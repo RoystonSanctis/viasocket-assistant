@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "configVersion": "2026.10.12-6",
+  "minExtensionVersion": "0.1.0",
+  "files": {
+    "providers": "providers.json",
+    "selectors": "selectors.json",
+    "mascot": "mascot.json",
+    "flags": "flags.json",
+    "tools": "tools.json",
+    "voice": "voice.json",
+    "prompts": {
+      "system": "prompts/system.md",
+      "flowBuilder": "prompts/flow-builder.md",
+      "devHub": "prompts/dev-hub.md",
+      "reactions": "prompts/reactions.md"
+    }
+  }
+}

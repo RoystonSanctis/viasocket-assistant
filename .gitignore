@@ -1,0 +1,6 @@
+node_modules/
+extension/dist/
+*.zip
+.DS_Store
+# Private notes about proprietary viaSocket internals must never be committed (they live outside this repo).
+internal-notes/

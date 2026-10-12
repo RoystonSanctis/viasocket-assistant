@@ -1,0 +1,540 @@
+// The chat panel: header with status and menu, setup banner, history, confirm/suggestion cards,
+// live transcript, voice row and the composer (text + hold-to-talk). Non-modal dialog next to the orb.
+
+import type { PageKind } from '../../shared/page'
+import type { ChatLine, ConfirmRequest, MascotMode, Suggestion } from '../../shared/mascot'
+import type { SttEngine, VoiceState } from '../../shared/messages'
+import type { MascotCallbacks } from './api'
+import { confirmCard, suggestionCard, type Card } from './cards'
+import { ChatView } from './chat-view'
+import { h, icon, iconButton } from './dom'
+import { boxAt, intersects, viewport, type Point, type Rect } from './geometry'
+import { VoiceRow } from './voice-row'
+
+const MAX_INPUT = 2000
+const PANEL_WIDTH = 360
+const EDGE = 12
+const GAP = 12
+const MAX_SUGGESTIONS = 4
+const FINAL_TRANSCRIPT_MS = 1500
+
+const STATUS: Record<MascotMode, string> = {
+  idle: 'Ready',
+  listening: 'Listening',
+  thinking: 'Thinking',
+  searching: 'Searching',
+  working: 'Working',
+  suggest: 'Has a suggestion',
+  confused: 'Something went wrong',
+  celebrate: 'Done',
+  sleeping: 'Napping',
+  waking: 'Waking up',
+  happy: 'Ready',
+  curious: 'Curious',
+}
+
+export interface PanelHooks {
+  callbacks: MascotCallbacks
+  onOpenChange(open: boolean): void
+  /** Any interaction inside the panel (keeps the mascot awake) */
+  onActivity(): void
+  /** Panel size changed while open; the controller repositions it */
+  onResize(): void
+  /** Focus should go back to the orb (Escape / close) */
+  focusOrb(): void
+}
+
+interface PendingCard {
+  card: Card
+  kind: 'confirm' | 'suggestion'
+}
+
+export class Panel {
+  readonly el: HTMLDivElement
+  private readonly status: HTMLDivElement
+  private readonly menuBtn: HTMLButtonElement
+  private readonly menu: HTMLDivElement
+  private readonly banner: HTMLDivElement
+  private readonly bannerText: HTMLSpanElement
+  private readonly chat = new ChatView()
+  private readonly cards: HTMLDivElement
+  private readonly transcript: HTMLDivElement
+  /** Screen-reader announcements that must not move focus (a confirmation arriving while the user types) */
+  private readonly announcer: HTMLDivElement
+  private readonly voice: VoiceRow
+  private readonly input: HTMLTextAreaElement
+  private readonly micBtn: HTMLButtonElement
+  private readonly sendBtn: HTMLButtonElement
+  private readonly pending = new Map<string, PendingCard>()
+  private readonly resizeObs: ResizeObserver
+  private lines: Record<string, string> = {}
+  private pageKind: PageKind = 'other'
+  private opened = false
+  private busy = false
+  private mode: MascotMode = 'idle'
+  private llmReady = true
+  private micHeld = false
+  private transcriptTimer = 0
+  private thinking = ''
+
+  constructor(private readonly hooks: PanelHooks) {
+    const cb = hooks.callbacks
+
+    // ----- header -----
+    this.status = h('div', { class: 'status', 'aria-live': 'polite', text: 'Ready' })
+    this.menuBtn = iconButton('more', 'More options')
+    this.menuBtn.setAttribute('aria-haspopup', 'menu')
+    this.menuBtn.setAttribute('aria-expanded', 'false')
+    const closeBtn = iconButton('close', 'Close assistant panel')
+    const header = h(
+      'div',
+      { class: 'hdr' },
+      h('span', { class: 'dot', 'aria-hidden': 'true' }),
+      h('div', { class: 'hdr-text' }, h('div', { class: 'title', id: 'vsa-title', text: 'viaSocket Assistant' }), this.status),
+      this.menuBtn,
+      closeBtn,
+    )
+
+    const clearItem = h('button', { type: 'button', role: 'menuitem', class: 'menu-item', text: 'Clear conversation' })
+    const settingsItem = h('button', { type: 'button', role: 'menuitem', class: 'menu-item', text: 'Settings' })
+    this.menu = h('div', { class: 'menu', role: 'menu', 'aria-label': 'Assistant options', hidden: true }, clearItem, settingsItem)
+
+    // ----- banner -----
+    this.bannerText = h('span', { class: 'banner-text' })
+    const bannerBtn = h('button', { type: 'button', class: 'btn small', text: 'Settings' })
+    this.banner = h('div', { class: 'banner', role: 'alert', hidden: true }, this.bannerText, bannerBtn)
+
+    // ----- body -----
+    this.cards = h('div', { class: 'cards' })
+    this.transcript = h('div', { class: 'transcript', 'aria-live': 'polite', hidden: true })
+    this.announcer = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite' })
+    // Browser speech uses the site's microphone permission, Whisper the extension's; settings has a section for each.
+    this.voice = new VoiceRow((engine) => cb.onOpenSettings(engine === 'browser' ? 'site-mic' : 'mic'))
+
+    // ----- composer -----
+    this.input = h('textarea', {
+      class: 'input',
+      rows: '1',
+      maxlength: String(MAX_INPUT),
+      placeholder: 'Ask me to build or fix something…',
+      'aria-label': 'Message the assistant',
+    })
+    this.micBtn = iconButton('mic', 'Hold to talk', 'icon-btn mic')
+    this.micBtn.setAttribute('aria-pressed', 'false')
+    this.sendBtn = iconButton('send', 'Send message', 'icon-btn send')
+    const composer = h('div', { class: 'composer' }, this.input, this.micBtn, this.sendBtn)
+
+    this.el = h(
+      'div',
+      { class: 'panel', role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'vsa-title', hidden: true },
+      header,
+      this.menu,
+      this.banner,
+      this.chat.el,
+      this.cards,
+      this.transcript,
+      this.voice.el,
+      composer,
+      this.announcer,
+    )
+    this.syncEmptyText()
+
+    // ----- wiring -----
+    closeBtn.addEventListener('click', () => this.close(true))
+    this.menuBtn.addEventListener('click', () => this.toggleMenu())
+    clearItem.addEventListener('click', () => {
+      this.toggleMenu(false)
+      cb.onClearThread()
+    })
+    settingsItem.addEventListener('click', () => {
+      this.toggleMenu(false)
+      cb.onOpenSettings()
+    })
+    bannerBtn.addEventListener('click', () => cb.onOpenSettings())
+    this.menu.addEventListener('keydown', (e) => this.menuKeys(e))
+
+    this.input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+        e.preventDefault()
+        this.submit()
+      }
+    })
+    this.input.addEventListener('input', () => this.autoGrow())
+    this.sendBtn.addEventListener('click', () => {
+      if (this.busy) cb.onCancel()
+      else this.submit()
+    })
+    this.wireMic()
+
+    this.el.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return
+      e.preventDefault()
+      if (!this.menu.hidden) {
+        this.toggleMenu(false)
+        this.menuBtn.focus()
+      } else this.close(true)
+    })
+    this.el.addEventListener('pointerdown', (e) => {
+      hooks.onActivity()
+      if (!this.menu.hidden && !this.menu.contains(e.target as Node) && e.target !== this.menuBtn && !this.menuBtn.contains(e.target as Node)) {
+        this.toggleMenu(false)
+      }
+    })
+    this.el.addEventListener('input', () => hooks.onActivity())
+
+    this.resizeObs = new ResizeObserver(() => {
+      if (this.opened) hooks.onResize()
+    })
+    this.resizeObs.observe(this.el)
+  }
+
+  get isOpen(): boolean {
+    return this.opened
+  }
+
+  get pendingCount(): number {
+    return this.pending.size
+  }
+
+  open(takeFocus: boolean): void {
+    if (!this.opened) {
+      this.opened = true
+      this.el.hidden = false
+      // Next frame so the open transition runs from the hidden state.
+      requestAnimationFrame(() => this.el.classList.toggle('open', this.opened))
+      this.chat.scrollToEnd()
+      this.hooks.onOpenChange(true)
+    }
+    if (takeFocus) this.focusBest()
+  }
+
+  close(restoreFocus: boolean): void {
+    if (!this.opened) return
+    const hadFocus = this.hasFocus()
+    this.opened = false
+    this.toggleMenu(false)
+    this.el.classList.remove('open')
+    this.el.hidden = true
+    this.releaseMic()
+    this.hooks.onOpenChange(false)
+    if (restoreFocus && hadFocus) this.hooks.focusOrb()
+  }
+
+  toggle(): void {
+    if (this.opened) this.close(true)
+    else this.open(true)
+  }
+
+  setLines(lines: Record<string, string>): void {
+    this.lines = lines
+    this.syncEmptyText()
+    if (!this.llmReady) this.setStatus(false, this.bannerText.dataset.reason)
+  }
+
+  setPageKind(kind: PageKind): void {
+    this.pageKind = kind
+    this.syncEmptyText()
+  }
+
+  setMode(mode: MascotMode): void {
+    this.mode = mode
+    this.syncStatus()
+  }
+
+  /** While a run is going, the header shows what the assistant is doing instead of a generic status */
+  setThinking(text: string): void {
+    this.thinking = text.replace(/\s+/g, ' ').trim()
+    this.syncStatus()
+  }
+
+  setModeColor(color: string): void {
+    this.el.style.setProperty('--mode-color', color)
+  }
+
+  setBusy(busy: boolean): void {
+    this.busy = busy
+    if (!busy) this.thinking = ''
+    this.el.classList.toggle('busy', busy)
+    this.sendBtn.replaceChildren(icon(busy ? 'stop' : 'send'))
+    const label = busy ? 'Stop' : 'Send message'
+    this.sendBtn.setAttribute('aria-label', label)
+    this.sendBtn.title = label
+    this.syncStatus()
+  }
+
+  setStatus(llmReady: boolean, reason?: string): void {
+    this.llmReady = llmReady
+    this.banner.hidden = llmReady
+    if (!llmReady) {
+      this.bannerText.dataset.reason = reason ?? ''
+      this.bannerText.textContent = reason?.trim() || this.lines.noKey || 'I need an AI key to think. Open settings to add one.'
+    }
+    this.syncStatus()
+  }
+
+  setHistory(lines: ChatLine[]): void {
+    this.chat.setHistory(lines)
+  }
+
+  addChat(line: ChatLine): void {
+    this.chat.add(line)
+  }
+
+  showConfirm(req: ConfirmRequest, takeFocus: boolean): void {
+    this.removeCard(req.id)
+    const card = confirmCard(req, (approved) => {
+      this.removeCard(req.id)
+      this.hooks.callbacks.onConfirm(req.id, approved)
+      this.hooks.onActivity()
+      if (this.opened) this.focusBest()
+    })
+    // Read before open(): a Space or Enter meant for the composer must not land on the card's buttons.
+    const typing = this.typing()
+    this.pending.set(req.id, { card, kind: 'confirm' })
+    this.cards.prepend(card.el)
+    this.open(false)
+    if (takeFocus && !typing) card.focusTarget.focus()
+    else this.announce(`Needs your confirmation: ${req.title}`)
+  }
+
+  dismissConfirm(id: string): void {
+    if (this.pending.get(id)?.kind === 'confirm') this.removeCard(id)
+  }
+
+  /** Confirmations only exist inside an agent run; once the run ends they can no longer be answered. */
+  dropConfirms(): void {
+    for (const [id, p] of [...this.pending.entries()]) if (p.kind === 'confirm') this.removeCard(id)
+  }
+
+  dismissSuggestions(ids: string[]): void {
+    for (const id of ids) if (this.pending.get(id)?.kind === 'suggestion') this.removeCard(id)
+  }
+
+  showSuggestion(s: Suggestion): void {
+    this.removeCard(s.id)
+    const card = suggestionCard(s, (action) => {
+      this.removeCard(s.id)
+      this.hooks.callbacks.onSuggestion(s.id, action)
+      this.hooks.onActivity()
+    })
+    this.pending.set(s.id, { card, kind: 'suggestion' })
+    this.cards.append(card.el)
+    // Old unanswered suggestions are dropped quietly; they were only ever offers.
+    const suggestions = [...this.pending.entries()].filter(([, p]) => p.kind === 'suggestion')
+    for (const [id] of suggestions.slice(0, Math.max(0, suggestions.length - MAX_SUGGESTIONS))) this.removeCard(id)
+  }
+
+  setSttEngine(engine: SttEngine): void {
+    this.voice.setEngine(engine, this.lines)
+  }
+
+  setVoiceState(state: VoiceState, detail?: string, progress?: number): void {
+    this.voice.set(state, this.lines, detail, progress)
+    if (state !== 'listening' && state !== 'transcribing') this.releaseMicVisual()
+    if (state === 'off' || state === 'ready' || state === 'error' || state === 'needs-permission') {
+      if (!this.transcriptTimer) this.setTranscriptText('')
+    }
+  }
+
+  setVoiceLevel(level: number): void {
+    this.voice.setLevel(level)
+  }
+
+  setTranscript(text: string, final: boolean): void {
+    clearTimeout(this.transcriptTimer)
+    this.transcriptTimer = 0
+    this.setTranscriptText(text)
+    if (final) {
+      this.transcriptTimer = window.setTimeout(() => {
+        this.transcriptTimer = 0
+        this.setTranscriptText('')
+      }, FINAL_TRANSCRIPT_MS)
+    }
+  }
+
+  /** Places the panel beside the orb, inside the viewport, preferring a side that doesn't cover `avoid` */
+  position(orb: Point, size: number, avoid: Rect | null): void {
+    if (!this.opened) return
+    const vp = viewport(EDGE)
+    const w = Math.min(PANEL_WIDTH, vp.right - vp.left)
+    const hgt = Math.min(this.el.offsetHeight || 420, vp.bottom - vp.top)
+    const top = clamp(orb.y + size / 2 - hgt / 2, vp.top, vp.bottom - hgt)
+    const right = clamp(orb.x + size + GAP, vp.left, vp.right - w)
+    const left = clamp(orb.x - GAP - w, vp.left, vp.right - w)
+    const orbBox = boxAt(orb, size)
+    const fits = (x: number): boolean => {
+      const r = { left: x, top, right: x + w, bottom: top + hgt }
+      return !intersects(r, orbBox) && !(avoid && intersects(r, avoid))
+    }
+    const vw = vp.right + EDGE
+    const order = orb.x + size / 2 > vw / 2 ? [left, right] : [right, left]
+    const x = order.find(fits) ?? order.find((c) => !intersects({ left: c, top, right: c + w, bottom: top + hgt }, orbBox)) ?? order[0] ?? vp.left
+    this.el.style.left = `${Math.round(x)}px`
+    this.el.style.top = `${Math.round(top)}px`
+    this.el.classList.toggle('from-left', x < orb.x)
+  }
+
+  destroy(): void {
+    clearTimeout(this.transcriptTimer)
+    this.resizeObs.disconnect()
+    this.releaseMic()
+  }
+
+  // ---------- internals ----------
+
+  private submit(): void {
+    const text = this.input.value.trim()
+    if (!text) return
+    this.hooks.callbacks.onUserText(text.slice(0, MAX_INPUT))
+    this.input.value = ''
+    this.autoGrow()
+    this.hooks.onActivity()
+  }
+
+  private autoGrow(): void {
+    this.input.style.height = 'auto'
+    this.input.style.height = `${Math.min(this.input.scrollHeight, 132)}px`
+  }
+
+  private wireMic(): void {
+    const down = (e: PointerEvent): void => {
+      if (e.button !== 0) return
+      e.preventDefault()
+      try {
+        this.micBtn.setPointerCapture(e.pointerId)
+      } catch {
+        /* pointer already gone */
+      }
+      this.pressMic()
+    }
+    const up = (): void => this.releaseMic()
+    this.micBtn.addEventListener('pointerdown', down)
+    this.micBtn.addEventListener('pointerup', up)
+    this.micBtn.addEventListener('pointercancel', up)
+    this.micBtn.addEventListener('pointerleave', up)
+    this.micBtn.addEventListener('lostpointercapture', up)
+    // Keyboard users: hold Space or Enter on the mic button.
+    this.micBtn.addEventListener('keydown', (e) => {
+      if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
+        e.preventDefault()
+        this.pressMic()
+      }
+    })
+    this.micBtn.addEventListener('keyup', (e) => {
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault()
+        this.releaseMic()
+      }
+    })
+    this.micBtn.addEventListener('blur', up)
+    this.micBtn.addEventListener('contextmenu', (e) => e.preventDefault())
+  }
+
+  private pressMic(): void {
+    if (this.micHeld) return
+    this.micHeld = true
+    this.micBtn.setAttribute('aria-pressed', 'true')
+    this.micBtn.classList.add('held')
+    this.hooks.onActivity()
+    this.hooks.callbacks.onMicDown()
+  }
+
+  private releaseMic(): void {
+    if (!this.micHeld) return
+    this.micHeld = false
+    this.releaseMicVisual()
+    this.hooks.callbacks.onMicUp()
+  }
+
+  private releaseMicVisual(): void {
+    if (this.micHeld) return
+    this.micBtn.setAttribute('aria-pressed', 'false')
+    this.micBtn.classList.remove('held')
+  }
+
+  private setTranscriptText(text: string): void {
+    const clean = text.trim()
+    this.transcript.textContent = clean
+    this.transcript.hidden = clean.length === 0
+  }
+
+  private removeCard(id: string): void {
+    const p = this.pending.get(id)
+    if (!p) return
+    p.card.el.remove()
+    this.pending.delete(id)
+  }
+
+  private focusBest(): void {
+    if (!this.typing()) {
+      for (const p of this.pending.values()) {
+        if (p.kind === 'confirm') {
+          p.card.focusTarget.focus()
+          return
+        }
+      }
+    }
+    this.input.focus()
+  }
+
+  /** The user is writing a message (composer focused, or a draft in it while focus is in the panel) */
+  private typing(): boolean {
+    if (!this.hasFocus()) return false
+    const root = this.el.getRootNode()
+    const active = root instanceof ShadowRoot ? root.activeElement : document.activeElement
+    return active === this.input || this.input.value.length > 0
+  }
+
+  private announce(text: string): void {
+    // Re-setting the same text is not announced again; clear first.
+    this.announcer.textContent = ''
+    requestAnimationFrame(() => {
+      this.announcer.textContent = text
+    })
+  }
+
+  private toggleMenu(force?: boolean): void {
+    const open = force ?? this.menu.hidden
+    this.menu.hidden = !open
+    this.menuBtn.setAttribute('aria-expanded', String(open))
+    if (open) this.menu.querySelector<HTMLButtonElement>('.menu-item')?.focus()
+  }
+
+  private menuKeys(e: KeyboardEvent): void {
+    const items = Array.from(this.menu.querySelectorAll<HTMLButtonElement>('.menu-item'))
+    const root = this.el.getRootNode() as ShadowRoot | Document
+    const i = items.indexOf(root.activeElement as HTMLButtonElement)
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      const next = (i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
+      items[next]?.focus()
+    } else if (e.key === 'Tab') {
+      this.toggleMenu(false)
+    }
+  }
+
+  private syncStatus(): void {
+    let text = STATUS[this.mode]
+    if (this.busy && (this.mode === 'idle' || this.mode === 'happy')) text = 'Working'
+    if (this.busy && this.thinking) text = this.thinking
+    if (!this.llmReady) text = 'Needs setup'
+    this.status.textContent = text
+    this.status.title = text
+  }
+
+  private hasFocus(): boolean {
+    const root = this.el.getRootNode()
+    const active = root instanceof ShadowRoot ? root.activeElement : document.activeElement
+    return active !== null && this.el.contains(active)
+  }
+
+  private syncEmptyText(): void {
+    const devHub = this.pageKind === 'developer-hub' || this.pageKind === 'developer-hub-plugin'
+    const greeting = (devHub ? this.lines.greetingDevHub : undefined) ?? this.lines.greeting
+    this.chat.setEmptyText(greeting ?? 'Hi! Tell me what to build, or hold the mic button and talk.')
+  }
+}
+
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.min(Math.max(n, lo), Math.max(lo, hi))
+}

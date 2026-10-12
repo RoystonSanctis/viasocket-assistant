@@ -1,0 +1,70 @@
+{
+  "manifest_version": 3,
+  "name": "viaSocket Assistant",
+  "short_name": "vS Assistant",
+  "description": "A voice-first mascot that builds, tests and improves your viaSocket workflows and plugs. Open source (AGPL-3.0).",
+  "version": "0.0.0",
+  "minimum_chrome_version": "120",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "viaSocket Assistant",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "permissions": ["storage", "cookies", "offscreen", "alarms", "tts", "scripting"],
+  "host_permissions": [
+    "https://flow.viasocket.com/*",
+    "https://beta-flow.viasocket.com/*",
+    "https://dev-flow.viasocket.com/*",
+    "https://flow-api.viasocket.com/*",
+    "https://dev-api.viasocket.com/*",
+    "https://flow.sokt.io/*",
+    "https://dev.sokt.io/*",
+    "https://raw.githubusercontent.com/*",
+    "https://*.huggingface.co/*",
+    "https://*.hf.co/*"
+  ],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://flow.viasocket.com/*", "https://beta-flow.viasocket.com/*", "https://dev-flow.viasocket.com/*"],
+      "js": ["page-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
+      "all_frames": false
+    },
+    {
+      "matches": ["https://flow.viasocket.com/*", "https://beta-flow.viasocket.com/*", "https://dev-flow.viasocket.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "commands": {
+    "toggle-voice": {
+      "suggested_key": {
+        "default": "Alt+Shift+V",
+        "mac": "Alt+Shift+V"
+      },
+      "description": "Start or stop talking to the assistant"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  }
+}

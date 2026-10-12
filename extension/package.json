@@ -1,0 +1,27 @@
+{
+  "name": "viasocket-assistant-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open-source Chrome extension: a voice-first, animated mascot assistant that builds and improves viaSocket workflows and plugs.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "check-config": "node scripts/check-config.mjs",
+    "check": "npm run typecheck && npm run check-config && npm run build"
+  },
+  "devDependencies": {
+    "@types/chrome": "0.3.5",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.3.1",
+    "zod": "4.6.6"
+  }
+}
