@@ -4,6 +4,38 @@ An open-source (AGPL-3.0-or-later) Chrome extension that puts a voice-first, ani
 
 Works on <https://flow.viasocket.com> and <https://beta-flow.viasocket.com>.
 
+## Mascot reactions & canvas behavior
+
+The assistant lives directly on your viaSocket workflow canvas as an animated bubble mascot. As you build, test, and publish workflows or Developer Hub plugs, the mascot changes its expression, color, and motion to reflect what's happening.
+
+<p align="center">
+  <img src="docs/mascot-reactions.svg" alt="viaSocket Assistant Mascot Reactions" width="100%">
+</p>
+
+> 🎮 **Interactive Prototype:** Open [docs/reactions-demo.html](docs/reactions-demo.html) in your browser to test roaming, dragging, parking, and all 8 reaction states.
+
+### Reaction modes & moods
+
+| Mode | Mood color | Eyes | Canvas motion | Example thinking text | When it happens |
+|---|---|---|---|---|---|
+| **Idle** | `#5DCAA5` (Sea green) | Open | Roams free areas of the canvas smoothly | *"Just looking around"* | Default roaming state when not working |
+| **Listening** | `#F0997B` (Coral) | Open | Pulses gently with voice input | *"Listening…"* | Holding hotkey (`Ctrl+Option` / `Ctrl+Alt`) |
+| **Thinking** | `#AFA9EC` (Lavender) | Open | Floats gently up and down | *"Reading your flow…"* | Awaiting model response or processing intent |
+| **Working** | `#85B7EB` (Sky blue) | Open | Flies next to the active step | *"Adding a Gmail step…"* | Executing tool calls (creating/editing steps) |
+| **Suggest** | `#EF9F27` (Amber) | Open | Outlines relevant node with dashed focus | *"Map 'User message' from trigger"* | Proactive suggestion on next workflow step |
+| **Error / Confused** | `#F09595` (Soft red) | Open | Shakes horizontally side-to-side | *"Test failed: the To field is empty"* | Step test fails, save fails, or API error |
+| **Celebrate** | `#97C459` (Lime green) | Open | Bounces joyfully upward | *"Test passed. Ready to publish"* | Test succeeds or flow published successfully |
+| **Sleeping** | `#B4B2A9` (Muted gray) | Closed slits (`2px`) | Docks at bottom corner of canvas | *"zzz"* | Idle for > 45 seconds |
+
+### Canvas interaction & control
+
+- **Park anytime**: Click and drag the bubble mascot to pin it anywhere on the canvas (e.g. to keep it out of your way).
+- **Resume roaming**: Double-click the parked mascot to release it back into roaming mode.
+- **Proactivity tiers**: Configured in settings or [`config/mascot.json`](config/mascot.json):
+  - **Quiet**: Only reacts on explicit user request or failed tests (offers "Explain").
+  - **Helpful** *(default)*: Explains failures and offers one actionable suggestion after problems.
+  - **Proactive**: Also suggests the next natural step after successes (e.g., adding a step after trigger setup).
+
 ## Repository layout
 
 | Path | What it is |

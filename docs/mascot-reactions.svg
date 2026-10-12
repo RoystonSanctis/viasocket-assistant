@@ -1,0 +1,221 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 620" width="100%" height="100%" style="background:#0d1117;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <defs>
+    <!-- Dot pattern for canvas -->
+    <pattern id="grid-dots" width="20" height="20" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1.2" fill="#30363d" opacity="0.75" />
+    </pattern>
+    
+    <!-- Gradients -->
+    <linearGradient id="header-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#58a6ff" />
+      <stop offset="50%" stop-color="#a371f7" />
+      <stop offset="100%" stop-color="#3fb950" />
+    </linearGradient>
+
+    <!-- Filter for bubble shadow -->
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.45" />
+    </filter>
+    <filter id="glow-suggest" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="4" flood-color="#ef9f27" flood-opacity="0.5" />
+    </filter>
+  </defs>
+
+  <!-- Title section -->
+  <text x="32" y="42" font-size="20" font-weight="700" fill="#f0f6fc">viaSocket Assistant — Mascot Reactions &amp; States</text>
+  <text x="32" y="66" font-size="13" fill="#8b949e">Voice-first, canvas-roaming companion that reacts to your workflow in real-time</text>
+
+  <!-- Canvas container -->
+  <g transform="translate(32, 85)">
+    <!-- Canvas background -->
+    <rect width="856" height="230" rx="12" fill="#161b22" stroke="#30363d" stroke-width="1.2" />
+    <rect width="856" height="230" rx="12" fill="url(#grid-dots)" />
+
+    <!-- Canvas Header Bar / Tag -->
+    <rect x="16" y="14" width="140" height="22" rx="4" fill="#21262d" stroke="#30363d" stroke-width="1" />
+    <circle cx="26" cy="25" r="4" fill="#3fb950" />
+    <text x="36" y="29" font-size="11" font-weight="600" fill="#8b949e">WORKFLOW CANVAS</text>
+
+    <!-- Node 1: Trigger -->
+    <g transform="translate(48, 55)">
+      <rect width="210" height="42" rx="8" fill="#21262d" stroke="#30363d" stroke-width="1.2" filter="url(#shadow)" />
+      <!-- Bolt icon -->
+      <path d="M18 12 L11 23 L16 23 L14 31 L23 19 L18 19 Z" fill="#ef9f27" />
+      <text x="32" y="26" font-size="13" font-weight="600" fill="#f0f6fc">Trigger: new comment</text>
+    </g>
+
+    <!-- Connector 1 -->
+    <line x1="153" y1="97" x2="153" y2="120" stroke="#388bfd" stroke-width="2" stroke-dasharray="3,3" />
+
+    <!-- Node 2: AI Action (Targeted / Highlighted) -->
+    <g transform="translate(48, 120)">
+      <!-- Outline highlight -->
+      <rect x="-4" y="-4" width="228" height="50" rx="11" fill="none" stroke="#58a6ff" stroke-width="2" stroke-dasharray="6,4" />
+      <rect width="220" height="42" rx="8" fill="#21262d" stroke="#58a6ff" stroke-width="1.2" filter="url(#shadow)" />
+      <!-- Robot icon -->
+      <rect x="13" y="16" width="16" height="12" rx="2" fill="none" stroke="#58a6ff" stroke-width="1.8" />
+      <circle cx="17.5" cy="21" r="1.5" fill="#58a6ff" />
+      <circle cx="24.5" cy="21" r="1.5" fill="#58a6ff" />
+      <line x1="21" y1="12" x2="21" y2="16" stroke="#58a6ff" stroke-width="1.8" />
+      <text x="38" y="26" font-size="13" font-weight="600" fill="#f0f6fc">Call AI agent instantly</text>
+    </g>
+
+    <!-- Connector 2 -->
+    <line x1="153" y1="162" x2="153" y2="182" stroke="#388bfd" stroke-width="2" stroke-dasharray="3,3" />
+
+    <!-- Node 3: Add Step (+) -->
+    <g transform="translate(133, 182)">
+      <rect width="40" height="30" rx="6" fill="#21262d" stroke="#30363d" stroke-width="1.2" />
+      <line x1="20" y1="9" x2="20" y2="21" stroke="#8b949e" stroke-width="2" stroke-linecap="round" />
+      <line x1="14" y1="15" x2="26" y2="15" stroke="#8b949e" stroke-width="2" stroke-linecap="round" />
+    </g>
+
+    <!-- Trajectory trail showing roaming movement -->
+    <path d="M 680 70 Q 560 50 480 110 T 360 145" fill="none" stroke="#a371f7" stroke-width="1.5" stroke-dasharray="4,6" opacity="0.6" />
+    <circle cx="680" cy="70" r="3" fill="#a371f7" opacity="0.4" />
+    <circle cx="530" cy="85" r="3" fill="#a371f7" opacity="0.6" />
+
+    <!-- Roaming Mascot (Thinking Mode) -->
+    <g transform="translate(350, 120)">
+      <!-- Bubble shadow + circle -->
+      <circle cx="22" cy="22" r="22" fill="#AFA9EC" filter="url(#shadow)" />
+      <!-- Left eye -->
+      <rect x="13" y="17" width="5" height="10" rx="2.5" fill="#26215C" />
+      <!-- Right eye -->
+      <rect x="26" y="17" width="5" height="10" rx="2.5" fill="#26215C" />
+
+      <!-- Thought bubble -->
+      <g transform="translate(56, 4)">
+        <rect width="210" height="34" rx="8" fill="#21262d" stroke="#30363d" stroke-width="1" filter="url(#shadow)" />
+        <path d="M 0 16 L -7 12 L 0 8 Z" fill="#21262d" />
+        <text x="14" y="21" font-size="12" font-weight="500" fill="#f0f6fc">Reading your flow…</text>
+        <!-- Blinking cursor -->
+        <rect x="126" y="11" width="2" height="13" fill="#58a6ff" />
+      </g>
+    </g>
+
+    <!-- Interactive Hint Inside Canvas -->
+    <g transform="translate(620, 186)">
+      <rect width="218" height="28" rx="6" fill="#21262d" opacity="0.9" stroke="#30363d" stroke-width="1" />
+      <text x="12" y="18" font-size="11" fill="#8b949e">🖱️ Drag to park • Double-click to roam</text>
+    </g>
+  </g>
+
+  <!-- 8 Mood / Reaction Cards Grid -->
+  <g transform="translate(32, 335)">
+    <!-- Row 1 -->
+
+    <!-- 1. Idle -->
+    <g transform="translate(0, 0)">
+      <rect width="202" height="116" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1" />
+      <circle cx="32" cy="32" r="16" fill="#5DCAA5" filter="url(#shadow)" />
+      <rect x="25" y="28" width="4" height="8" rx="2" fill="#04342C" />
+      <rect x="35" y="28" width="4" height="8" rx="2" fill="#04342C" />
+      <text x="60" y="28" font-size="14" font-weight="700" fill="#5DCAA5">Idle</text>
+      <text x="60" y="44" font-size="11" fill="#8b949e">Roams canvas</text>
+      <rect x="12" y="64" width="178" height="38" rx="6" fill="#21262d" />
+      <text x="20" y="80" font-size="11" font-weight="600" fill="#e6edf3">"Just looking around"</text>
+      <text x="20" y="94" font-size="10" fill="#7d8590">Wanders smoothly when free</text>
+    </g>
+
+    <!-- 2. Listening -->
+    <g transform="translate(218, 0)">
+      <rect width="202" height="116" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1" />
+      <circle cx="32" cy="32" r="16" fill="#F0997B" filter="url(#shadow)" />
+      <rect x="25" y="28" width="4" height="8" rx="2" fill="#4A1B0C" />
+      <rect x="35" y="28" width="4" height="8" rx="2" fill="#4A1B0C" />
+      <text x="60" y="28" font-size="14" font-weight="700" fill="#F0997B">Listening</text>
+      <text x="60" y="44" font-size="11" fill="#8b949e">Voice active</text>
+      <rect x="12" y="64" width="178" height="38" rx="6" fill="#21262d" />
+      <text x="20" y="80" font-size="11" font-weight="600" fill="#e6edf3">"Listening…"</text>
+      <text x="20" y="94" font-size="10" fill="#7d8590">Pulses with microphone input</text>
+    </g>
+
+    <!-- 3. Thinking -->
+    <g transform="translate(436, 0)">
+      <rect width="202" height="116" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1" />
+      <circle cx="32" cy="32" r="16" fill="#AFA9EC" filter="url(#shadow)" />
+      <rect x="25" y="28" width="4" height="8" rx="2" fill="#26215C" />
+      <rect x="35" y="28" width="4" height="8" rx="2" fill="#26215C" />
+      <text x="60" y="28" font-size="14" font-weight="700" fill="#AFA9EC">Thinking</text>
+      <text x="60" y="44" font-size="11" fill="#8b949e">LLM query</text>
+      <rect x="12" y="64" width="178" height="38" rx="6" fill="#21262d" />
+      <text x="20" y="80" font-size="11" font-weight="600" fill="#e6edf3">"Reading your flow…"</text>
+      <text x="20" y="94" font-size="10" fill="#7d8590">Floats gently while generating</text>
+    </g>
+
+    <!-- 4. Working -->
+    <g transform="translate(654, 0)">
+      <rect width="202" height="116" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1" />
+      <circle cx="32" cy="32" r="16" fill="#85B7EB" filter="url(#shadow)" />
+      <rect x="25" y="28" width="4" height="8" rx="2" fill="#042C53" />
+      <rect x="35" y="28" width="4" height="8" rx="2" fill="#042C53" />
+      <text x="60" y="28" font-size="14" font-weight="700" fill="#85B7EB">Working</text>
+      <text x="60" y="44" font-size="11" fill="#8b949e">Editing canvas</text>
+      <rect x="12" y="64" width="178" height="38" rx="6" fill="#21262d" />
+      <text x="20" y="80" font-size="11" font-weight="600" fill="#e6edf3">"Adding a Gmail step…"</text>
+      <text x="20" y="94" font-size="10" fill="#7d8590">Flies adjacent to target node</text>
+    </g>
+
+    <!-- Row 2 -->
+
+    <!-- 5. Suggest -->
+    <g transform="translate(0, 128)">
+      <rect width="202" height="116" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1" />
+      <circle cx="32" cy="32" r="16" fill="#EF9F27" filter="url(#shadow)" />
+      <rect x="25" y="28" width="4" height="8" rx="2" fill="#412402" />
+      <rect x="35" y="28" width="4" height="8" rx="2" fill="#412402" />
+      <text x="60" y="28" font-size="14" font-weight="700" fill="#EF9F27">Suggest</text>
+      <text x="60" y="44" font-size="11" fill="#8b949e">Proactive tip</text>
+      <rect x="12" y="64" width="178" height="38" rx="6" fill="#21262d" />
+      <text x="20" y="78" font-size="10.5" font-weight="600" fill="#e6edf3">"Map 'User message'…"</text>
+      <text x="20" y="93" font-size="10" fill="#7d8590">Outlines relevant step with dash</text>
+    </g>
+
+    <!-- 6. Error -->
+    <g transform="translate(218, 128)">
+      <rect width="202" height="116" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1" />
+      <circle cx="32" cy="32" r="16" fill="#F09595" filter="url(#shadow)" />
+      <rect x="25" y="28" width="4" height="8" rx="2" fill="#501313" />
+      <rect x="35" y="28" width="4" height="8" rx="2" fill="#501313" />
+      <text x="60" y="28" font-size="14" font-weight="700" fill="#F09595">Error</text>
+      <text x="60" y="44" font-size="11" fill="#8b949e">Test / save issue</text>
+      <rect x="12" y="64" width="178" height="38" rx="6" fill="#21262d" />
+      <text x="20" y="78" font-size="10.5" font-weight="600" fill="#e6edf3">"Test failed: To is empty"</text>
+      <text x="20" y="93" font-size="10" fill="#7d8590">Shakes sideways &amp; offers Explain</text>
+    </g>
+
+    <!-- 7. Celebrate -->
+    <g transform="translate(436, 128)">
+      <rect width="202" height="116" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1" />
+      <circle cx="32" cy="32" r="16" fill="#97C459" filter="url(#shadow)" />
+      <rect x="25" y="28" width="4" height="8" rx="2" fill="#173404" />
+      <rect x="35" y="28" width="4" height="8" rx="2" fill="#173404" />
+      <text x="60" y="28" font-size="14" font-weight="700" fill="#97C459">Celebrate</text>
+      <text x="60" y="44" font-size="11" fill="#8b949e">Flow published</text>
+      <rect x="12" y="64" width="178" height="38" rx="6" fill="#21262d" />
+      <text x="20" y="78" font-size="10.5" font-weight="600" fill="#e6edf3">"Test passed. Ready!"</text>
+      <text x="20" y="93" font-size="10" fill="#7d8590">Joyfully bounces on success</text>
+    </g>
+
+    <!-- 8. Sleeping -->
+    <g transform="translate(654, 128)">
+      <rect width="202" height="116" rx="10" fill="#161b22" stroke="#30363d" stroke-width="1" />
+      <circle cx="32" cy="32" r="16" fill="#B4B2A9" filter="url(#shadow)" />
+      <!-- Closed eye slits -->
+      <rect x="25" y="31" width="4" height="2" rx="1" fill="#2C2C2A" />
+      <rect x="35" y="31" width="4" height="2" rx="1" fill="#2C2C2A" />
+      <text x="60" y="28" font-size="14" font-weight="700" fill="#B4B2A9">Sleeping</text>
+      <text x="60" y="44" font-size="11" fill="#8b949e">Idle > 45s</text>
+      <rect x="12" y="64" width="178" height="38" rx="6" fill="#21262d" />
+      <text x="20" y="78" font-size="10.5" font-weight="600" fill="#e6edf3">"zzz"</text>
+      <text x="20" y="93" font-size="10" fill="#7d8590">Docks quietly in bottom corner</text>
+    </g>
+  </g>
+
+  <!-- Bottom status pill -->
+  <g transform="translate(32, 584)">
+    <rect width="856" height="26" rx="6" fill="#161b22" stroke="#30363d" stroke-width="1" />
+    <text x="16" y="17" font-size="11" fill="#8b949e">Configurable in <tspan fill="#f0f6fc">config/mascot.json</tspan> • Proactivity tiers: <tspan fill="#58a6ff">Quiet</tspan> (errors only), <tspan fill="#58a6ff">Helpful</tspan> (default), <tspan fill="#58a6ff">Proactive</tspan> (suggest next steps)</text>
+  </g>
+</svg>

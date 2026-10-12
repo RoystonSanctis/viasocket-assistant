@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>viaSocket Assistant — Mascot Reactions Visualization</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface-1: #161b22;
+      --surface-2: #21262d;
+      --border: #30363d;
+      --border-accent: #58a6ff;
+      --text-primary: #f0f6fc;
+      --text-secondary: #8b949e;
+      --radius: 8px;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f6f8fa;
+        --surface-1: #ffffff;
+        --surface-2: #f3f4f6;
+        --border: #d0d7de;
+        --border-accent: #0969da;
+        --text-primary: #1f2328;
+        --text-secondary: #656d76;
+      }
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      width: 100%;
+      max-width: 760px;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    p.desc {
+      font-size: 14px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+    #cv {
+      position: relative;
+      height: 380px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background-color: var(--surface-1);
+      background-image: radial-gradient(var(--border) 1px, transparent 1px);
+      background-size: 20px 20px;
+      overflow: hidden;
+      user-select: none;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    }
+    .nd {
+      position: absolute;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: outline 0.2s, border-color 0.2s;
+    }
+    .nd svg {
+      width: 16px;
+      height: 16px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .nd.hl {
+      outline: 2px dashed var(--border-accent);
+      outline-offset: 4px;
+      border-color: var(--border-accent);
+    }
+    #bb {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      cursor: grab;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+      transition: background-color 0.3s;
+      z-index: 10;
+    }
+    #bb:active {
+      cursor: grabbing;
+    }
+    #bb i.e {
+      display: block;
+      width: 6px;
+      height: 10px;
+      border-radius: 3px;
+      transition: height 0.15s;
+    }
+    #tt {
+      position: absolute;
+      left: 0;
+      top: 0;
+      max-width: 240px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 8px 12px;
+      font-size: 12px;
+      color: var(--text-primary);
+      line-height: 1.4;
+      pointer-events: none;
+      white-space: normal;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      z-index: 9;
+    }
+    #modes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 16px 0 12px;
+    }
+    #modes button {
+      padding: 7px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      background: var(--surface-2);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    #modes button:hover {
+      border-color: var(--border-accent);
+    }
+    #modes button.on {
+      border-color: var(--border-accent);
+      background: rgba(88, 166, 255, 0.15);
+      color: var(--border-accent);
+      font-weight: 600;
+    }
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .hint {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>viaSocket Assistant — Mascot Reactions</h1>
+    <p class="desc">Interactive prototype of the roaming bubble mascot on the workflow canvas. It dynamically changes mood, color, and eye expressions depending on the current task and page events.</p>
+
+    <div id="cv">
+      <div class="nd" id="n1" style="left:40px;top:40px">
+        <svg viewBox="0 0 24 24"><path d="M13 3l-10 12h9l-1 8 10-12h-9l1-8z"/></svg>
+        Trigger: new comment
+      </div>
+      <div class="nd" id="n2" style="left:40px;top:140px">
+        <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
+        Call AI agent instantly
+      </div>
+      <div class="nd" id="n3" style="left:96px;top:236px;padding:8px 14px">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </div>
+      <div id="tt">Just looking around</div>
+      <div id="bb" role="img" aria-label="Mascot bubble"><i class="e"></i><i class="e"></i></div>
+    </div>
+
+    <div id="modes"></div>
+
+    <p class="hint">💡 <strong>Interactive Controls:</strong> Click a reaction mode above to switch states. Drag the bubble to park it anywhere on canvas. Double-click it to release and let it roam again.</p>
+  </div>
+
+  <script>
+    const M = {
+      idle:      { c: '#5DCAA5', e: '#04342C', t: 'Just looking around' },
+      listening: { c: '#F0997B', e: '#4A1B0C', t: 'Listening…' },
+      thinking:  { c: '#AFA9EC', e: '#26215C', t: 'Reading your flow…' },
+      working:   { c: '#85B7EB', e: '#042C53', t: 'Adding a Gmail step…' },
+      suggest:   { c: '#EF9F27', e: '#412402', t: 'Map "User message" from the trigger comment' },
+      error:     { c: '#F09595', e: '#501313', t: 'Test failed: the To field is empty' },
+      celebrate: { c: '#97C459', e: '#173404', t: 'Test passed. Ready to publish' },
+      sleeping:  { c: '#B4B2A9', e: '#2C2C2A', t: 'zzz' }
+    };
+
+    const cv = document.getElementById('cv');
+    const bb = document.getElementById('bb');
+    const tt = document.getElementById('tt');
+    const eyes = bb.querySelectorAll('.e');
+    const box = document.getElementById('modes');
+
+    let mode = 'idle', x = 360, y = 60, tx = x, ty = y;
+    let pinned = false, drag = null, t0 = 0, full = '', ti = 0;
+
+    Object.keys(M).forEach(k => {
+      const b = document.createElement('button');
+      b.id = 'm-' + k;
+      b.innerHTML = `<span class="badge-dot" style="background:${M[k].c}"></span>${k.charAt(0).toUpperCase() + k.slice(1)}`;
+      b.onclick = () => setMode(k);
+      box.appendChild(b);
+    });
+
+    function rect(id) {
+      const r = document.getElementById(id), c = cv.getBoundingClientRect(), q = r.getBoundingClientRect();
+      return { x: q.left - c.left, y: q.top - c.top, w: q.width, h: q.height };
+    }
+
+    function setMode(k) {
+      mode = k;
+      pinned = false;
+      document.querySelectorAll('#modes button').forEach(b => b.classList.toggle('on', b.id === 'm-' + k));
+      bb.style.backgroundColor = M[k].c;
+      eyes.forEach(e => {
+        e.style.background = M[k].e;
+        e.style.height = k === 'sleeping' ? '2px' : '10px';
+      });
+      document.querySelectorAll('.nd').forEach(n => n.classList.remove('hl'));
+      full = M[k].t;
+      ti = 0;
+
+      const W = cv.clientWidth, H = cv.clientHeight;
+      if (k === 'working') {
+        const r = rect('n3');
+        tx = r.x + r.w + 16;
+        ty = r.y - 6;
+      } else if (k === 'suggest') {
+        const r = rect('n2');
+        tx = r.x + r.w + 20;
+        ty = r.y - 6;
+        document.getElementById('n2').classList.add('hl');
+      } else if (k === 'error') {
+        const r = rect('n2');
+        tx = r.x + r.w + 20;
+        ty = r.y - 6;
+        document.getElementById('n2').classList.add('hl');
+      } else if (k === 'sleeping') {
+        tx = W - 70;
+        ty = H - 70;
+      } else if (k === 'listening' || k === 'thinking' || k === 'celebrate') {
+        // stay near current spot
+      } else {
+        pickWander();
+      }
+    }
+
+    function pickWander() {
+      const W = cv.clientWidth, H = cv.clientHeight;
+      for (let i = 0; i < 20; i++) {
+        const px = 40 + Math.random() * (W - 140);
+        const py = 20 + Math.random() * (H - 90);
+        const hit = ['n1', 'n2', 'n3'].some(id => {
+          const r = rect(id);
+          return px > r.x - 50 && px < r.x + r.w + 10 && py > r.y - 50 && py < r.y + r.h + 10;
+        });
+        if (!hit) {
+          tx = px;
+          ty = py;
+          return;
+        }
+      }
+    }
+
+    bb.addEventListener('pointerdown', e => {
+      drag = { dx: e.clientX - x, dy: e.clientY - y };
+      bb.setPointerCapture(e.pointerId);
+      bb.style.cursor = 'grabbing';
+    });
+
+    bb.addEventListener('pointermove', e => {
+      if (!drag) return;
+      x = tx = e.clientX - drag.dx;
+      y = ty = e.clientY - drag.dy;
+    });
+
+    bb.addEventListener('pointerup', () => {
+      if (drag) {
+        drag = null;
+        pinned = true;
+        bb.style.cursor = 'grab';
+      }
+    });
+
+    bb.addEventListener('dblclick', () => {
+      pinned = false;
+      setMode('idle');
+    });
+
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function tick(t) {
+      const dt = t - t0;
+      t0 = t;
+      const W = cv.clientWidth, H = cv.clientHeight;
+
+      if (!drag) {
+        if (mode === 'idle' && !pinned && Math.hypot(tx - x, ty - y) < 4 && Math.random() < 0.01) {
+          pickWander();
+        }
+        const sp = mode === 'idle' ? 0.015 : 0.06;
+        x += (tx - x) * (reduce ? 1 : sp);
+        y += (ty - y) * (reduce ? 1 : sp);
+      }
+
+      x = Math.max(4, Math.min(W - 48, x));
+      y = Math.max(4, Math.min(H - 48, y));
+
+      let s = 1, oy = 0, ox = 0;
+      if (!reduce) {
+        if (mode === 'listening') s = 1 + 0.08 * Math.abs(Math.sin(t / 180));
+        if (mode === 'thinking') oy = Math.sin(t / 400) * 4;
+        if (mode === 'celebrate') oy = -Math.abs(Math.sin(t / 160)) * 10;
+        if (mode === 'error') ox = Math.sin(t / 40) * (Math.sin(t / 600) > 0.6 ? 3 : 0);
+        if (mode === 'sleeping') s = 1 + 0.03 * Math.sin(t / 900);
+      }
+
+      bb.style.transform = `translate(${x + ox}px, ${y + oy}px) scale(${s})`;
+
+      if (ti <= full.length && Math.floor(t / 30) !== Math.floor((t - dt) / 30)) {
+        tt.textContent = full.slice(0, ti) || ' ';
+        ti++;
+      }
+
+      const tw = tt.offsetWidth;
+      const left = x + 54 + tw > W ? x - tw - 10 : x + 54;
+      tt.style.transform = `translate(${left}px, ${y + oy + 8}px)`;
+
+      if (mode !== 'sleeping' && Math.random() < 0.004) {
+        eyes.forEach(e => {
+          e.style.height = '2px';
+          setTimeout(() => e.style.height = '10px', 120);
+        });
+      }
+
+      requestAnimationFrame(tick);
+    }
+
+    setMode('idle');
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>
