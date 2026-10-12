@@ -15,6 +15,30 @@ export function obj(v: unknown): Row | undefined {
   return isRow(v) ? v : undefined
 }
 
+/** A JSON column that may come back as an object or as a JSON string (dh.mjs `obj`). Anything else → {}. */
+export function jsonObj(v: unknown): Row {
+  if (isRow(v)) return v
+  if (typeof v !== 'string' || !v.trim()) return {}
+  try {
+    const parsed: unknown = JSON.parse(v)
+    return isRow(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+/** dh.mjs `deep`: nested objects are merged key by key, everything else (arrays included) is replaced. */
+export function deepMerge(a: unknown, b: unknown): unknown {
+  if (!isRow(a) || !isRow(b)) return b
+  const out: Row = { ...a }
+  for (const k of Object.keys(b)) out[k] = k in a ? deepMerge(a[k], b[k]) : b[k]
+  return out
+}
+
+export function isDeletedRow(r: Row): boolean {
+  return str(r.status) === 'deleted' || flag(r.isdeleted)
+}
+
 export function str(v: unknown): string | undefined {
   if (typeof v === 'string') return v || undefined
   if (typeof v === 'number' && Number.isFinite(v)) return String(v)
@@ -135,6 +159,12 @@ export function scheduleOf(v: Row): number[] | undefined {
 
 export function inputFieldsOf(v: Row): Row[] {
   return rowsOf(obj(v.inputjson)?.inputFields)
+}
+
+/** Every input field, nested "input groups" children/fields included, depth-first. */
+export function flattenFields(fields: Row[], depth = 0): Row[] {
+  if (depth > 6) return []
+  return fields.flatMap((f) => [f, ...flattenFields([...rowsOf(f.children), ...rowsOf(f.fields)], depth + 1)])
 }
 
 /** sampledata is a JSON column: booleans are stored as null and raw strings must be JSON-encoded. */

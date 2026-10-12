@@ -1,6 +1,6 @@
 {
   "name": "viasocket-assistant-extension",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Open-source Chrome extension: a voice-first, animated mascot assistant that builds and improves viaSocket workflows and plugs.",
   "license": "AGPL-3.0-or-later",

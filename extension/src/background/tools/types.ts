@@ -36,6 +36,11 @@ export interface ToolContext {
   signal: AbortSignal
   maxResultChars: number
   stripRunData: boolean
+  /**
+   * Set for confirmsInRun tools when the generic gate would have asked (alwaysConfirm, Apply on a suggestion). Such a
+   * tool must then ask in run() even for work it would otherwise run directly.
+   */
+  mustConfirm?: boolean
 }
 
 export interface Tool<A = Record<string, unknown>> {
@@ -51,8 +56,9 @@ export interface Tool<A = Record<string, unknown>> {
   /** Human-readable summary shown in the confirmation card for 'confirm' tools */
   confirmText?(args: A, ctx: ToolContext): string
   /**
-   * run() always asks the user itself, with a preview built from saved data, so the generic confirmation gate
-   * (alwaysConfirm, Apply on a suggestion) skips it rather than showing a second card.
+   * run() asks the user itself, with a preview built from saved data, so the generic confirmation gate skips it
+   * rather than showing a second card. When that gate would have asked (alwaysConfirm, Apply on a suggestion), ctx
+   * carries mustConfirm and run() asks even for work it treats as read-only.
    */
   confirmsInRun?: boolean
   run(args: A, ctx: ToolContext): Promise<unknown>

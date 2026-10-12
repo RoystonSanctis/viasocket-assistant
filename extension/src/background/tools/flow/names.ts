@@ -8,9 +8,10 @@ export const FLOW_TOOL_NAMES = [
 ] as const
 
 export const DH_TOOL_NAMES = [
-  'dh_list_plugins', 'dh_get_plugin', 'dh_create_plugin', 'dh_list_actions', 'dh_get_action_version', 'dh_create_action',
-  'dh_new_action_version', 'dh_update_action_version', 'dh_list_auth_versions', 'dh_update_auth_version', 'dh_dry_run',
-  'dh_publish_action_version', 'dh_list_components',
+  'dh_search_plugins', 'dh_get_plugin', 'dh_create_plugin', 'dh_brand_details', 'dh_update_plugin', 'dh_publish_plugin',
+  'dh_kb', 'dh_list_auth_versions', 'dh_create_connection', 'dh_update_auth_version', 'dh_check_connection', 'dh_connect',
+  'dh_list_actions', 'dh_get_action_version', 'dh_create_action', 'dh_new_action_version', 'dh_update_action_version',
+  'dh_list_components', 'dh_create_component', 'dh_map_component', 'dh_dry_run', 'dh_publish_action_version',
 ] as const
 
 /** Tools a suggestion card's Apply button may run (through the normal confirmation path). Never UI tools. */

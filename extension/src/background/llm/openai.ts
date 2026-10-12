@@ -1,8 +1,12 @@
 // OpenAI-compatible chat completions with tool calling (OpenRouter, Groq, Gemini, Mistral, OpenAI, DeepSeek,
 // Ollama, LM Studio, ...). Only the documented common subset is used so one adapter fits all of them.
+// The built-in OpenAI provider uses the Responses API instead (openai-responses.ts), falling back to chat
+// completions for models that endpoint refuses.
 
 import { CHAT_TIMEOUT_MS, LIST_TIMEOUT_MS, asRecord, errorInBody, llmFetch, newCallId, providerUrl } from './http'
 import { repairToolPairs, stripThink } from './history'
+import { fitToolDescription, fnv1a, isOpenAiPlatform, loadRemembered, noTemperature, openaiHeaders, rememberedSet } from './openai-common'
+import { responsesChat } from './openai-responses'
 import {
   LlmError,
   type ChatMessage,
@@ -40,15 +44,15 @@ const GEMINI_SCHEMA_KEYS = new Set([
   'type', 'format', 'title', 'description', 'nullable', 'enum', 'items', 'properties', 'required', 'anyOf',
   'minItems', 'maxItems', 'minProperties', 'maxProperties', 'minLength', 'maxLength', 'pattern', 'minimum', 'maximum',
 ])
-const OPENAI_MAX_DESCRIPTION = 1024
-/** provider:model pairs that refused a custom temperature, so later steps do not pay for a failed request first. */
-const noTemperature = new Set<string>()
+/**
+ * provider:model pairs that accept function tools on chat completions only with reasoning_effort 'none' (newer
+ * OpenAI reasoning models; their default effort is refused next to tools). Remembered like noTemperature.
+ */
+const noReasoningWithTools = rememberedSet('noReasoningWithTools')
+/** provider:model pairs the Responses API does not serve; they use chat completions instead. */
+const noResponses = rememberedSet('noResponses')
 
-export function openaiHeaders(p: ResolvedProvider): Record<string, string> {
-  const headers: Record<string, string> = { ...p.extraHeaders }
-  if (p.key) headers.Authorization = `Bearer ${p.key}`
-  return headers
-}
+export { openaiHeaders }
 
 function isGemini(p: ResolvedProvider): boolean {
   try {
@@ -56,15 +60,6 @@ function isGemini(p: ResolvedProvider): boolean {
   } catch {
     return p.id === 'gemini'
   }
-}
-
-function fnv1a(s: string, seed: number): number {
-  let h = seed >>> 0
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i)
-    h = Math.imul(h, 0x01000193) >>> 0
-  }
-  return h
 }
 
 // Ids written by another provider (after a switch) fail Mistral's check (exactly 9 alphanumerics). Others get ids
@@ -132,13 +127,6 @@ function sanitizeForGemini(schema: unknown): unknown {
   return out
 }
 
-function fitDescription(text: string, max: number): string {
-  if (text.length <= max) return text
-  const cut = text.slice(0, max - 1)
-  const end = cut.lastIndexOf('. ')
-  return `${end > max / 2 ? cut.slice(0, end + 1) : cut}…`
-}
-
 function wireTool(p: ResolvedProvider, t: NonNullable<ChatRequest['tools']>[number]): Record<string, unknown> {
   if (isGemini(p)) {
     const hasParams = Object.keys(t.parameters.properties ?? {}).length > 0
@@ -148,7 +136,7 @@ function wireTool(p: ResolvedProvider, t: NonNullable<ChatRequest['tools']>[numb
     }
   }
   // OpenAI's limit, applied to every provider here: routers such as OpenRouter pass descriptions on to OpenAI models.
-  const description = fitDescription(t.description, OPENAI_MAX_DESCRIPTION)
+  const description = fitToolDescription(t.description)
   return { type: 'function', function: { name: t.name, description, parameters: t.parameters } }
 }
 
@@ -165,6 +153,7 @@ function buildBody(p: ResolvedProvider, req: ChatRequest): Record<string, unknow
   if (req.tools?.length) {
     body.tools = req.tools.map((t) => wireTool(p, t))
     body.tool_choice = 'auto'
+    if (noReasoningWithTools.has(`${p.id}:${req.model}`)) body.reasoning_effort = 'none'
   }
   if (req.temperature !== undefined && !noTemperature.has(`${p.id}:${req.model}`)) body.temperature = req.temperature
   // OpenAI's newer models only accept max_completion_tokens; everyone else still uses max_tokens.
@@ -245,21 +234,66 @@ function parseChat(p: ResolvedProvider, req: ChatRequest, json: unknown): ChatRe
   return res
 }
 
-async function chat(p: ResolvedProvider, req: ChatRequest): Promise<ChatResponse> {
+async function chatCompletions(p: ResolvedProvider, req: ChatRequest): Promise<ChatResponse> {
   const body = buildBody(p, req)
-  let json: unknown
-  try {
-    json = await post(p, body, req.signal)
-  } catch (e) {
-    // Reasoning models (OpenAI o-series and similar) refuse a custom temperature; retry once without it.
-    if (!(e instanceof LlmError) || e.kind !== 'bad-request' || !('temperature' in body) || !/temperature/i.test(e.message)) {
+  const key = `${p.id}:${req.model}`
+  // Reasoning models refuse some request shapes with a 400 that names the parameter. Each known case is adjusted
+  // once and remembered for the model, so a single answer costs at most two extra requests, and later ones none.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return parseChat(p, req, await post(p, body, req.signal))
+    } catch (e) {
+      if (attempt >= 2 || !(e instanceof LlmError) || e.kind !== 'bad-request') throw e
+      if ('temperature' in body && /temperature/i.test(e.message)) {
+        noTemperature.add(key)
+        delete body.temperature
+        continue
+      }
+      if (body.tools && body.reasoning_effort === undefined && /reasoning[_ ]effort/i.test(e.message)) {
+        noReasoningWithTools.add(key)
+        body.reasoning_effort = 'none'
+        continue
+      }
       throw e
     }
-    noTemperature.add(`${p.id}:${req.model}`)
-    delete body.temperature
-    json = await post(p, body, req.signal)
   }
-  return parseChat(p, req, json)
+}
+
+const UNSUPPORTED = /not supported|unsupported|only (supported|available)|not available|does not support|cannot be used/i
+/** Wording of request-shape problems, which the Responses adapter adjusts itself and which do not mean "use another endpoint". */
+const REQUEST_SHAPE = /parameter|temperature|include|encrypted|reasoning|tool|input|item|max_output_tokens/i
+
+/** The Responses API does not serve this model (or this account): 404, or a 400 saying so. */
+function responsesRefused(e: unknown): boolean {
+  if (!(e instanceof LlmError)) return false
+  if (e.status === 404 || e.status === 405) return true
+  if (e.status !== 400 || !UNSUPPORTED.test(e.message)) return false
+  return /responses/i.test(e.message) || (/\bmodel\b/i.test(e.message) && !REQUEST_SHAPE.test(e.message))
+}
+
+/**
+ * Whether a refusal says the model is not served there, rather than e.g. a bare 404 page from a hiccup, which falls
+ * back for this answer only.
+ */
+function refusesModel(e: LlmError): boolean {
+  return /responses|\bmodel\b|support/i.test(e.message)
+}
+
+async function chat(p: ResolvedProvider, req: ChatRequest): Promise<ChatResponse> {
+  await loadRemembered()
+  const key = `${p.id}:${req.model}`
+  if (!isOpenAiPlatform(p) || noResponses.has(key)) return chatCompletions(p, req)
+  try {
+    return await responsesChat(p, req)
+  } catch (e) {
+    if (req.signal?.aborted || !responsesRefused(e)) throw e
+    // Older and non-chat models are not served there; chat completions keeps its own reasoning_effort fallback.
+    // Remembered only once chat completions answered: a model that exists nowhere fails there too, and a model
+    // moved over by a passing error would lose reasoning next to tools for the rest of the browser session.
+    const res = await chatCompletions(p, req)
+    if (refusesModel(e as LlmError)) noResponses.add(key)
+    return res
+  }
 }
 
 function toModelInfo(item: unknown): ModelInfo | null {

@@ -40,7 +40,7 @@ export function openEditorVersionId(ctx: ToolContext): string | undefined {
 
 export function requirePluginId(ctx: ToolContext, arg: string | undefined): string {
   const id = arg ?? pagePluginId(ctx)
-  if (!id) fail('Which plug? Pass pluginId (see dh_list_plugins) or open the plug in the Developer Hub.')
+  if (!id) fail('Which plug? Find it with dh_search_plugins and pass pluginId, or open the plug in the Developer Hub.')
   return assertRowId(id, 'Plug id')
 }
 
@@ -120,4 +120,9 @@ export async function resolveVersionTarget(
     versionId: String(version.rowid),
     latest,
   }
+}
+
+/** ui_navigate arguments for a connection page (the page keys its query on the plug id, as the DH UI does). */
+export function authOpen(pluginId: string, authId: string): DhOpen {
+  return dhOpen(pluginId, 'auth', authId, pluginId)
 }

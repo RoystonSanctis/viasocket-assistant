@@ -6,7 +6,7 @@ A community, open-source assistant for [viaSocket](https://viasocket.com): a sma
 
 - **Voice first.** Hold a key and talk; speech recognition runs on your device. Short replies can be spoken back.
 - **Builds flows.** Sets triggers (webhook, schedule, email, app events), finds apps and actions, checks connections, adds and maps steps one at a time, writes code steps, tests them and fixes errors. Your open editor updates live.
-- **Builds plugs.** Creates actions and triggers in the Developer Hub, writes their code and input fields, dry-runs them with your connection and publishes versions when you ask.
+- **Builds plugs.** Finds plugs in the Developer Hub by name, then extends the existing one or creates a new plug: its connection, helper components, actions and triggers, with their code and input fields, following the Developer Hub plug skill and its knowledge base. It dry-runs only read-only parts with your own connection and publishes, privately, only after you say yes.
 - **Shows its work.** Flies to the step or field it changed and highlights it, opens step panels, and keeps a short thinking line next to the bubble.
 - **Reacts to you.** Notices failed tests, publishes and errors on the page and offers to explain or fix them. How chatty it is depends on the proactivity setting (quiet, helpful or proactive).
 - **Keeps you in control.** Deleting, publishing, discarding and overwriting always ask first, with a button.
@@ -122,6 +122,7 @@ The extension downloads prompts, selectors, providers, mascot wording, flags, to
 
 - The address is `CONFIG_REMOTE_BASE` plus `CONFIG_BRANCH_PREFIX` and the channel (`stable` or `beta`, chosen on the options page) in `src/shared/constants.ts`, e.g. `https://raw.githubusercontent.com/RoystonSanctis/viasocket-assistant/config-stable/manifest.json`. Point it at your own repo before publishing a fork, or set it to an empty string to use only the bundled copy.
 - Everything is validated with the zod schemas in `src/shared/config.ts`. An invalid or unreachable config never replaces the last good one, and the copy in `dist/defaults` is the final fallback.
+- A config whose `minExtensionVersion` is newer than the installed extension is skipped, and the last good one stays. The extension version comes from `package.json` (currently 0.2.0). The current config requires 0.2.0, because its prompts and tool switches use the Developer Hub tools added in that version.
 - The config is data only. It can't add tools, change where keys are sent, or remove confirmations.
 
 ## Security model

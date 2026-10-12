@@ -3,7 +3,8 @@
 
 import * as z from '../../../shared/zod'
 import type { Tool, ToolContext } from '../types'
-import { dhGet } from './api'
+import { dhGet, dhGetFields } from './api'
+import { ACTION_LIST_FIELDS } from './constants'
 import { P, dhTool, rowId } from './define'
 import { actionSummary } from './plugin-tools'
 import {
@@ -46,8 +47,8 @@ function versionLine(t: VersionTarget, v: Row, openId: string | undefined) {
 const listActions = dhTool({
   name: 'dh_list_actions',
   description:
-    "List a plug's actions and triggers (defaults to the open plug): id, type, status, public/private, the published version id " +
-    'and the connection version it uses. Use dh_get_action_version to read one.',
+    "List a plug's actions and triggers (defaults to the open plug): id, key, type, status, public/private, the published " +
+    'version id and the connection version it uses. dh_get_plugin already includes this list; use dh_get_action_version to read one.',
   properties: {
     pluginId: P.pluginId,
     type: { type: 'string', enum: ['action', 'trigger'], description: 'Only actions or only triggers. Omit for both.' },
@@ -57,7 +58,9 @@ const listActions = dhTool({
   describe: (a) => (a.type === 'trigger' ? 'Listing triggers' : a.type === 'action' ? 'Listing actions' : 'Listing actions and triggers'),
   async run(a, ctx) {
     const pluginId = requirePluginId(ctx, a.pluginId)
-    const rows = (await dhGet(ctx, 'actions', 'getAllActions', pluginId)).filter((r) => !a.type || str(r.type) === a.type)
+    const rows = (await dhGetFields(ctx, 'actions', 'getAllActions', pluginId, ACTION_LIST_FIELDS)).filter(
+      (r) => str(r.status) !== 'deleted' && (!a.type || str(r.type) === a.type),
+    )
     return {
       pluginId,
       count: rows.length,
@@ -135,7 +138,7 @@ const getActionVersion = dhTool({
         status: str(v.status),
         verification: str(v.verificationstatus),
         editable: !lock,
-        ...(lock ? { lockedBecause: lock, toEdit: 'Call dh_new_action_version to create an editable copy.' } : {}),
+        ...(lock ? { lockedBecause: lock, toEdit: 'Call dh_new_action_version to create an editable copy (then re-map its components).' } : {}),
         ...(t.kind === 'trigger' ? { triggerType, scheduleMinutes: scheduleOf(v) } : {}),
         authId: str(v.authid),
         authType: str(v.authtype),

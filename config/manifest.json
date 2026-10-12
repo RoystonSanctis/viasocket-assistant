@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "configVersion": "2026.10.12-6",
-  "minExtensionVersion": "0.1.0",
+  "configVersion": "2026.10.12-8",
+  "minExtensionVersion": "0.2.0",
   "files": {
     "providers": "providers.json",
     "selectors": "selectors.json",

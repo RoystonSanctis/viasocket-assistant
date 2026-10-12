@@ -79,6 +79,8 @@ node scripts/validate.mjs
 
 Bump `configVersion` in `config/manifest.json` with every change, then push to `beta` (Beta channel) or `main` (everyone). Changes reach users within about 15 minutes, or immediately with **Refresh config** on the options page.
 
+The current config needs extension 0.2.0 or newer (`minExtensionVersion`), because its prompts and tool switches use the 0.2.0 Developer Hub tools. Older installs skip it and keep the config they already have until they update. Raise `minExtensionVersion` whenever a config change depends on a newer extension.
+
 ## License
 
 AGPL-3.0-or-later. See [LICENSE](LICENSE).

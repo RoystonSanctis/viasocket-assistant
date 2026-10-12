@@ -241,6 +241,30 @@ async function loadBundled(channel: Channel): Promise<FullConfig> {
   return { ...bundledMemo, channel, loadedAt: Date.now() }
 }
 
+/** Orders YYYY.MM.DD-N config versions; null when either is in another format (then the remote one wins as before). */
+export function compareConfigVersion(a: string, b: string): number | null {
+  const parse = (v: string) => /^(\d{4})\.(\d{1,2})\.(\d{1,2})-(\d+)$/.exec(v)?.slice(1).map(Number)
+  const x = parse(a)
+  const y = parse(b)
+  if (!x || !y) return null
+  for (let i = 0; i < 4; i++) if (x[i] !== y[i]) return (x[i] ?? 0) - (y[i] ?? 0)
+  return 0
+}
+
+/**
+ * The copy built into this extension when a downloaded or cached config is older than it. A new build ships with
+ * the config it was written for; until that config is published, the older one online must not undercut it.
+ */
+async function newerBundled(config: FullConfig, channel: Channel): Promise<FullConfig | null> {
+  try {
+    const bundled = await loadBundled(channel)
+    const cmp = compareConfigVersion(config.configVersion, bundled.configVersion)
+    return cmp !== null && cmp < 0 ? bundled : null
+  } catch {
+    return null
+  }
+}
+
 // ---------- storage cache ----------
 
 async function readCache(channel: Channel): Promise<CacheEntry | null> {
@@ -276,7 +300,8 @@ async function activeChannel(): Promise<Channel> {
 async function loadInitial(channel: Channel): Promise<FullConfig> {
   const gen = generation
   const entry = await readCache(channel)
-  const config: FullConfig = entry ? { ...entry.config, source: 'cache', channel } : await loadBundled(channel)
+  const cached: FullConfig | null = entry ? { ...entry.config, source: 'cache', channel } : null
+  const config: FullConfig = cached ? ((await newerBundled(cached, channel)) ?? cached) : await loadBundled(channel)
   if (gen === generation && !current) current = config
 
   const stale = !entry || Date.now() - entry.checkedAt > CONFIG_REFRESH_MINUTES * 60_000
@@ -333,8 +358,10 @@ async function doRefresh(channel: Channel, force: boolean): Promise<FullConfig> 
     })
     // The channel changed while we were fetching: the result is cached for its channel but not applied.
     if (gen !== generation || channel !== channelMemo) return getConfig()
-    apply(r.config, prev)
-    return r.config
+    // Cached either way (ETag bookkeeping), but an online config older than this build's own is not used.
+    const adopted = (await newerBundled(r.config, channel)) ?? r.config
+    apply(adopted, prev)
+    return adopted
   } catch (e) {
     console.warn(`[config] remote ${channel} config not adopted, keeping ${prev?.configVersion ?? 'none'}:`, describe(e))
     return prev ?? getConfig()

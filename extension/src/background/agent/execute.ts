@@ -8,7 +8,7 @@ import { VsError } from '../tools/viasocket-client'
 import type { RunTarget } from './run-target'
 import type { Session } from './session'
 
-const READ_PREFIXES = ['vs_get', 'vs_list', 'vs_search', 'dh_get', 'dh_list']
+const READ_PREFIXES = ['vs_get', 'vs_list', 'vs_search', 'dh_get', 'dh_list', 'dh_search', 'dh_check', 'dh_kb']
 const CONFIRM_DETAIL_CHARS = 800
 
 export interface ToolOutcome {
@@ -169,8 +169,10 @@ export async function executeTool(
     maxResultChars: flags.maxToolResultChars,
     stripRunData: flags.stripRunData,
   }
+  const gateWouldAsk = forceConfirm || needsConfirm(tool, config)
+  if (tool.confirmsInRun && gateWouldAsk) ctx.mustConfirm = true
 
-  if (!tool.confirmsInRun && (forceConfirm || needsConfirm(tool, config))) {
+  if (!tool.confirmsInRun && gateWouldAsk) {
     const approved = await ui.confirm(label, confirmDetail(tool, args, ctx), true)
     signal.throwIfAborted()
     if (!approved) {

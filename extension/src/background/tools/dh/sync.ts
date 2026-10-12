@@ -129,3 +129,16 @@ function withoutSecrets(row: Row): Row {
   const { clientsecret: _secret, ...rest } = row
   return rest
 }
+
+/** Pushes a component mapping into the open editor of that exact version (created → the create event shape). */
+export async function syncMapping(ctx: ToolContext, version: Row, mappingRow: Row, created: boolean): Promise<PageSync | undefined> {
+  const id = str(version.rowid)
+  if (!id || openEditorVersionId(ctx) !== id) return undefined
+  const thread = editorThread(version)
+  if (!thread) return result(false)
+  await editorReady(ctx)
+  const data = created
+    ? { type: 'COMPONENT_MAPPING_CREATE_BY_AI', data: { createdEntry: mappingRow } }
+    : { updated: true, data: { type: 'action_version_component_table', updatedEntry: mappingRow } }
+  return result(await pushRtlayer(ctx, thread, data))
+}

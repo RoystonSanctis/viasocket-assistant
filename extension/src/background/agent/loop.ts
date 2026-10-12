@@ -26,7 +26,7 @@ const THREAD_BUSY_MESSAGE = "I'm already working on this flow or plug in another
 const MAX_INPUT_CHARS = 4000
 const RATE_LIMIT_BACKOFF_MS = [2000, 5000, 10000]
 const TRANSIENT_RETRY_MS = 1500
-const PUBLISH_TOOLS = new Set(['vs_publish_flow', 'dh_publish_action_version'])
+const PUBLISH_TOOLS = new Set(['vs_publish_flow', 'dh_publish_action_version', 'dh_publish_plugin'])
 /** Write tools run without asking, so a model that emits a burst of calls in one answer is capped. */
 const MAX_CALLS_PER_TURN = 8
 // History budget per request, in characters (about 4 per token). Tool definitions plus prompts are already

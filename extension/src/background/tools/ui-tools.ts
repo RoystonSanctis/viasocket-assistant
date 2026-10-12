@@ -159,7 +159,12 @@ const suggest = defineTool<SuggestArgs>({
       const args = a.applyArgs ?? {}
       if ((JSON.stringify(args) ?? '').length > 8000) throw new ToolError('applyArgs is too large.')
       const tool = [...FLOW_TOOLS, ...DH_TOOLS].find((t) => t.name === a.applyTool)
-      const errs = tool ? validateArgs(tool.parameters, args) : []
+      if (!tool) throw new ToolError(`${a.applyTool} cannot be used in a suggestion.`)
+      // Apply runs with this page's toolset, so a tool not offered here could never run from the card.
+      if (tool.pages && !tool.pages.includes(ctx.page.kind)) {
+        throw new ToolError(`${a.applyTool} is not available on this page, so it cannot be offered as a suggestion here.`)
+      }
+      const errs = validateArgs(tool.parameters, args)
       if (errs.length) throw new ToolError(`applyArgs do not fit ${a.applyTool}: ${errs.join('; ')}`)
       apply = { tool: a.applyTool, args, label: a.applyLabel ? cleanText(a.applyLabel, 24) : undefined }
     }
