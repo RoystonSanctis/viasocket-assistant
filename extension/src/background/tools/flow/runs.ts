@@ -1,9 +1,10 @@
-// Flow run data: the latest run (sample data for mapping and tests) and the context passed to dry runs.
+// Flow run data: the latest run (sample data for mapping and tests), the context passed to dry runs, and the
+// execute route every dry run goes through (step tests, trigger tests, dropdown option loaders).
 
 import type { ToolContext } from '../types'
 import { call } from './errors'
 import type { FlowTarget } from './types'
-import { asRecord, isRecord, leafPaths, parseMaybeJson, str, trimData } from './util'
+import { asRecord, isRecord, leafPaths, parseMaybeJson, str, trimData, truncate } from './util'
 
 export interface RunContext {
   req: { body: unknown; headers: Record<string, unknown>; query: unknown }
@@ -17,6 +18,7 @@ export interface ParsedRun {
   at?: string
   body: unknown
   query: unknown
+  headers: Record<string, unknown>
   res: Record<string, unknown>
   vals: Record<string, unknown>
   large: boolean
@@ -43,6 +45,7 @@ export function parseRun(raw: unknown): ParsedRun | null {
     at: str(raw.requestTimestamp) ?? str(raw.createdAt),
     body: req.body ?? {},
     query: req.query ?? {},
+    headers: asRecord(req.headers),
     res: asRecord(parseMaybeJson(raw.responseSnapshot)),
     vals: asRecord(parseMaybeJson(raw.vals)),
     large: meta.storedInBucket === true || meta.isDataTooLarge === true,
@@ -67,23 +70,40 @@ export function summarizeRun(run: ParsedRun, strip: boolean): Record<string, unk
   }
 }
 
-/**
- * Context for a single-step dry run: the given payload (or the latest run's) as context.req.body, plus earlier
- * step outputs so references resolve.
- */
-export function buildTestContext(run: ParsedRun | null, payload: unknown): RunContext {
-  const context: RunContext = {
-    req: { body: payload ?? run?.body ?? {}, headers: {}, query: run?.query ?? {} },
-    res: run?.res ?? {},
-    vals: run?.vals ?? {},
-  }
-  if ((JSON.stringify(context) ?? '').length > MAX_CONTEXT_CHARS) {
-    context.res = {}
-    context.vals = {}
-  }
-  return context
-}
-
 export function contextTooLarge(context: RunContext): boolean {
   return (JSON.stringify(context) ?? '').length > MAX_CONTEXT_CHARS
+}
+
+export interface DryRunResult {
+  success: boolean
+  message: unknown
+  console: unknown
+  data: Record<string, unknown>
+}
+
+/**
+ * POST /:orgId/:scriptId/execute, the route behind every Test button and dropdown loader. A failed run still
+ * answers 200 with data.success false and the error as data.message. `redact` masks personal data in error text.
+ */
+export async function executeDryRun(ctx: ToolContext, t: FlowTarget, body: Record<string, unknown>, what: string): Promise<DryRunResult> {
+  const res = await call(what, () => ctx.vs.request({ method: 'POST', path: `/${t.orgId}/${t.scriptId}/execute`, body, signal: ctx.signal }), {
+    redact: ctx.stripRunData,
+  })
+  const data = asRecord(asRecord(res).data)
+  return { success: data.success === true, message: data.message, console: data.console, data }
+}
+
+/** Console output arrives as a string or as captured log arguments. */
+export function consoleOf(raw: unknown): string | undefined {
+  const text = typeof raw === 'string' ? raw : JSON.stringify(raw ?? '')
+  return text && text !== '""' && text !== '[]' ? text : undefined
+}
+
+/** The error text inside a failed dry run's message. */
+export function dryRunErrorText(message: unknown): string | undefined {
+  if (typeof message === 'string') return truncate(message, 500)
+  const m = asRecord(message)
+  const nested = asRecord(m.error)
+  const text = str(m.errorMessage) ?? str(nested.message) ?? (Number(m.status) >= 400 ? str(m.message) : undefined) ?? str(m.message)
+  return text ? truncate(text, 500) : undefined
 }

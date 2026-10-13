@@ -4,7 +4,6 @@
 // references are `${context...}`), `_key` (the display copy) and `_key-Type` (the coercion type the runtime
 // uses for numbers, booleans, lists and defaults). Group children use parent["child"] / parent["_child"].
 
-import { fieldList } from './catalog'
 import { checkTemplateText } from './js-check'
 import type { FieldDef, InputJson } from './types'
 import { isRecord } from './util'
@@ -82,13 +81,12 @@ export interface EncodedInput {
   unknownKeys: string[]
   /** Value problems that would break the generated code */
   problems: string[]
-  /** Required, always-visible fields still empty */
-  missingRequired: string[]
 }
 
 /**
  * Merges model-provided values (field key -> value; null clears a field) into `base` with the sibling entries
- * the UI and runtime expect. Only keys defined by the action are kept.
+ * the UI and runtime expect. Only keys defined by the action are kept. Required fields are checked separately
+ * (fields.ts missingInputs), with the editor's visibility rules.
  */
 export function encodeInputData(values: Record<string, unknown>, ij: InputJson, base: Record<string, unknown> = {}): EncodedInput {
   const inputData: Record<string, unknown> = { ...base }
@@ -115,12 +113,5 @@ export function encodeInputData(values: Record<string, unknown>, ij: InputJson, 
     else delete inputData[sib.display]
     inputData[sib.type] = coercion
   }
-  const missingRequired = fieldList(ij)
-    .filter((f) => f.required && !f.visibleWhen && !f.group)
-    .filter((f) => {
-      const v = inputData[f.key]
-      return v === undefined || v === '' || (Array.isArray(v) && v.length === 0)
-    })
-    .map((f) => f.key)
-  return { inputData, unknownKeys, problems, missingRequired }
+  return { inputData, unknownKeys, problems }
 }

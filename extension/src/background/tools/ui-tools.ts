@@ -2,12 +2,12 @@
 // They never call write APIs. Navigation targets are built from validated ids, never taken from the model as URLs,
 // and highlight targets are named selector keys or visible labels, never raw CSS.
 
-import type { HighlightTarget, Suggestion } from '../../shared/mascot'
+import { PLAN_ITEM_ID, PLAN_KINDS, PLAN_LIMITS, PLAN_STATUSES, type HighlightTarget, type PlanUpdate, type Suggestion, type WorkflowPlan } from '../../shared/mascot'
 import type { Tool, ToolContext } from './types'
 import { DH_TOOLS } from './dh-tools'
 import { FLOW_TOOLS } from './flow-tools'
 import { ToolError } from './flow/errors'
-import { editorParam, getFlow, requireOrg, resolveFlow, triggerKind, verifyProject } from './flow/flow-api'
+import { editorParam, getFlow, requireOrg, resolveFlow, triggerKind, triggerPanelSlug, verifyProject } from './flow/flow-api'
 import { knownFlowProject } from './flow/known'
 import { SUGGESTABLE_TOOLS } from './flow/names'
 import { defineTool, params, S, validateArgs } from './flow/schema'
@@ -32,12 +32,6 @@ function requireEditor(ctx: ToolContext): void {
 
 function cleanText(v: string, max: number): string {
   return v.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, max)
-}
-
-/** Panel query for the trigger: the editor keys trigger panels by trigger type. */
-function triggerPanelSlug(kind: string | undefined): string {
-  if (kind === 'webhook' || kind === 'email' || kind === 'cron') return kind
-  return kind ? 'trigger' : 'selecttrigger'
 }
 
 const openStep = defineTool<{ slugName: string }>({
@@ -269,4 +263,91 @@ const navigate = defineTool<NavigateArgs>({
   },
 })
 
-export const UI_TOOLS: Tool<any>[] = [openStep, closePanel, highlight, suggest, refreshPage, navigate]
+const PLAN_ITEM = {
+  type: 'object',
+  description: 'One checklist item. On "replace" give id + title (status defaults to todo); on "patch" give id + only what changes.',
+  properties: {
+    id: S.str('Stable short id you choose, e.g. "trigger", "s2", "if-paid". Reuse it in patches.', { pattern: PLAN_ITEM_ID.source, maxLength: 40 }),
+    title: S.str('What this item does, in plain words for the user.', { minLength: 1, maxLength: PLAN_LIMITS.title }),
+    detail: S.str('Optional one-line detail (app, condition, schedule). "" removes it.', { maxLength: PLAN_LIMITS.detail }),
+    kind: S.enum(PLAN_KINDS, 'What the item is.'),
+    status: S.enum(PLAN_STATUSES, 'todo, doing (working on it now), done, skipped or blocked (waiting for the user).'),
+    note: S.str('Short status note, e.g. what you need from the user. "" removes it.', { maxLength: PLAN_LIMITS.note }),
+    depth: S.int('Nesting: 1-3 for steps inside a branch or loop, 0 or omitted for the top level.', { minimum: 0, maximum: PLAN_LIMITS.depth }),
+  },
+  required: ['id'],
+  additionalProperties: false,
+}
+
+const PLAN_PARAMS = params(
+  {
+    op: S.enum(['replace', 'patch', 'clear'], 'replace: set the whole plan. patch: change items by id. clear: remove the plan.'),
+    title: S.str('Plan title, e.g. "New Typeform lead to Slack and Sheets".', { maxLength: PLAN_LIMITS.planTitle }),
+    items: { type: 'array', description: `Checklist items in build order (at most ${PLAN_LIMITS.items}).`, maxItems: PLAN_LIMITS.items, items: PLAN_ITEM },
+    awaitingConfirmation: S.bool('True while the user still has to approve the plan; the card then shows "Looks good, start" and "Change something".'),
+  },
+  ['op'],
+)
+
+/** Models often send null for optional fields they mean to leave out; inside items that would fail validation. */
+function dropNulls(a: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(a.items)) return a
+  const items = a.items.map((it) =>
+    it && typeof it === 'object' && !Array.isArray(it) ? Object.fromEntries(Object.entries(it).filter(([, v]) => v !== null)) : it,
+  )
+  return { ...a, items }
+}
+
+function planDescribe(a: PlanUpdate): string {
+  if (a.op === 'clear') return 'Clearing the plan'
+  if (a.op === 'replace') return a.awaitingConfirmation ? 'Drafting the plan' : 'Updating the plan'
+  const doing = a.items?.find((i) => i.status === 'doing' && i.title)
+  return doing?.title ? `Now: ${doing.title}` : 'Updating the plan'
+}
+
+/** Not wrapped in defineTool: nulls inside items are dropped before the same schema check. */
+const plan: Tool<PlanUpdate> = {
+  name: 'ui_plan',
+  description:
+    'Show the user the step-by-step plan for the workflow you are building, as a checklist pinned at the top of the chat, and keep it current. It changes only the checklist, never the flow. ' +
+    'op "replace" sets the whole plan: title + items in build order (trigger first, then every step: conditions and their branches, delays, JS code, AI, loops, Get Data, Run flow if, response, test, publish); depth 1-3 nests a step inside a branch or loop. ' +
+    'Set awaitingConfirmation true when you propose a plan, then end your turn: only the user\'s reply approves it, and write tools are refused until they answer. ' +
+    'op "patch" changes items by id (status, note, wording) and/or title or awaitingConfirmation: "doing" when you start an item, "done" once it is configured and tested, "blocked" with a note saying what you need from the user, "skipped" if dropped. ' +
+    'op "clear" removes the plan.',
+  parameters: PLAN_PARAMS,
+  danger: 'safe',
+  describe: planDescribe,
+  async run(raw, ctx) {
+    const a = dropNulls((raw ?? {}) as unknown as Record<string, unknown>) as unknown as PlanUpdate
+    const errs = validateArgs(PLAN_PARAMS, a)
+    if (errs.length) throw new ToolError(`Invalid arguments for ui_plan: ${errs.join('; ')}`)
+    if (a.op === 'clear' && (a.items?.length || a.title)) throw new ToolError('op "clear" takes no items or title.')
+    let change
+    try {
+      change = await ctx.ui.plan(a)
+    } catch (e) {
+      throw new ToolError(e instanceof Error ? e.message : String(e))
+    }
+    const started = change.started[0]
+    if (started) ctx.ui.thinking(`Now: ${started.title}`)
+    const out: Record<string, unknown> = { ok: true, op: a.op, shown: change.plan !== null, ...planSummary(change.plan) }
+    if (change.autoApproved) out.note = 'awaitingConfirmation was cleared because work on the plan started after the user replied.'
+    if (change.stillAwaiting) out.note = 'The plan still waits for the user\'s approval (proposed in this answer): ask them and end your turn.'
+    return out
+  },
+}
+
+function planSummary(p: WorkflowPlan | null): Record<string, unknown> {
+  if (!p) return {}
+  const count = (s: string) => p.items.filter((i) => i.status === s).length
+  const out: Record<string, unknown> = { items: p.items.length, done: count('done'), awaitingConfirmation: p.awaitingConfirmation }
+  const doing = p.items.filter((i) => i.status === 'doing').map((i) => i.id)
+  const next = p.items.find((i) => i.status === 'todo')
+  const blocked = p.items.filter((i) => i.status === 'blocked').map((i) => i.id)
+  if (doing.length) out.doing = doing.length === 1 ? doing[0] : doing
+  if (next) out.next = next.id
+  if (blocked.length) out.blocked = blocked
+  return out
+}
+
+export const UI_TOOLS: Tool<any>[] = [openStep, closePanel, highlight, suggest, refreshPage, navigate, plan]

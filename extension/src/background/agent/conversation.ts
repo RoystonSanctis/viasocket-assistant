@@ -2,7 +2,7 @@
 // the browser closes, and is not readable by content scripts (default TRUSTED_CONTEXTS access level).
 // Threads from incognito tabs are the exception and live in memory only (see incognitoThreads).
 
-import type { ChatLine, ChatRole } from '../../shared/mascot'
+import { normalizePlan, type ChatLine, type ChatRole, type WorkflowPlan } from '../../shared/mascot'
 import { threadKey, type PageContext } from '../../shared/page'
 import type { ChatMessage } from '../llm/types'
 import type { Session } from './session'
@@ -10,6 +10,8 @@ import type { Session } from './session'
 export interface Thread {
   messages: ChatMessage[]
   lines: ChatLine[]
+  /** The workflow plan shown as a checklist card (ui_plan); kept with the thread so it is cleared and carried with it */
+  plan?: WorkflowPlan | null
 }
 
 const PREFIX = 'thread:'
@@ -52,6 +54,7 @@ async function read(key: string): Promise<Thread> {
   return {
     messages: Array.isArray(raw?.messages) ? raw.messages : [],
     lines: Array.isArray(raw?.lines) ? raw.lines : [],
+    plan: normalizePlan(raw?.plan),
   }
 }
 
@@ -106,6 +109,30 @@ export async function loadLines(key: string): Promise<ChatLine[]> {
   return (await read(key)).lines
 }
 
+export async function loadPlan(key: string): Promise<WorkflowPlan | null> {
+  return (await read(key)).plan ?? null
+}
+
+/** Stores the thread's plan; null removes it. */
+export function savePlan(key: string, plan: WorkflowPlan | null): Promise<void> {
+  return serialized(async () => {
+    const thread = await read(key)
+    if (!plan && !thread.plan) return
+    await write(key, { ...thread, plan })
+  })
+}
+
+/** Shows a conversation in the panel: its chat lines, then its plan. Null shows an empty conversation. */
+export function showThread(session: Session, thread: Pick<Thread, 'lines' | 'plan'> | null): void {
+  session.send({ type: 'history', lines: thread?.lines ?? [] })
+  session.send({ type: 'plan', plan: thread?.plan ?? null })
+}
+
+/** Sends the stored conversation for `key` to the panel (an empty one for null). */
+export async function sendHistory(session: Session, key: string | null): Promise<void> {
+  showThread(session, key ? await read(key) : null)
+}
+
 export function saveMessages(key: string, messages: ChatMessage[], maxMessages: number): Promise<void> {
   return serialized(async () => {
     const thread = await read(key)
@@ -143,15 +170,26 @@ export function clearThread(key: string): Promise<void> {
   })
 }
 
-/** Copies a thread to a new page's key when that page has no conversation of its own yet. */
+/**
+ * Copies a thread to a new page's key when that page has no conversation of its own yet. The plan MOVES: it belongs
+ * to the flow being built, and the source (often the org-wide project or home thread) must not keep showing a stale
+ * build. When the new page already has a conversation, only the plan moves there (unless it has a plan of its own).
+ */
 export function carryOver(from: string, to: string): Promise<boolean> {
   if (from === to) return Promise.resolve(false)
   return serialized(async () => {
     const target = await read(to)
-    if (target.messages.length || target.lines.length) return false
     const source = await read(from)
+    if (target.messages.length || target.lines.length) {
+      if (source.plan && !target.plan) {
+        await write(to, { ...target, plan: source.plan })
+        await write(from, { ...source, plan: null })
+      }
+      return false
+    }
     if (!source.messages.length && !source.lines.length) return false
     await write(to, source)
+    if (source.plan) await write(from, { ...source, plan: null })
     return true
   })
 }

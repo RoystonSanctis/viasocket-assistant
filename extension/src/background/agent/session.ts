@@ -58,6 +58,8 @@ export class Session {
   private abortCtl: AbortController | null = null
   /** Thread a run started on. A run that navigates (e.g. into a flow it just created) keeps writing here. */
   private runThread: string | null = null
+  /** When the current run started (the user's message); a plan proposed after it awaits the user's reply */
+  runStartedAt = 0
   private idleTimer: ReturnType<typeof setTimeout> | null = null
   private idleWaiters: Array<() => void> = []
   private cookieScope: Promise<CookieScope | null> | null = null
@@ -130,6 +132,7 @@ export class Session {
     this.busy = true
     this.updateKeepAlive()
     this.abortCtl = new AbortController()
+    this.runStartedAt = Date.now()
     this.runThread = this.page ? this.threadOf(this.page) : null
     this.send({ type: 'busy', busy: true })
     return this.abortCtl.signal

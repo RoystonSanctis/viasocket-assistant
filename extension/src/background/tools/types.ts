@@ -2,7 +2,7 @@
 // Safety is enforced here in code (allowlisted endpoints, confirmations), never delegated to the prompt.
 
 import type { JsonSchema } from '../llm/types'
-import type { HighlightTarget, MascotMode, Suggestion } from '../../shared/mascot'
+import type { HighlightTarget, MascotMode, PlanChange, PlanUpdate, Suggestion } from '../../shared/mascot'
 import type { PageContext, PageKind } from '../../shared/page'
 import type { ViaSocketClient } from './viasocket-client'
 
@@ -27,6 +27,12 @@ export interface UiBridge {
   say(text: string): void
   /** Shows a suggestion card; Apply runs `apply` through the same checks and confirmation as the agent. Returns its id. */
   suggest(suggestion: Omit<Suggestion, 'id'>): string
+  /**
+   * Applies a ui_plan change to the workflow plan of the conversation this run writes to, stores it with that
+   * conversation and shows it as the checklist card. Rejects, with a message meant for the model, when the change
+   * does not fit (unknown item id, empty plan, ...).
+   */
+  plan(update: PlanUpdate): Promise<PlanChange>
 }
 
 export interface ToolContext {

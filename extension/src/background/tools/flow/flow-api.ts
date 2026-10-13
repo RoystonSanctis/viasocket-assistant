@@ -205,10 +205,50 @@ export function triggerKind(trigger: Trigger | undefined): string | undefined {
   return trigger && typeof trigger.triggerType === 'string' && trigger.triggerType ? trigger.triggerType : undefined
 }
 
+/** Panel query for the trigger: the editor keys trigger panels by trigger type. */
+export function triggerPanelSlug(kind: string | undefined): string {
+  if (kind === 'webhook' || kind === 'email' || kind === 'cron') return kind
+  return kind ? 'trigger' : 'selecttrigger'
+}
+
+/**
+ * Get Data (pre-process), loop and run-if settings stored on the trigger. Every trigger save must carry them over
+ * (POST /trigger replaces the whole trigger), so tools and the model both need to see them.
+ */
+export function triggerFeatures(trigger: Trigger | undefined): Record<string, unknown> | undefined {
+  if (!trigger) return undefined
+  const out: Record<string, unknown> = {}
+  const pre = isRecord(trigger.preProcess) ? trigger.preProcess : undefined
+  if (pre) {
+    const type = str(pre.type)
+    const code = asRecord(pre.code)
+    out.getData =
+      type === 'plugin'
+        ? { source: 'app', app: str(code.serviceName), action: str(code.actionName), actionId: str(code.selectedCreate), connected: !!str(pre.auth_id) }
+        : type === 'api'
+          ? { source: 'api', method: str(code.method), url: truncate(str(code.url) ?? '', 160) }
+          : { source: 'code' }
+  }
+  const loops = asRecord(trigger.loops)
+  const filter = asRecord(trigger.preProcessFilter)
+  const key = filter.type === 'filterByKey' ? str(asRecord(filter.value).value) : undefined
+  if (loops.loopsEnabled === true) out.loop = { enabled: true, arrayKey: key || '(root)' }
+  else if (key) out.loop = { enabled: false, arrayKey: key, note: 'The key still narrows the body although the loop is off.' }
+  const pc = asRecord(trigger.preCondition)
+  if (Object.keys(pc).length) {
+    out.runIf = {
+      enabled: pc.conditionEnabled === true,
+      condition: truncate(str(pc.code) ?? '', 200) || undefined,
+      statement: str(pc.statement) ? truncate(String(pc.statement), 160) : undefined,
+    }
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 export function summarizeTrigger(trigger: Trigger | undefined, scriptId: string, vmBase: string): Record<string, unknown> | null {
   const kind = triggerKind(trigger)
   if (!trigger || !kind) return null
-  const base: Record<string, unknown> = { type: kind, state: trigger.type }
+  const base: Record<string, unknown> = { type: kind, state: trigger.type, ...(triggerFeatures(trigger) ?? {}) }
   switch (kind) {
     case 'webhook':
       return { ...base, url: `${vmBase}/func/${scriptId}`, note: 'The URL runs the live flow after publishing.' }
@@ -316,4 +356,52 @@ export function refreshEditorIfOpen(ctx: ToolContext, scriptId: string, extra: R
   } catch {
     // Refreshing is best-effort; the write itself already succeeded.
   }
+}
+
+/**
+ * Opens a step's (or the trigger's) panel in the open editor so the user sees what was just configured. The
+ * ?timestamp bump makes the editor refetch first, so the panel shows the saved state rather than a stale copy.
+ * Only for the flow open in the editor; returns whether it navigated.
+ */
+export function openPanel(
+  ctx: ToolContext,
+  scriptId: string,
+  stepId: string,
+  slugName: string,
+  extra: { stepType?: string; flowCondition?: string } = {},
+): boolean {
+  if (ctx.page.kind !== 'flow-editor' || ctx.page.scriptId !== scriptId) return false
+  try {
+    ctx.ui.navigate(
+      pagePathWithParams(ctx.page.url, {
+        stepId,
+        slugName,
+        position: null,
+        parent: null,
+        stepType: extra.stepType ?? null,
+        flowCondition: extra.flowCondition ?? null,
+        timestamp: String(Date.now()),
+      }),
+      { replace: true },
+    )
+    return true
+  } catch {
+    // Opening the panel is a courtesy; the write itself already succeeded.
+    return false
+  }
+}
+
+/** The trigger's loop ('hitFlowIndividually') or run-if ('runIfCondition') panel. */
+export function openTriggerFeaturePanel(ctx: ToolContext, scriptId: string, kind: string | undefined, flowCondition: 'hitFlowIndividually' | 'runIfCondition'): boolean {
+  const type = kind === 'webhook' || kind === 'cron' || kind === 'email' ? kind : 'trigger'
+  return openPanel(ctx, scriptId, `${type}-advance-config`, `${type}-advance-config`, { flowCondition })
+}
+
+/** The Get Data panel (the trigger's pre-process), of its kind: plugin, api or function. */
+export function openGetDataPanel(ctx: ToolContext, scriptId: string, stepType: string): boolean {
+  return openPanel(ctx, scriptId, 'CRON_PRE_PROCESS', 'CRON_PRE_PROCESS', { stepType })
+}
+
+export function openTriggerPanel(ctx: ToolContext, scriptId: string, kind: string | undefined): boolean {
+  return openPanel(ctx, scriptId, 'SET_TRIGGER', triggerPanelSlug(kind))
 }

@@ -85,6 +85,42 @@ export async function getActionRow(ctx: ToolContext, actionId: string): Promise<
   return row as ActionRow
 }
 
+export interface ActionVersionRow {
+  rowid: string
+  sampledata?: unknown
+  metadata?: unknown
+  [k: string]: unknown
+}
+
+/**
+ * One version of an action (the row a trigger or step is pinned to through actionVersionId): its own documented
+ * sample and metadata such as scheduleTimeOptions. Fails when the version is unknown.
+ */
+export async function getActionVersionRow(ctx: ToolContext, actionVersionId: string): Promise<ActionVersionRow> {
+  const body = await call('Reading the app action version', () =>
+    ctx.vs.request({
+      method: 'GET',
+      path: '/dbdash/getpluginbyplugid/actionversion',
+      // At least two names, so `fields` reaches the controller as an array.
+      query: { rowid: actionVersionId, fields: 'rowid,sampledata,metadata' },
+      signal: ctx.signal,
+    }),
+  )
+  const row = rowsOf(body)[0]
+  if (!row || typeof row.rowid !== 'string') throw new ToolError(`Action version ${actionVersionId} was not found.`)
+  return row as ActionVersionRow
+}
+
+/** Polling intervals (minutes) an action version allows, as the trigger panel offers them. */
+export const DEFAULT_POLL_MINUTES = [5, 15, 60, 720, 1440] as const
+
+export function scheduleTimeOptions(row: ActionVersionRow | undefined): number[] {
+  const list = asArray(asRecord(parseMaybeJson(row?.metadata)).scheduleTimeOptions)
+    .map((v) => Number(v))
+    .filter((v) => (DEFAULT_POLL_MINUTES as readonly number[]).includes(v))
+  return list.length ? list : [...DEFAULT_POLL_MINUTES]
+}
+
 export function normalizeInputJson(v: unknown): InputJson {
   const ij = asRecord(parseMaybeJson(v))
   const steps: Record<string, string[]> = {}
@@ -140,7 +176,8 @@ export function fieldList(ij: InputJson): FieldSummary[] {
         default: b.defaultValue,
         group,
       })
-      if (ij.steps[key] && depth < 4) walk(key, key, depth + 1)
+      // Only input groups hold child fields; a dropdown's steps entry is the picked option the editor merged in.
+      if (ij.steps[key] && depth < 4 && String(b.type ?? '').toLowerCase() === 'input groups') walk(key, key, depth + 1)
     }
   }
   walk('root', undefined, 0)
@@ -148,8 +185,10 @@ export function fieldList(ij: InputJson): FieldSummary[] {
 }
 
 export function summarizeAction(row: ActionRow): Record<string, unknown> {
-  // App-defined example output (not customer data): its paths tell the model what later steps can reference.
+  // App-defined example output (not customer data). It shows roughly what the app returns, but it is not a real
+  // output: mappings must come from a test (vs_get_variables), so the paths are labelled as documented only.
   const sample = parseMaybeJson(row.sampledata)
+  const base = row.type === 'trigger' ? 'context.req.body' : 'context.res.<StepSlug>'
   return {
     actionId: row.rowid,
     name: row.name,
@@ -164,6 +203,13 @@ export function summarizeAction(row: ActionRow): Record<string, unknown> {
     triggerType: row.type === 'trigger' ? row.triggertype : undefined,
     description: row.description ? truncate(String(row.description), 300) : undefined,
     fields: fieldList(normalizeInputJson(row.inputjson)),
-    sampleOutputFields: isRecord(sample) || Array.isArray(sample) ? leafPaths(sample, 'output', 60) : undefined,
+    documentedSampleFields:
+      isRecord(sample) || Array.isArray(sample)
+        ? leafPaths(Array.isArray(sample) ? sample[0] : sample, base, 60).filter((p) => !p.includes('viasocket_help'))
+        : undefined,
+    sampleNote:
+      isRecord(sample) || Array.isArray(sample)
+        ? `Documented example only, not real data. After the ${row.type === 'trigger' ? 'trigger' : 'step'} is saved and tested, map fields with the insert texts from vs_get_variables.`
+        : undefined,
   }
 }

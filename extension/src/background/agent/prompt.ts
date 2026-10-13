@@ -2,6 +2,7 @@
 // Only a fixed set of {{placeholders}} is substituted in the prompt files; there is no other templating.
 
 import type { FullConfig } from '../../shared/config'
+import type { WorkflowPlan } from '../../shared/mascot'
 import type { ObservedEvent } from '../../shared/observed'
 import type { PageContext, PageKind } from '../../shared/page'
 import type { UserSettings } from '../../shared/settings'
@@ -9,6 +10,7 @@ import { buildToolset } from '../tools'
 import { resolveEnv } from '../tools/env'
 import { SLUG_RE } from '../tools/flow/util'
 import { summarizeEvent } from './events'
+import { planPromptBlock } from './plan'
 import type { Session } from './session'
 
 const FLOW_PAGES: ReadonlySet<PageKind> = new Set(['flow-editor', 'project', 'home'])
@@ -53,7 +55,7 @@ function promptValue(field: (typeof CONTEXT_FIELDS)[number], v: string | undefin
 
 /**
  * `page` is the page the run acts on (pinned at run start), not necessarily the tab's current page.
- * `explainEvent` is set when the user pressed "Explain" on a reaction.
+ * `explainEvent` is set when the user pressed "Explain" on a reaction. `plan` is the conversation's checklist.
  */
 export function buildSystemPrompt(
   config: FullConfig,
@@ -62,6 +64,7 @@ export function buildSystemPrompt(
   page: PageContext | null,
   toolNames?: string[],
   explainEvent?: ObservedEvent,
+  plan?: WorkflowPlan | null,
 ): string {
   const kind: PageKind = page?.kind ?? 'other'
   const date = localDate()
@@ -91,6 +94,8 @@ export function buildSystemPrompt(
   const names = toolNames ?? (page ? buildToolset({ page, flags: config.flags, toolsConfig: config.tools }).map((t) => t.name) : [])
   const strip = config.flags.stripRunData
   const blocks = [prompt, contextBlock(session, page, settings, date, names, strip)]
+  const planBlock = planPromptBlock(plan ?? null)
+  if (planBlock) blocks.push(planBlock)
   if (explainEvent) blocks.push(explainBlock(explainEvent, strip))
   return blocks.join('\n\n')
 }

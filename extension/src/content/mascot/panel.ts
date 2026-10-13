@@ -1,14 +1,15 @@
-// The chat panel: header with status and menu, setup banner, history, confirm/suggestion cards,
+// The chat panel: header with status and menu, setup banner, the plan checklist, history, confirm/suggestion cards,
 // live transcript, voice row and the composer (text + hold-to-talk). Non-modal dialog next to the orb.
 
 import type { PageKind } from '../../shared/page'
-import type { ChatLine, ConfirmRequest, MascotMode, Suggestion } from '../../shared/mascot'
+import { PLAN_APPROVE_TEXT, type ChatLine, type ConfirmRequest, type MascotMode, type Suggestion, type WorkflowPlan } from '../../shared/mascot'
 import type { SttEngine, VoiceState } from '../../shared/messages'
 import type { MascotCallbacks } from './api'
 import { confirmCard, suggestionCard, type Card } from './cards'
 import { ChatView } from './chat-view'
 import { h, icon, iconButton } from './dom'
 import { boxAt, intersects, viewport, type Point, type Rect } from './geometry'
+import { PlanCard } from './plan-card'
 import { VoiceRow } from './voice-row'
 
 const MAX_INPUT = 2000
@@ -17,6 +18,8 @@ const EDGE = 12
 const GAP = 12
 const MAX_SUGGESTIONS = 4
 const FINAL_TRANSCRIPT_MS = 1500
+const INPUT_PLACEHOLDER = 'Ask me to build or fix something…'
+const CHANGE_PLAN_PLACEHOLDER = 'What should change in the plan?'
 
 const STATUS: Record<MascotMode, string> = {
   idle: 'Ready',
@@ -57,6 +60,7 @@ export class Panel {
   private readonly banner: HTMLDivElement
   private readonly bannerText: HTMLSpanElement
   private readonly chat = new ChatView()
+  private readonly plan: PlanCard
   private readonly cards: HTMLDivElement
   private readonly transcript: HTMLDivElement
   /** Screen-reader announcements that must not move focus (a confirmation arriving while the user types) */
@@ -105,6 +109,19 @@ export class Panel {
     this.banner = h('div', { class: 'banner', role: 'alert', hidden: true }, this.bannerText, bannerBtn)
 
     // ----- body -----
+    this.plan = new PlanCard({
+      onApprove: () => {
+        this.resetPlaceholder()
+        cb.onUserText(PLAN_APPROVE_TEXT)
+        hooks.onActivity()
+      },
+      onChange: () => {
+        // The user says what to change in their own words; the model then replaces the plan.
+        this.input.placeholder = CHANGE_PLAN_PLACEHOLDER
+        this.input.focus()
+        hooks.onActivity()
+      },
+    })
     this.cards = h('div', { class: 'cards' })
     this.transcript = h('div', { class: 'transcript', 'aria-live': 'polite', hidden: true })
     this.announcer = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite' })
@@ -116,7 +133,7 @@ export class Panel {
       class: 'input',
       rows: '1',
       maxlength: String(MAX_INPUT),
-      placeholder: 'Ask me to build or fix something…',
+      placeholder: INPUT_PLACEHOLDER,
       'aria-label': 'Message the assistant',
     })
     this.micBtn = iconButton('mic', 'Hold to talk', 'icon-btn mic')
@@ -130,6 +147,7 @@ export class Panel {
       header,
       this.menu,
       this.banner,
+      this.plan.el,
       this.chat.el,
       this.cards,
       this.transcript,
@@ -196,6 +214,11 @@ export class Panel {
     return this.pending.size
   }
 
+  /** A proposed plan is waiting for "Looks good, start" or "Change something" */
+  get planNeedsAnswer(): boolean {
+    return this.plan.needsAnswer
+  }
+
   open(takeFocus: boolean): void {
     if (!this.opened) {
       this.opened = true
@@ -254,6 +277,7 @@ export class Panel {
   setBusy(busy: boolean): void {
     this.busy = busy
     if (!busy) this.thinking = ''
+    this.plan.setBusy(busy)
     this.el.classList.toggle('busy', busy)
     this.sendBtn.replaceChildren(icon(busy ? 'stop' : 'send'))
     const label = busy ? 'Stop' : 'Send message'
@@ -278,6 +302,11 @@ export class Panel {
 
   addChat(line: ChatLine): void {
     this.chat.add(line)
+  }
+
+  setPlan(plan: WorkflowPlan | null): void {
+    this.plan.set(plan)
+    if (!this.plan.needsAnswer) this.resetPlaceholder()
   }
 
   showConfirm(req: ConfirmRequest, takeFocus: boolean): void {
@@ -376,6 +405,7 @@ export class Panel {
 
   destroy(): void {
     clearTimeout(this.transcriptTimer)
+    this.plan.destroy()
     this.resizeObs.disconnect()
     this.releaseMic()
   }
@@ -387,8 +417,13 @@ export class Panel {
     if (!text) return
     this.hooks.callbacks.onUserText(text.slice(0, MAX_INPUT))
     this.input.value = ''
+    this.resetPlaceholder()
     this.autoGrow()
     this.hooks.onActivity()
+  }
+
+  private resetPlaceholder(): void {
+    if (this.input.placeholder !== INPUT_PLACEHOLDER) this.input.placeholder = INPUT_PLACEHOLDER
   }
 
   private autoGrow(): void {

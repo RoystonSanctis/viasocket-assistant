@@ -160,6 +160,9 @@ async function main(): Promise<void> {
       case 'history':
         mascot.setHistory(msg.lines)
         break
+      case 'plan':
+        mascot.setPlan(msg.plan)
+        break
       case 'suggestion':
         mascot.showSuggestion(msg.suggestion)
         break

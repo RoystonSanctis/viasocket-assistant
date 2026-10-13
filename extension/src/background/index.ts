@@ -8,7 +8,7 @@ import type { ObservedEvent, ObservedKind } from '../shared/observed'
 import { parsePage, type PageContext } from '../shared/page'
 import { SETTINGS_KEY, type UserSettings } from '../shared/settings'
 import { getConfig, onConfigChanged, refreshConfig } from './config-loader'
-import { clearThread, forgetIncognitoThreads, loadLines } from './agent/conversation'
+import { clearThread, forgetIncognitoThreads, sendHistory } from './agent/conversation'
 import { runAgent } from './agent/loop'
 import { handleObserved, handleSuggestionResponse } from './agent/reactions'
 import { suggestionStillApplies } from './agent/run-target'
@@ -111,8 +111,8 @@ function asObservedEvent(raw: unknown): ObservedEvent | null {
 async function sendHello(session: Session): Promise<void> {
   const config = await getConfig()
   session.send({ type: 'config', config: toClientConfig(config) })
-  const key = session.threadKey
-  session.send({ type: 'history', lines: key ? await loadLines(key) : [] })
+  // Chat lines and the plan checklist, so a reload keeps both.
+  await sendHistory(session, session.threadKey)
   session.send(await computeStatus(config))
   // A panel that was mid-run when the worker restarted would otherwise stay "busy".
   session.send({ type: 'busy', busy: session.busy })
@@ -151,7 +151,7 @@ async function handlePortMessage(session: Session, raw: unknown): Promise<void> 
       dropStaleSuggestions(session)
       // During a run the panel keeps showing the run; the thread follows the user when it ends.
       const now = session.threadOf(page)
-      if (!session.busy && now !== before) session.send({ type: 'history', lines: await loadLines(now) })
+      if (!session.busy && now !== before) await sendHistory(session, now)
       return
     }
     case 'user-input':
@@ -191,7 +191,8 @@ async function handlePortMessage(session: Session, raw: unknown): Promise<void> 
       await session.whenIdle(5000)
       const key = session.page ? session.threadOf(session.page) : null
       if (key) await clearThread(key)
-      session.send({ type: 'history', lines: [] })
+      // Empty history and no plan: the plan is stored with the thread and went with it.
+      await sendHistory(session, null)
       return
     }
     case 'open-options':

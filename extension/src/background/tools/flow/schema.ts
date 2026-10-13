@@ -21,6 +21,14 @@ export const S = {
     enum: [...values],
     description,
   }),
+  /** List of short strings (e.g. field keys) */
+  strs: (description: string, extra: Node = {}): Node => ({
+    type: 'array',
+    description,
+    maxItems: 50,
+    items: { type: 'string', minLength: 1, maxLength: 200 },
+    ...extra,
+  }),
   /** Free-form map (e.g. field values keyed by field key) */
   map: (description: string, values: Node = {}): Node => ({ type: 'object', description, additionalProperties: values }),
   pairs: (description: string): Node => ({

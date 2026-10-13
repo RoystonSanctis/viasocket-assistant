@@ -13,7 +13,8 @@ export interface ToolsetOptions {
   toolsConfig: ToolsConfig
 }
 
-const TRIGGER_TOOL_NAMES = new Set(['vs_set_trigger'])
+/** Tools that change or test the trigger (Get Data, loop and run-if live on the trigger too); enableTriggerTools gates them all. */
+const TRIGGER_TOOL_NAMES = new Set(['vs_set_trigger', 'vs_test_trigger', 'vs_set_get_data', 'vs_set_trigger_loop', 'vs_set_run_condition'])
 
 export const ALL_TOOLS: Tool<any>[] = [...UI_TOOLS, ...FLOW_TOOLS, ...DH_TOOLS]
 

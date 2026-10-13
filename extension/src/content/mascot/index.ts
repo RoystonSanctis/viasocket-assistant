@@ -3,7 +3,7 @@
 // glue between the orb, thinking line, panel, spotlight and motion controller.
 
 import type { ClientConfig, MascotConfig } from '../../shared/config'
-import type { ChatLine, ConfirmRequest, HighlightTarget, MascotMode, Suggestion } from '../../shared/mascot'
+import { normalizePlan, type ChatLine, type ConfirmRequest, type HighlightTarget, type MascotMode, type Suggestion, type WorkflowPlan } from '../../shared/mascot'
 import type { SttEngine, VoiceState } from '../../shared/messages'
 import type { PageContext, PageKind } from '../../shared/page'
 import type { CreateMascot, MascotCallbacks, MascotController } from './api'
@@ -15,6 +15,7 @@ import { Motion } from './motion'
 import { OrbInput } from './orb-input'
 import { Panel } from './panel'
 import { loadPark, savePark, type ParkSpot } from './park-store'
+import { restingText } from './plan-card'
 import { Selectors } from './selectors'
 import { STYLES } from './styles'
 import { ThinkingLine } from './thinking'
@@ -110,6 +111,7 @@ class Mascot implements MascotController {
   /** The current highlight was asked for (not a reaction's), so a target that never shows up is reported */
   private reportMiss = false
   private busy = false
+  private plan: WorkflowPlan | null = null
   private voice: VoiceState = 'off'
   private asleep = false
   private wakingUntil = 0
@@ -216,12 +218,14 @@ class Mascot implements MascotController {
     this.root.classList.toggle('hidden', !enabled)
     if (enabled) {
       this.activity()
+      this.syncResting()
       this.kick()
       return
     }
     this.panel.close(false)
     this.clearHighlight()
     this.thinking.clear()
+    this.syncResting()
     this.pause()
   }
 
@@ -237,6 +241,7 @@ class Mascot implements MascotController {
       this.asleep = false
       if (mode === 'idle') this.beginWaking()
       else this.bubble.stretch()
+      this.syncResting()
     }
     this.mode = mode
     this.scheduleRevert(mode)
@@ -265,6 +270,21 @@ class Mascot implements MascotController {
   setHistory(lines: ChatLine[]): void {
     if (this.destroyed) return
     this.panel.setHistory(lines)
+  }
+
+  setPlan(raw: WorkflowPlan | null): void {
+    if (this.destroyed) return
+    const prev = this.plan
+    const plan = normalizePlan(raw)
+    this.plan = plan
+    this.panel.setPlan(plan)
+    // A plan proposed during a run waits for the user like a confirmation does, so the panel opens (focus stays put).
+    // One replayed from history (a reload, another tab) does not pop the panel open.
+    const newRequest = !!plan?.awaitingConfirmation && (!prev || prev.id !== plan.id || !prev.awaitingConfirmation)
+    if (newRequest && this.busy && this.enabled) this.panel.open(false)
+    if (plan) this.activity()
+    this.syncResting()
+    this.syncBadge()
   }
 
   showConfirm(request: ConfirmRequest): void {
@@ -481,6 +501,7 @@ class Mascot implements MascotController {
     if (!this.asleep) return
     this.asleep = false
     this.beginWaking()
+    this.syncResting()
     this.applyMode()
     this.kick()
   }
@@ -489,8 +510,15 @@ class Mascot implements MascotController {
     if (this.asleep) return
     this.asleep = true
     this.thinking.clear()
+    this.syncResting()
     this.applyMode()
     this.kick()
+  }
+
+  /** While idle, the line next to the orb shows where the plan stands (the item in progress); asleep it shows nothing. */
+  private syncResting(): void {
+    const text = this.enabled && !this.asleep && !this.destroyed ? restingText(this.plan) : ''
+    this.thinking.setResting(text, this.mascot.thinkingTextMaxChars)
   }
 
   private checkSleep(now: number): void {
@@ -527,6 +555,8 @@ class Mascot implements MascotController {
     this.panel.setLines(m.lines)
     this.root.style.setProperty('--hl', this.colorFor('suggest'))
     this.applyMode()
+    // thinkingTextMaxChars may have changed. (The first call runs from the constructor, before the plan exists.)
+    if (this.plan) this.syncResting()
   }
 
   private onMoved(x: number): void {
@@ -553,7 +583,7 @@ class Mascot implements MascotController {
   }
 
   private syncBadge(): void {
-    this.bubble.setBadge(!this.panel.isOpen && (this.unread || this.panel.pendingCount > 0))
+    this.bubble.setBadge(!this.panel.isOpen && (this.unread || this.panel.pendingCount > 0 || this.panel.planNeedsAnswer))
   }
 
   private loadParkFor(kind: PageKind): void {

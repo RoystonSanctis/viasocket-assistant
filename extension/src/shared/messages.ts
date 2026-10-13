@@ -5,7 +5,7 @@
 //
 // The LLM key and the viaSocket token never travel to the content script or the page.
 
-import type { ChatLine, ConfirmRequest, HighlightTarget, MascotMode, Suggestion } from './mascot'
+import type { ChatLine, ConfirmRequest, HighlightTarget, MascotMode, Suggestion, WorkflowPlan } from './mascot'
 import type { PageContext } from './page'
 import type { ObservedEvent } from './observed'
 import type { ClientConfig } from './config'
@@ -34,6 +34,8 @@ export type BackgroundToContent =
   | { type: 'thinking-text'; text: string }
   | { type: 'chat'; line: ChatLine }
   | { type: 'history'; lines: ChatLine[] }
+  /** The conversation's workflow plan (checklist card); null hides it. Sent after every 'history' and on each change */
+  | { type: 'plan'; plan: WorkflowPlan | null }
   | { type: 'suggestion'; suggestion: Suggestion }
   /** Suggestions made for a flow or plug the tab no longer shows; Apply would be refused, so the cards go */
   | { type: 'suggestions-clear'; ids: string[] }

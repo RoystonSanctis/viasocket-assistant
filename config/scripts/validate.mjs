@@ -19,11 +19,13 @@ const CONFIG_VERSION_STYLE = /^\d{4}\.\d{2}\.\d{2}-\d+$/
 
 // Tool names implemented by the extension. Keep in sync with the extension's tool registry.
 const KNOWN_TOOLS = new Set([
-  'ui_open_step', 'ui_close_panel', 'ui_highlight', 'ui_suggest', 'ui_refresh_page', 'ui_navigate',
-  'vs_list_projects', 'vs_list_flows', 'vs_create_flow', 'vs_get_flow', 'vs_get_step', 'vs_search_apps',
-  'vs_list_app_actions', 'vs_get_action', 'vs_list_connections', 'vs_connect_app', 'vs_add_step',
-  'vs_update_step', 'vs_delete_step', 'vs_move_step', 'vs_set_trigger', 'vs_test_step', 'vs_test_flow',
-  'vs_get_recent_run', 'vs_publish_flow', 'vs_discard_changes', 'vs_rename_flow',
+  'ui_open_step', 'ui_close_panel', 'ui_highlight', 'ui_suggest', 'ui_refresh_page', 'ui_navigate', 'ui_plan',
+  'vs_list_projects', 'vs_list_flows', 'vs_create_flow', 'vs_get_flow', 'vs_get_step', 'vs_get_variables',
+  'vs_search_apps', 'vs_list_app_actions', 'vs_list_builtin_tools', 'vs_list_ai_agents', 'vs_get_action',
+  'vs_get_field_options', 'vs_list_connections', 'vs_connect_app', 'vs_add_step', 'vs_update_step',
+  'vs_set_response', 'vs_delete_step', 'vs_move_step', 'vs_set_trigger', 'vs_test_trigger', 'vs_set_get_data',
+  'vs_set_trigger_loop', 'vs_set_run_condition', 'vs_test_step', 'vs_test_flow', 'vs_get_recent_run',
+  'vs_publish_flow', 'vs_discard_changes', 'vs_rename_flow',
   'dh_search_plugins', 'dh_get_plugin', 'dh_create_plugin', 'dh_brand_details', 'dh_update_plugin',
   'dh_publish_plugin', 'dh_kb', 'dh_list_auth_versions', 'dh_create_connection', 'dh_update_auth_version',
   'dh_check_connection', 'dh_connect', 'dh_list_actions', 'dh_get_action_version', 'dh_list_components',

@@ -43,8 +43,11 @@ export function appPath(t: AppTarget): string {
   }
 }
 
-/** Editor query params the tools may change: the open step panel and the refetch stamp. */
-const EDITOR_PARAMS = new Set(['stepId', 'slugName', 'position', 'parent', 'timestamp'])
+/**
+ * Editor query params the tools may change: the open step panel (stepType names the Get Data panel's kind,
+ * flowCondition the trigger's loop / run-if panel) and the refetch stamp.
+ */
+const EDITOR_PARAMS = new Set(['stepId', 'slugName', 'position', 'parent', 'timestamp', 'stepType', 'flowCondition'])
 
 /** Path + query of the current page with some editor params set (string) or removed (null). */
 export function pagePathWithParams(pageUrl: string, changes: Record<string, string | null>): string {

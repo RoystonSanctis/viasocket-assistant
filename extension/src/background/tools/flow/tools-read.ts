@@ -1,7 +1,8 @@
 // Read-only flow tools: projects, flows, steps, the app catalog, connections and run data.
 
 import type { Tool, ToolContext } from '../types'
-import { fieldList, getActionRow, listActions, normalizeInputJson, searchApps, summarizeAction, isPaidAction } from './catalog'
+import { getActionRowAny } from './builtins'
+import { fieldList, listActions, normalizeInputJson, searchApps, summarizeAction, isPaidAction } from './catalog'
 import { listConnections, summarizeConnection } from './connections'
 import { call, ToolError } from './errors'
 import {
@@ -10,6 +11,7 @@ import {
 } from './flow-api'
 import { rememberFlow } from './known'
 import { getRecentRun, summarizeRun } from './runs'
+import { cleanSample, deepEqual } from './samples'
 import { defineTool, params, S } from './schema'
 import type { Block, FunctionRow, JsonScript, PluginData } from './types'
 import {
@@ -215,7 +217,16 @@ function stepDetail(slug: string, block: Block, fn: FunctionRow | null, js: Json
       out.data = block.data
       break
   }
-  if (block.sampleData !== undefined && block.sampleData !== null) out.sampleOutput = trimData(block.sampleData, ctx.stripRunData)
+  if (block.sampleData !== undefined && block.sampleData !== null) {
+    out.sampleOutput = trimData(block.sampleData, ctx.stripRunData)
+    // An app step starts with the action's documented example; only a test replaces it with a real output.
+    const documented = block.type === 'plugin' ? parseMaybeJson(pluginDataOf(block, fn)?.sampleData) : undefined
+    out.sampleOrigin =
+      documented !== undefined && deepEqual(cleanSample(parseMaybeJson(block.sampleData)), cleanSample(documented))
+        ? "documented (the app's example, not a real output: test the step)"
+        : 'saved from a test'
+    out.mapWith = 'vs_get_variables (insert texts)'
+  }
   if (block.type === 'variable') out.reference = `context.vals.${slug}`
   else if (['function', 'api', 'plugin', 'ifBlock'].includes(block.type)) out.reference = `context.res.${slug}`
   return out
@@ -309,13 +320,13 @@ const listAppActions = defineTool<{ serviceId: string; kind?: 'action' | 'trigge
 const getAction = defineTool<{ actionId: string }>({
   name: 'vs_get_action',
   description:
-    'Read the full definition of an app action or trigger: its input fields (key, label, type, required, static options, whether options are loaded dynamically, visibility rules), the connection it needs (authType, authIdLookup, serviceId for vs_list_connections), actionVersionId, whether it is a paid action, and the fields of its sample output. Call it before vs_add_step / vs_set_trigger so inputData uses the exact field keys.',
+    'Read the full definition of an app action, trigger or built-in tool (actionId from vs_list_builtin_tools): its input fields (key, label, type, required, static options, whether options are loaded dynamically, visibility rules), the connection it needs (authType, authIdLookup, serviceId for vs_list_connections), actionVersionId, whether it is a paid action, and the fields of its sample output. Call it before vs_add_step / vs_set_trigger so inputData uses the exact field keys.',
   parameters: params({ actionId: S.str('actionId from vs_list_app_actions.', { pattern: ROW_ID_RE.source }) }, ['actionId']),
   danger: 'safe',
   pages,
   describe: () => 'Reading the action details',
   async run(a, ctx) {
-    return bounded(summarizeAction(await getActionRow(ctx, a.actionId)), ctx.maxResultChars)
+    return bounded(summarizeAction(await getActionRowAny(ctx, a.actionId)), ctx.maxResultChars)
   },
 })
 

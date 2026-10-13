@@ -2,7 +2,7 @@
 // The mascot is pure UI: it never talks to the service worker directly.
 
 import type { ClientConfig } from '../../shared/config'
-import type { ChatLine, ConfirmRequest, HighlightTarget, MascotMode, Suggestion } from '../../shared/mascot'
+import type { ChatLine, ConfirmRequest, HighlightTarget, MascotMode, Suggestion, WorkflowPlan } from '../../shared/mascot'
 import type { SttEngine, VoiceState } from '../../shared/messages'
 import type { PageContext } from '../../shared/page'
 
@@ -32,6 +32,8 @@ export interface MascotController {
   setThinking(text: string): void
   addChat(line: ChatLine): void
   setHistory(lines: ChatLine[]): void
+  /** The workflow plan checklist pinned at the top of the chat; null hides it */
+  setPlan(plan: WorkflowPlan | null): void
   showConfirm(request: ConfirmRequest): void
   /** Removes a confirmation card that can no longer be answered (timed out or its run was cancelled) */
   dismissConfirm(id: string): void

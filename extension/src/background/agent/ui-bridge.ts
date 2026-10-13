@@ -3,7 +3,8 @@
 import type { Suggestion } from '../../shared/mascot'
 import type { UiBridge } from '../tools/types'
 import { speakReply } from '../voice'
-import { postLine } from './conversation'
+import { loadPlan, postLine, savePlan } from './conversation'
+import { applyPlanUpdate } from './plan'
 import { actingPage, expectNavigation, rememberSuggestionPage } from './run-target'
 import type { PendingSuggestion, Session } from './session'
 
@@ -52,6 +53,16 @@ export function createUiBridge(session: Session): UiBridge {
       session.addSuggestion(entry)
       session.send({ type: 'suggestion', suggestion: full })
       return id
+    },
+    async plan(update) {
+      // The run's thread (session.threadKey follows the run), so a run that navigates into a new flow keeps its plan.
+      const key = session.threadKey
+      if (!key) throw new Error('There is no conversation to keep a plan in on this page.')
+      const change = applyPlanUpdate(await loadPlan(key), update, Date.now(), session.busy ? session.runStartedAt : undefined)
+      if ('error' in change) throw new Error(change.error)
+      await savePlan(key, change.plan)
+      session.send({ type: 'plan', plan: change.plan })
+      return change
     },
   }
 }

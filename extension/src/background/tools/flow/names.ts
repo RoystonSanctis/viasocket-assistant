@@ -1,10 +1,11 @@
 // Fixed tool names. The config repo's tools.json and prompts refer to these exact strings.
 
 export const FLOW_TOOL_NAMES = [
-  'vs_list_projects', 'vs_list_flows', 'vs_create_flow', 'vs_get_flow', 'vs_get_step', 'vs_search_apps',
-  'vs_list_app_actions', 'vs_get_action', 'vs_list_connections', 'vs_connect_app', 'vs_add_step', 'vs_update_step',
-  'vs_delete_step', 'vs_move_step', 'vs_set_trigger', 'vs_test_step', 'vs_test_flow', 'vs_get_recent_run',
-  'vs_publish_flow', 'vs_discard_changes', 'vs_rename_flow',
+  'vs_list_projects', 'vs_list_flows', 'vs_create_flow', 'vs_get_flow', 'vs_get_step', 'vs_get_variables', 'vs_search_apps',
+  'vs_list_app_actions', 'vs_list_builtin_tools', 'vs_list_ai_agents', 'vs_get_action', 'vs_get_field_options', 'vs_list_connections',
+  'vs_connect_app', 'vs_add_step', 'vs_update_step', 'vs_set_response', 'vs_delete_step', 'vs_move_step', 'vs_set_trigger',
+  'vs_test_trigger', 'vs_set_get_data', 'vs_set_trigger_loop', 'vs_set_run_condition', 'vs_test_step', 'vs_test_flow',
+  'vs_get_recent_run', 'vs_publish_flow', 'vs_discard_changes', 'vs_rename_flow',
 ] as const
 
 export const DH_TOOL_NAMES = [

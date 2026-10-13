@@ -6,6 +6,11 @@ import { asArray, isRecord, str, truncate } from './util'
 
 export class ToolError extends Error {}
 
+/** Cancellation from the user (Stop) must never be swallowed by best-effort catches. */
+export function isAbortError(e: unknown): boolean {
+  return (e instanceof VsError && e.kind === 'aborted') || (e instanceof DOMException && e.name === 'AbortError')
+}
+
 /** Short detail from a backend error body: test-run failures nest the real reason, validation failures list details. */
 function detailOf(body: unknown): string {
   if (!isRecord(body)) return ''

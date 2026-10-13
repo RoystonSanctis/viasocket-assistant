@@ -1,7 +1,7 @@
 // The agent loop: ask the model, run the tools it calls one at a time, feed results back, repeat until it answers.
 
 import type { FullConfig } from '../../shared/config'
-import type { ChatLine } from '../../shared/mascot'
+import { PLAN_APPROVE_TEXT } from '../../shared/mascot'
 import type { ObservedEvent } from '../../shared/observed'
 import { loadSettings, type UserSettings } from '../../shared/settings'
 import { getConfig } from '../config-loader'
@@ -13,8 +13,9 @@ import { buildToolset } from '../tools'
 import type { Tool } from '../tools/types'
 import { VsError } from '../tools/viasocket-client'
 import { speakReply, stopSpeaking } from '../voice'
-import { carryOver, fitBudget, loadLines, loadThread, postLine, saveMessages, trimMessages } from './conversation'
+import { carryOver, fitBudget, loadPlan, loadThread, postLine, saveMessages, showThread, trimMessages, type Thread } from './conversation'
 import { errorContent, executeTool, isAbort, prepareArgs } from './execute'
+import { approvePlan, awaitingReply } from './plan'
 import { buildSystemPrompt } from './prompt'
 import { PageMovedError, followPage, pinTarget, releaseTarget, type RunTarget } from './run-target'
 import type { Session } from './session'
@@ -126,6 +127,9 @@ export async function runAgent(session: Session, userText: string, _source: 'voi
     messages = [...history.messages, { role: 'user', content: text }]
     await saveMessages(thread, messages, maxMessages)
 
+    // The plan card's "Looks good, start" button: the plan stops waiting for approval before the model even answers.
+    if (text === PLAN_APPROVE_TEXT) await approvePlan(session, thread).catch(() => false)
+
     session.ui.mascot('thinking')
     await agentLoop({
       session, config, settings, provider, adapter, model, messages, thread, signal, target, contextLength,
@@ -176,17 +180,17 @@ async function finishRun(session: Session, target: RunTarget | null, movedAway: 
   // followPage again: the page change for a navigation the run made last may only have arrived during its answer.
   const followed = !!target && !movedAway && !!now && followPage(session, target) && session.threadOf(target.page) === now
   const leftBehind = !!runThread && !!now && now !== runThread && !followed
-  let lines: ChatLine[] | null = null
+  let shown: Thread | null = null
   if (leftBehind) {
     // Loaded before endRun so a new run cannot post a line that this history then hides.
-    lines = await loadLines(now).catch(() => null)
+    shown = await loadThread(now).catch(() => null)
   }
   session.endRun()
   if (runThread && now && now !== runThread && followed) {
     // The run navigated (e.g. into a flow it just created): let the conversation follow the user there.
     carryOver(runThread, now).catch(() => undefined)
   }
-  if (lines) session.send({ type: 'history', lines })
+  if (shown) showThread(session, shown)
   if (movedAway) postLine(session, 'system-note', new PageMovedError().message)
   if (reload !== null && completed && !movedAway && !leftBehind) session.send({ type: 'reload-page', reason: reload })
 }
@@ -209,7 +213,9 @@ async function agentLoop(run: RunContext): Promise<void> {
     if (!followPage(session, target)) throw new PageMovedError()
     const tools = buildToolset({ page: target.page, flags, toolsConfig: config.tools })
     const toolSpecs = tools.length ? tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })) : undefined
-    const system = buildSystemPrompt(config, settings, session, target.page, tools.map((t) => t.name), run.explainEvent)
+    // Re-read every step: ui_plan may have changed it, and trimmed history may no longer hold the call that set it.
+    const plan = await loadPlan(thread).catch(() => null)
+    const system = buildSystemPrompt(config, settings, session, target.page, tools.map((t) => t.name), run.explainEvent, plan)
     const fixedChars = system.length + (toolSpecs ? JSON.stringify(toolSpecs).length : 0)
     const build = (shrink: boolean): ChatRequest => ({
       model: run.model,
@@ -353,6 +359,17 @@ async function runToolCalls(run: RunContext, calls: ToolCall[], tools: Tool[]): 
     const prepared = prepareArgs(tool, call.arguments)
     if ('error' in prepared) {
       reply(call, errorContent(prepared.error, 'invalid-arguments'))
+      continue
+    }
+    // A plan proposed in this answer waits for the user's reply: nothing is built until they agree.
+    if (tool.danger !== 'safe' && !tool.name.startsWith('ui_') && awaitingReply(await loadPlan(run.thread).catch(() => null), session.runStartedAt)) {
+      reply(
+        call,
+        errorContent(
+          'Not run: the plan you proposed is waiting for the user\'s approval. Ask them in one short line and end your turn; build only after they agree or ask for changes.',
+          'plan-awaiting-approval',
+        ),
+      )
       continue
     }
     try {
