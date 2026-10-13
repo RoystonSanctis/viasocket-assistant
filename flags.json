@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "maxAgentSteps": 24,
+  "maxToolResultChars": 12000,
+  "conversationMaxMessages": 40,
+  "defaultProactivity": "helpful",
+  "enableDevHub": true,
+  "enableTriggerTools": true,
+  "alwaysConfirm": [],
+  "stripRunData": true,
+  "disabled": false
+}

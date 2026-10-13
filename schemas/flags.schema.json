@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/RoystonSanctis/viasocket-assistant/config-stable/schemas/flags.schema.json",
+  "title": "Feature flags and limits",
+  "description": "Switches and limits. Every field except schemaVersion is optional and falls back to the default compiled into the extension.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "maxAgentSteps": { "type": "integer", "minimum": 1, "maximum": 60, "default": 24 },
+    "maxToolResultChars": { "type": "integer", "minimum": 500, "maximum": 60000, "default": 12000 },
+    "conversationMaxMessages": { "type": "integer", "minimum": 4, "maximum": 200, "default": 40 },
+    "defaultProactivity": { "enum": ["quiet", "helpful", "proactive"], "default": "helpful" },
+    "enableDevHub": { "type": "boolean", "default": true },
+    "enableTriggerTools": { "type": "boolean", "default": true },
+    "alwaysConfirm": {
+      "type": "array",
+      "description": "Tool names that always ask the user first, on top of the ones the code already treats as dangerous. This can only add confirmations, never remove them.",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+      "default": []
+    },
+    "stripRunData": {
+      "type": "boolean",
+      "description": "Remove run and sample data (customer emails, payloads) from flow JSON before it is sent to the AI.",
+      "default": true
+    },
+    "disabled": { "type": "boolean", "description": "Emergency switch: turns the assistant off for everyone.", "default": false },
+    "disabledMessage": { "type": "string", "minLength": 1, "maxLength": 200 }
+  }
+}
