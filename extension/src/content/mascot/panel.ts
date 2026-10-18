@@ -93,7 +93,7 @@ export class Panel {
     this.menuBtn = iconButton('more', 'More options')
     this.menuBtn.setAttribute('aria-haspopup', 'menu')
     this.menuBtn.setAttribute('aria-expanded', 'false')
-    const closeBtn = iconButton('close', 'Close assistant panel')
+    const closeBtn = iconButton('close', 'Close SOCKET panel')
     const header = h(
       'div',
       { class: 'hdr' },
@@ -105,7 +105,7 @@ export class Panel {
 
     const clearItem = h('button', { type: 'button', role: 'menuitem', class: 'menu-item', text: 'Clear conversation' })
     const settingsItem = h('button', { type: 'button', role: 'menuitem', class: 'menu-item', text: 'Settings' })
-    this.menu = h('div', { class: 'menu', role: 'menu', 'aria-label': 'Assistant options', hidden: true }, clearItem, settingsItem)
+    this.menu = h('div', { class: 'menu', role: 'menu', 'aria-label': 'SOCKET options', hidden: true }, clearItem, settingsItem)
 
     // ----- banner -----
     this.bannerText = h('span', { class: 'banner-text' })
@@ -144,7 +144,7 @@ export class Panel {
       rows: '1',
       maxlength: String(MAX_INPUT),
       placeholder: INPUT_PLACEHOLDER,
-      'aria-label': 'Message the assistant',
+      'aria-label': 'Message SOCKET',
     })
     this.micBtn = iconButton('mic', 'Hold to talk', 'icon-btn mic')
     this.micBtn.setAttribute('aria-pressed', 'false')

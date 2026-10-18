@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
-    <title>viaSocket Assistant settings</title>
+    <title>SOCKET settings</title>
     <link rel="icon" href="icons/icon-32.png">
     <link rel="stylesheet" href="options.css">
   </head>
@@ -16,7 +16,7 @@
         <div class="brand">
           <img src="icons/icon-48.png" alt="" width="40" height="40">
           <div>
-            <h1>viaSocket Assistant</h1>
+            <h1>SOCKET</h1>
             <p class="subtitle">Settings</p>
           </div>
         </div>
@@ -25,7 +25,7 @@
             <li><a href="#provider">Provider</a></li>
             <li><a href="#model">Model</a></li>
             <li><a href="#voice">Voice</a></li>
-            <li><a href="#assistant">Assistant</a></li>
+            <li><a href="#assistant">SOCKET</a></li>
             <li><a href="#privacy">Privacy</a></li>
             <li><a href="#about">About</a></li>
           </ul>
@@ -40,14 +40,14 @@
       </div>
 
       <div id="privacy-banner" class="banner banner-warn" role="region" aria-label="Privacy notice" hidden>
-        <p>Before you start, please read what the assistant shares with your AI provider.</p>
+        <p>Before you start, please read what SOCKET shares with your AI provider.</p>
         <a class="button" href="#privacy">Review privacy notice</a>
       </div>
 
       <!-- Provider -->
       <section id="provider" class="card-section" aria-labelledby="provider-heading">
         <h2 id="provider-heading" tabindex="-1">AI provider</h2>
-        <p class="lead">The assistant uses your own API key. It is stored only in this browser and sent only to the provider you pick.</p>
+        <p class="lead">SOCKET uses your own API key. It is stored only in this browser and sent only to the provider you pick.</p>
 
         <fieldset class="provider-fieldset">
           <legend>Choose a provider</legend>
@@ -89,7 +89,7 @@
       <!-- Model -->
       <section id="model" class="card-section" aria-labelledby="model-heading">
         <h2 id="model-heading" tabindex="-1">Model</h2>
-        <p class="lead">Models for <strong id="model-provider-name">your provider</strong>. The assistant needs a model that supports tool calling.</p>
+        <p class="lead">Models for <strong id="model-provider-name">your provider</strong>. SOCKET needs a model that supports tool calling.</p>
         <p class="current">Current model: <code id="model-current">none selected</code></p>
 
         <div class="button-row">
@@ -304,17 +304,17 @@
         </div>
       </section>
 
-      <!-- Assistant -->
+      <!-- SOCKET -->
       <section id="assistant" class="card-section" aria-labelledby="assistant-heading">
-        <h2 id="assistant-heading" tabindex="-1">Assistant</h2>
+        <h2 id="assistant-heading" tabindex="-1">SOCKET</h2>
 
         <fieldset>
-          <legend>How chatty should it be?</legend>
+          <legend>How proactive should SOCKET be?</legend>
           <div class="choice-list">
             <div class="choice">
               <input type="radio" name="proactivity" id="proactivity-quiet" value="quiet" aria-describedby="proactivity-quiet-desc">
               <label for="proactivity-quiet">Quiet</label>
-              <p id="proactivity-quiet-desc" class="hint">Only speaks when you talk to it.</p>
+              <p id="proactivity-quiet-desc" class="hint">Only speaks when you talk to SOCKET.</p>
             </div>
             <div class="choice">
               <input type="radio" name="proactivity" id="proactivity-helpful" value="helpful" aria-describedby="proactivity-helpful-desc">
@@ -331,13 +331,13 @@
 
         <div class="field checkbox-field">
           <input id="mascot-enabled" type="checkbox">
-          <label for="mascot-enabled">Show the mascot on viaSocket pages</label>
+          <label for="mascot-enabled">Show SOCKET on viaSocket pages</label>
         </div>
 
         <div class="field">
           <label for="custom-prompt">Custom system prompt</label>
           <textarea id="custom-prompt" rows="6" maxlength="32768" spellcheck="true" aria-describedby="custom-prompt-note"></textarea>
-          <p id="custom-prompt-note" class="hint">For power users. Anything here <strong>replaces</strong> the assistant's base persona prompt from the public config. The page guidance for the flow editor and Developer Hub, the reaction rules and the current page context are still added after it. Leave it empty to use the default.</p>
+          <p id="custom-prompt-note" class="hint">For power users. Anything here <strong>replaces</strong> SOCKET's base persona prompt from the public config. The page guidance for the flow editor and Developer Hub, the reaction rules and the current page context are still added after it. Leave it empty to use the default.</p>
           <div class="button-row">
             <button type="button" id="custom-prompt-save" class="button">Save prompt</button>
             <button type="button" id="custom-prompt-clear" class="button">Clear</button>
@@ -372,18 +372,18 @@
       <!-- Privacy -->
       <section id="privacy" class="card-section" aria-labelledby="privacy-heading">
         <h2 id="privacy-heading" tabindex="-1">Privacy</h2>
-        <p>The assistant talks to the AI provider you chose, using your key. Here is what that means in plain words.</p>
+        <p>SOCKET talks to the AI provider you chose, using your key. Here is what that means in plain words.</p>
         <h3>Sent to your AI provider</h3>
         <ul>
-          <li>The messages you type or say to the assistant.</li>
+          <li>The messages you type or say to SOCKET.</li>
           <li>The structure of the flow or plug you are working on: step names, step settings, field mappings and code.</li>
           <li>The short error message viaSocket shows when a save, test or publish fails. With <strong>Strip run data</strong> on, it is masked like the error text described below.</li>
           <li>Results of test runs and past runs, in the reduced form described below.</li>
         </ul>
         <h3>Run data</h3>
-        <p>Run data is what passed through a flow or plug: test outputs, sample data, inputs, variables and logs. With <strong>Strip run data</strong> on (the default, set by the <code>stripRunData</code> flag in the public config), the assistant sends this instead of the data itself:</p>
+        <p>Run data is what passed through a flow or plug: test outputs, sample data, inputs, variables and logs. With <strong>Strip run data</strong> on (the default, set by the <code>stripRunData</code> flag in the public config), SOCKET sends this instead of the data itself:</p>
         <ul>
-          <li>The structure and field names, so the assistant can map fields by their path. Field names that look like data (containing an @ or a long number) become <code>&lt;key&gt;</code>.</li>
+          <li>The structure and field names, so SOCKET can map fields by their path. Field names that look like data (containing an @ or a long number) become <code>&lt;key&gt;</code>.</li>
           <li>The shape of each value instead of the value, such as <code>&lt;email&gt;</code>, <code>&lt;phone&gt;</code>, <code>&lt;number&gt;</code>, <code>&lt;date&gt;</code>, <code>&lt;url&gt;</code>, <code>&lt;digits:10&gt;</code> or <code>&lt;string:12&gt;</code> (text 12 characters long). True, false and empty values are sent as they are.</li>
           <li>Error and console text from runs, with emails, phone numbers, long numbers, tokens and longer quoted values replaced by placeholders such as <code>&lt;email&gt;</code> or <code>&lt;token&gt;</code>. The rest of the wording is sent, because it is needed to fix the problem, so anything else written into an error or log line can still reach the provider.</li>
           <li>Long lists and deep objects are cut to their first few entries.</li>
@@ -409,7 +409,7 @@
       <section id="about" class="card-section" aria-labelledby="about-heading">
         <h2 id="about-heading" tabindex="-1">About</h2>
         <p>Version <strong id="about-version"></strong></p>
-        <p>viaSocket Assistant is free and open-source software, licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0). You may use, study, share and change it under that license. It comes with no warranty.</p>
+        <p>SOCKET is free and open-source software, licensed under the GNU Affero General Public License v3.0 or later (AGPL-3.0). You may use, study, share and change it under that license. It comes with no warranty.</p>
         <ul class="link-list">
           <li><a id="repo-link" target="_blank" rel="noopener noreferrer">Source code</a></li>
           <li><a id="issues-link" target="_blank" rel="noopener noreferrer">Report a problem</a></li>
