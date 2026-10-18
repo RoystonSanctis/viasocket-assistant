@@ -269,14 +269,26 @@
             <p id="mic-result" class="status" role="status" aria-live="polite"></p>
           </div>
 
-          <div class="subsection">
-            <h3>Replies</h3>
-            <div class="field checkbox-field">
-              <input id="speak-replies" type="checkbox" aria-describedby="speak-replies-hint">
-              <label for="speak-replies">Speak replies out loud</label>
+          <fieldset class="subsection">
+            <legend>Audio output</legend>
+            <div class="choice-list">
+              <div class="choice">
+                <input type="radio" name="audio-output" id="audio-output-full" value="full" aria-describedby="audio-output-full-desc">
+                <label for="audio-output-full">Full response</label>
+                <p id="audio-output-full-desc" class="hint">Speaks the entire answer aloud.</p>
+              </div>
+              <div class="choice">
+                <input type="radio" name="audio-output" id="audio-output-minimal" value="minimal" aria-describedby="audio-output-minimal-desc">
+                <label for="audio-output-minimal">Minimal response</label>
+                <p id="audio-output-minimal-desc" class="hint">Speaks only the first sentence summary.</p>
+              </div>
+              <div class="choice">
+                <input type="radio" name="audio-output" id="audio-output-off" value="off" aria-describedby="audio-output-off-desc">
+                <label for="audio-output-off">Muted (text only)</label>
+                <p id="audio-output-off-desc" class="hint">No spoken voice audio output.</p>
+              </div>
             </div>
-            <p id="speak-replies-hint" class="hint">Uses your computer's built-in voice. Only the first sentence is read.</p>
-          </div>
+          </fieldset>
 
           <div class="subsection" aria-labelledby="hotkey-heading">
             <h3 id="hotkey-heading">Push-to-talk keys</h3>

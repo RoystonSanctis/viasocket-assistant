@@ -305,6 +305,7 @@ async function main(): Promise<void> {
     },
   }
   const mascot: MascotController = createMascot(callbacks)
+  mascot.setSettings(settings)
 
   // ---------- wake word ----------
 
@@ -515,6 +516,7 @@ async function main(): Promise<void> {
       .then((next) => {
         if (dead) return
         settings = next
+        mascot.setSettings(next)
         applyEnabled()
       })
       .catch(() => undefined)

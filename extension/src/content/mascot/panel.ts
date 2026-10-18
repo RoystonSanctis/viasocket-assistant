@@ -4,6 +4,7 @@
 import type { PageKind } from '../../shared/page'
 import { PLAN_APPROVE_TEXT, type ChatLine, type ConfirmRequest, type MascotMode, type Suggestion, type WorkflowPlan } from '../../shared/mascot'
 import type { SttEngine, VoiceState } from '../../shared/messages'
+import { DEFAULT_SETTINGS, saveSettings, type AudioOutputMode, type Proactivity, type UserSettings } from '../../shared/settings'
 import type { MascotCallbacks } from './api'
 import { confirmCard, suggestionCard, type Card } from './cards'
 import { ChatView } from './chat-view'
@@ -55,6 +56,7 @@ interface PendingCard {
 export class Panel {
   readonly el: HTMLDivElement
   private readonly status: HTMLDivElement
+  private readonly audioBtn: HTMLButtonElement
   private readonly menuBtn: HTMLButtonElement
   private readonly menu: HTMLDivElement
   private readonly banner: HTMLDivElement
@@ -70,7 +72,10 @@ export class Panel {
   private readonly micBtn: HTMLButtonElement
   private readonly sendBtn: HTMLButtonElement
   private readonly pending = new Map<string, PendingCard>()
+  private readonly audioItems = new Map<AudioOutputMode, HTMLButtonElement>()
+  private readonly proactivityItems = new Map<Proactivity, HTMLButtonElement>()
   private readonly resizeObs: ResizeObserver
+  private settings: UserSettings = DEFAULT_SETTINGS
   private lines: Record<string, string> = {}
   private pageKind: PageKind = 'other'
   private opened = false
@@ -92,6 +97,13 @@ export class Panel {
 
     // ----- header -----
     this.status = h('div', { class: 'status', 'aria-live': 'polite', text: 'Ready' })
+    this.audioBtn = h('button', {
+      type: 'button',
+      class: 'icon-btn hdr-audio-btn',
+      'aria-label': 'Audio output',
+      title: 'Audio output',
+    })
+    this.audioBtn.append(icon('volumeFull'))
     this.menuBtn = iconButton('more', 'More options')
     this.menuBtn.setAttribute('aria-haspopup', 'menu')
     this.menuBtn.setAttribute('aria-expanded', 'false')
@@ -101,13 +113,122 @@ export class Panel {
       { class: 'hdr' },
       h('span', { class: 'dot', 'aria-hidden': 'true' }),
       h('div', { class: 'hdr-text' }, h('div', { class: 'title', id: 'vsa-title', text: 'SOCKET' }), this.status),
+      this.audioBtn,
       this.menuBtn,
       closeBtn,
     )
 
+    // ----- menu -----
     const clearItem = h('button', { type: 'button', role: 'menuitem', class: 'menu-item', text: 'Clear conversation' })
+
+    const buildRadioItem = (opts: {
+      iconName?: 'volumeFull' | 'volumeLow' | 'volumeMute'
+      title: string
+      sub?: string
+      onClick: () => void
+    }): HTMLButtonElement => {
+      const check = h('span', { class: 'menu-item-check' }, icon('check'))
+      const textDiv = h('div', { class: 'menu-item-text' }, h('span', { class: 'menu-item-title', text: opts.title }))
+      if (opts.sub) {
+        textDiv.append(h('span', { class: 'menu-item-sub', text: opts.sub }))
+      }
+      const content = h('div', { class: 'menu-item-content' })
+      if (opts.iconName) {
+        content.append(h('span', { class: 'menu-item-icon' }, icon(opts.iconName)))
+      }
+      content.append(textDiv)
+      const item = h('button', { type: 'button', role: 'menuitemradio', class: 'menu-item' }, content, check)
+      item.addEventListener('click', opts.onClick)
+      return item
+    }
+
+    const setAudio = (mode: AudioOutputMode) => {
+      this.settings.audioOutput = mode
+      this.settings.speakReplies = mode !== 'off'
+      this.syncAudioBtn()
+      this.syncMenuChecks()
+      this.toggleMenu(false)
+      hooks.onActivity()
+      void saveSettings({ audioOutput: mode })
+    }
+
+    const audioFull = buildRadioItem({
+      iconName: 'volumeFull',
+      title: 'Full response',
+      sub: 'Speaks entire answer',
+      onClick: () => setAudio('full'),
+    })
+    const audioMinimal = buildRadioItem({
+      iconName: 'volumeLow',
+      title: 'Minimal response',
+      sub: 'First sentence only',
+      onClick: () => setAudio('minimal'),
+    })
+    const audioOff = buildRadioItem({
+      iconName: 'volumeMute',
+      title: 'Muted',
+      sub: 'Silent, text only',
+      onClick: () => setAudio('off'),
+    })
+    this.audioItems.set('full', audioFull)
+    this.audioItems.set('minimal', audioMinimal)
+    this.audioItems.set('off', audioOff)
+
+    const setProactivity = (mode: Proactivity) => {
+      this.settings.proactivity = mode
+      this.syncMenuChecks()
+      this.toggleMenu(false)
+      hooks.onActivity()
+      void saveSettings({ proactivity: mode })
+    }
+
+    const proProactive = buildRadioItem({
+      title: 'Proactive',
+      sub: 'Suggests fixes & next steps',
+      onClick: () => setProactivity('proactive'),
+    })
+    const proHelpful = buildRadioItem({
+      title: 'Helpful',
+      sub: 'Tips on saves & errors',
+      onClick: () => setProactivity('helpful'),
+    })
+    const proQuiet = buildRadioItem({
+      title: 'Quiet',
+      sub: 'Speaks only when asked',
+      onClick: () => setProactivity('quiet'),
+    })
+    this.proactivityItems.set('proactive', proProactive)
+    this.proactivityItems.set('helpful', proHelpful)
+    this.proactivityItems.set('quiet', proQuiet)
+
     const settingsItem = h('button', { type: 'button', role: 'menuitem', class: 'menu-item', text: 'Settings' })
-    this.menu = h('div', { class: 'menu', role: 'menu', 'aria-label': 'SOCKET options', hidden: true }, clearItem, settingsItem)
+
+    this.menu = h(
+      'div',
+      { class: 'menu', role: 'menu', 'aria-label': 'SOCKET options', hidden: true },
+      clearItem,
+      h('div', { class: 'menu-divider', role: 'separator' }),
+      h('div', { class: 'menu-label', text: 'Audio output' }),
+      audioFull,
+      audioMinimal,
+      audioOff,
+      h('div', { class: 'menu-divider', role: 'separator' }),
+      h('div', { class: 'menu-label', text: 'Bot proactivity' }),
+      proProactive,
+      proHelpful,
+      proQuiet,
+      h('div', { class: 'menu-divider', role: 'separator' }),
+      settingsItem,
+    )
+
+    this.syncAudioBtn()
+    this.syncMenuChecks()
+
+    this.audioBtn.addEventListener('click', () => {
+      const cur = this.settings.audioOutput ?? (this.settings.speakReplies ? 'minimal' : 'off')
+      const nextMode: AudioOutputMode = cur === 'full' ? 'minimal' : cur === 'minimal' ? 'off' : 'full'
+      setAudio(nextMode)
+    })
 
     // ----- banner -----
     this.bannerText = h('span', { class: 'banner-text' })
@@ -383,6 +504,12 @@ export class Panel {
 
   setVoiceEnabled(enabled: boolean): void {
     this.micBtn.hidden = !enabled
+  }
+
+  setSettings(settings: UserSettings): void {
+    this.settings = settings
+    this.syncAudioBtn()
+    this.syncMenuChecks()
   }
 
   setSttEngine(engine: SttEngine): void {
@@ -700,6 +827,35 @@ export class Panel {
     const devHub = this.pageKind === 'developer-hub' || this.pageKind === 'developer-hub-plugin'
     const greeting = (devHub ? this.lines.greetingDevHub : undefined) ?? this.lines.greeting
     this.chat.setEmptyText(greeting ?? 'Hi! Tell me what to build, or hold the mic button and talk.')
+  }
+
+  private syncAudioBtn(): void {
+    const mode = this.settings.audioOutput ?? (this.settings.speakReplies ? 'minimal' : 'off')
+    const iconName = mode === 'full' ? 'volumeFull' : mode === 'minimal' ? 'volumeLow' : 'volumeMute'
+    const title =
+      mode === 'full'
+        ? 'Audio output: Full (click to cycle)'
+        : mode === 'minimal'
+          ? 'Audio output: Minimal (click to cycle)'
+          : 'Audio output: Muted (click to cycle)'
+    this.audioBtn.title = title
+    this.audioBtn.setAttribute('aria-label', title)
+    this.audioBtn.replaceChildren(icon(iconName))
+  }
+
+  private syncMenuChecks(): void {
+    const curAudio = this.settings.audioOutput ?? (this.settings.speakReplies ? 'minimal' : 'off')
+    for (const [mode, btn] of this.audioItems) {
+      const active = mode === curAudio
+      btn.classList.toggle('active', active)
+      btn.setAttribute('aria-checked', String(active))
+    }
+    const curProactivity = this.settings.proactivity ?? 'helpful'
+    for (const [mode, btn] of this.proactivityItems) {
+      const active = mode === curProactivity
+      btn.classList.toggle('active', active)
+      btn.setAttribute('aria-checked', String(active))
+    }
   }
 }
 

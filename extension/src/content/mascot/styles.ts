@@ -322,18 +322,105 @@ export const STYLES = `
 .title { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+.hdr-audio-btn { transition: color 0.15s ease; }
+.hdr-audio-btn svg { width: 17px; height: 17px; }
+
 .menu {
   position: absolute; right: 10px; top: 46px; z-index: 2;
-  min-width: 190px; padding: 4px;
+  min-width: 220px; max-height: calc(100% - 60px);
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex; flex-direction: column;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;
   box-shadow: var(--shadow);
 }
-.menu-item { all: unset; box-sizing: border-box; padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--fg); }
+.menu-label {
+  padding: 6px 10px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  user-select: none;
+}
+.menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 6px;
+  flex: none;
+}
+.menu-item {
+  all: unset;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .menu-item:hover, .menu-item:focus-visible { background: var(--surface); outline: none; }
 .menu-item:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+.menu-item.active {
+  color: var(--accent);
+  font-weight: 500;
+}
+.menu-item-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+.menu-item-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.menu-item-sub {
+  font-size: 10.5px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.menu-item-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  color: var(--muted);
+}
+.menu-item.active .menu-item-icon {
+  color: var(--accent);
+}
+.menu-item-icon svg {
+  width: 15px;
+  height: 15px;
+  display: block;
+}
+.menu-item-check {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  opacity: 0;
+  color: var(--accent);
+}
+.menu-item-check svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+.menu-item.active .menu-item-check {
+  opacity: 1;
+}
 
 .banner {
   display: flex; align-items: center; gap: 8px; flex: none;

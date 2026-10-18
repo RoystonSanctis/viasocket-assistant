@@ -6,6 +6,7 @@ import type { ClientConfig, MascotConfig } from '../../shared/config'
 import { normalizePlan, type ChatLine, type ConfirmRequest, type HighlightTarget, type MascotMode, type Suggestion, type WorkflowPlan } from '../../shared/mascot'
 import type { SttEngine, VoiceState } from '../../shared/messages'
 import type { PageContext, PageKind } from '../../shared/page'
+import type { UserSettings } from '../../shared/settings'
 import type { CreateMascot, MascotCallbacks, MascotController } from './api'
 import { Bubble } from './bubble'
 import { DEFAULT_MASCOT } from './defaults'
@@ -419,6 +420,11 @@ class Mascot implements MascotController {
   setStatus(llmReady: boolean, reason?: string): void {
     if (this.destroyed) return
     this.panel.setStatus(llmReady, reason)
+  }
+
+  setSettings(settings: UserSettings): void {
+    if (this.destroyed) return
+    this.panel.setSettings(settings)
   }
 
   destroy(): void {

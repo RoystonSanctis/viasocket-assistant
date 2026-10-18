@@ -336,14 +336,16 @@ export function stopSpeaking(): void {
   }
 }
 
-/** Speaks the start of an assistant reply when the user has spoken replies on. */
+/** Speaks an assistant reply when the user has audio output on (full or minimal). */
 export async function speakReply(text: string, session?: Session): Promise<void> {
   const [settings, config] = await Promise.all([loadSettings(), getConfig()])
-  if (!settings.speakReplies) {
+  const mode = settings.audioOutput ?? (settings.speakReplies ? 'minimal' : 'off')
+  if (mode === 'off' || !settings.speakReplies) {
     if (session) session.send({ type: 'tts-state', speaking: false })
     return
   }
-  speak(speechText(text, config.voice.tts.maxChars), config.voice.tts, session)
+  const maxChars = mode === 'full' ? Math.max(config.voice.tts.maxChars, 4000) : config.voice.tts.maxChars
+  speak(speechText(text, maxChars, mode), config.voice.tts, session)
 }
 
 // Periods in these do not end a sentence ("e.g. the Slack app"). Swapped for a stand-in while the sentence is found.
@@ -353,17 +355,22 @@ const HEADING_LINE = /^\s*#{1,6}\s/
 /** A list item line, its marker stripped in group 1 */
 const LIST_ITEM = /^\s*(?:[*_]{0,2}\d{1,3}[.)][*_]{0,2}|[-*+\u2022])\s+(.*)$/
 
-/** First sentence of a reply as plain text, capped at maxChars on a word boundary. */
-export function speechText(text: string, maxChars: number): string {
+/**
+ * Reply as plain text for speech synthesis:
+ * - 'minimal': extracts only the first sentence
+ * - 'full': cleans markdown syntax and speaks the full response capped at maxChars
+ */
+export function speechText(text: string, maxChars: number, mode: 'full' | 'minimal' = 'minimal'): string {
   const plain = text
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/`([^`]*)`/g, '$1')
     .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
     .split('\n')
     .map((line) => {
-      // A heading is a label, not the reply. A list item is a unit of its own; left alone, its "1." marker would
-      // count as the first sentence.
-      if (HEADING_LINE.test(line)) return ''
+      if (mode === 'minimal' && HEADING_LINE.test(line)) return ''
+      if (mode === 'full' && HEADING_LINE.test(line)) {
+        return line.replace(HEADING_LINE, '').trim().replace(/[^.!?:;]$/, '$&:')
+      }
       const item = LIST_ITEM.exec(line)?.[1]?.trim()
       return item === undefined ? line : item.replace(/[^.!?:;]$/, '$&.')
     })
@@ -372,7 +379,8 @@ export function speechText(text: string, maxChars: number): string {
     .replace(/\s+/g, ' ')
     .trim()
     .replace(ABBREVIATIONS, (m) => m.replace(/\./g, DOT_STAND_IN))
-  let s = (/^(.{2,}?[.!?])(?:\s|$)/.exec(plain)?.[1] ?? plain).replaceAll(DOT_STAND_IN, '.')
+
+  let s = mode === 'full' ? plain.replaceAll(DOT_STAND_IN, '.') : (/^(.{2,}?[.!?])(?:\s|$)/.exec(plain)?.[1] ?? plain).replaceAll(DOT_STAND_IN, '.')
   if (s.length > maxChars) {
     s = s.slice(0, Math.max(1, maxChars - 1))
     const cut = s.lastIndexOf(' ')

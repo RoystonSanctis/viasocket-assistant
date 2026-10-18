@@ -2,6 +2,7 @@
 // and is never part of these settings, so settings can be freely read by any extension context.
 
 export type Proactivity = 'quiet' | 'helpful' | 'proactive'
+export type AudioOutputMode = 'full' | 'minimal' | 'off'
 
 export interface HotkeySetting {
   ctrl: boolean
@@ -26,6 +27,7 @@ export interface UserSettings {
   sttModel: string
   sttLanguage: string
   speakReplies: boolean
+  audioOutput: AudioOutputMode
   hotkey: HotkeySetting
   configChannel: 'stable' | 'beta'
   /** Power users can replace the remote system prompt entirely */
@@ -48,6 +50,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   sttModel: '',
   sttLanguage: '',
   speakReplies: true,
+  audioOutput: 'full',
   hotkey: { ctrl: true, alt: true, shift: false, meta: false, code: '' },
   configChannel: 'stable',
   customSystemPrompt: '',
@@ -61,13 +64,24 @@ export async function loadSettings(): Promise<UserSettings> {
   if (typeof chrome === 'undefined' || !chrome.storage?.local) return DEFAULT_SETTINGS
   try {
     const raw = (await chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY] as Partial<UserSettings> | undefined
-    return { ...DEFAULT_SETTINGS, ...(raw ?? {}), hotkey: { ...DEFAULT_SETTINGS.hotkey, ...(raw?.hotkey ?? {}) } }
+    const base = { ...DEFAULT_SETTINGS, ...(raw ?? {}), hotkey: { ...DEFAULT_SETTINGS.hotkey, ...(raw?.hotkey ?? {}) } }
+    if (!raw?.audioOutput) {
+      base.audioOutput = base.speakReplies ? 'minimal' : 'off'
+    } else {
+      base.speakReplies = base.audioOutput !== 'off'
+    }
+    return base
   } catch {
     return DEFAULT_SETTINGS
   }
 }
 
 export async function saveSettings(patch: Partial<UserSettings>): Promise<UserSettings> {
+  if (patch.audioOutput !== undefined) {
+    patch.speakReplies = patch.audioOutput !== 'off'
+  } else if (patch.speakReplies !== undefined) {
+    patch.audioOutput = patch.speakReplies ? 'minimal' : 'off'
+  }
   const next = { ...(await loadSettings()), ...patch }
   if (typeof chrome !== 'undefined' && chrome.storage?.local) {
     try {
@@ -78,3 +92,4 @@ export async function saveSettings(patch: Partial<UserSettings>): Promise<UserSe
   }
   return next
 }
+

@@ -5,6 +5,7 @@ import type { ClientConfig } from '../../shared/config'
 import type { ChatLine, ConfirmRequest, HighlightTarget, MascotMode, Suggestion, WorkflowPlan } from '../../shared/mascot'
 import type { SttEngine, VoiceState } from '../../shared/messages'
 import type { PageContext } from '../../shared/page'
+import type { UserSettings } from '../../shared/settings'
 
 export interface MascotCallbacks {
   /** User typed a message in the panel */
@@ -60,6 +61,7 @@ export interface MascotController {
   /** Controls visibility of the voice mic button in the composer */
   setVoiceEnabled(enabled: boolean): void
   setStatus(llmReady: boolean, reason?: string): void
+  setSettings(settings: UserSettings): void
   destroy(): void
 }
 

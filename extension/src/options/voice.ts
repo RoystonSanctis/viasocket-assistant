@@ -3,6 +3,7 @@
 
 import { SUPPORTED_APP_HOSTS } from '../background/tools/env'
 import type { FromOffscreen } from '../shared/messages'
+import type { AudioOutputMode } from '../shared/settings'
 import { byId, checkedValue, errorMessage, h, openBrowserPage, radios, setChecked, setStatus } from './dom'
 import { rpc } from './rpc'
 import { store, subscribe, updateSettings } from './store'
@@ -23,7 +24,6 @@ const downloadRow = byId('stt-download-row', HTMLDivElement)
 const download = byId('stt-download', HTMLButtonElement)
 const progress = byId('stt-progress', HTMLProgressElement)
 const sttStatus = byId('stt-status', HTMLParagraphElement)
-const speak = byId('speak-replies', HTMLInputElement)
 const shortcutCurrent = byId('shortcut-current', HTMLElement)
 const shortcutOpen = byId('shortcut-open', HTMLButtonElement)
 const siteMic = byId('site-mic', HTMLDivElement)
@@ -52,7 +52,14 @@ export function initVoice(): void {
     void save({ sttModel: sttModel.value })
   })
   sttLanguage.addEventListener('change', () => void save({ sttLanguage: sttLanguage.value }))
-  speak.addEventListener('change', () => void save({ speakReplies: speak.checked }))
+  for (const r of radios('audio-output')) {
+    r.addEventListener('change', () => {
+      if (r.checked) {
+        const mode = (checkedValue('audio-output') ?? 'full') as AudioOutputMode
+        void save({ audioOutput: mode, speakReplies: mode !== 'off' })
+      }
+    })
+  }
   download.addEventListener('click', () => void onDownload())
   shortcutOpen.addEventListener('click', () => openBrowserPage('chrome://extensions/shortcuts'))
   for (const host of SUPPORTED_APP_HOSTS) {
@@ -100,7 +107,7 @@ function render(): void {
   siteMic.hidden = local
   renderModels()
   renderLanguage(local)
-  speak.checked = s.speakReplies
+  setChecked('audio-output', s.audioOutput ?? (s.speakReplies ? 'minimal' : 'off'))
 }
 
 function renderModels(): void {
