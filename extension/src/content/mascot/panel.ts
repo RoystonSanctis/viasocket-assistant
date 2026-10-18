@@ -315,6 +315,13 @@ export class Panel {
 
   addChat(line: ChatLine): void {
     this.chat.add(line)
+    if (line.role === 'user' && this.input.value.trim()) {
+      const draft = this.input.value.replace(/\s+/g, ' ').trim()
+      const posted = line.text.replace(/\s+/g, ' ').trim()
+      if (draft === posted) {
+        this.clearInput()
+      }
+    }
   }
 
   setPlan(plan: WorkflowPlan | null): void {
@@ -384,6 +391,7 @@ export class Panel {
     }
     if (state === 'off' || state === 'ready' || state === 'error' || state === 'needs-permission') {
       if (!this.transcriptTimer) this.setTranscriptText('')
+      this.inputPrefix = ''
     }
   }
 
@@ -396,14 +404,8 @@ export class Panel {
     this.transcriptTimer = 0
     this.setTranscriptText(text)
 
-    const clean = text.replace(/\s+/g, ' ').trim()
-    if (clean) {
-      this.input.value = this.inputPrefix ? `${this.inputPrefix}${clean}` : clean
-      this.autoGrow()
-      this.hooks.onActivity()
-    }
-
     if (final) {
+      this.clearInput()
       this.transcriptTimer = window.setTimeout(() => {
         this.transcriptTimer = 0
         this.setTranscriptText('')
@@ -412,6 +414,14 @@ export class Panel {
         this.isMicToggled = false
         this.releaseMicVisual()
       }
+      return
+    }
+
+    const clean = text.replace(/\s+/g, ' ').trim()
+    if (clean) {
+      this.input.value = this.inputPrefix ? `${this.inputPrefix}${clean}` : clean
+      this.autoGrow()
+      this.hooks.onActivity()
     }
   }
 
@@ -454,11 +464,15 @@ export class Panel {
     const text = this.input.value.trim()
     if (!text) return
     this.hooks.callbacks.onUserText(text.slice(0, MAX_INPUT))
+    this.clearInput()
+    this.hooks.onActivity()
+  }
+
+  private clearInput(): void {
     this.input.value = ''
     this.inputPrefix = ''
     this.resetPlaceholder()
     this.autoGrow()
-    this.hooks.onActivity()
   }
 
   private resetPlaceholder(): void {
