@@ -121,3 +121,23 @@ No user browsing history or personal data is collected or tracked.
 - [x] **I do not sell or transfer user data to third parties, apart from the approved use cases** (CHECK THIS)
 - [x] **I do not use or transfer user data for purposes that are unrelated to my item's single purpose** (CHECK THIS)
 - [x] **I do not use or transfer user data to determine creditworthiness or for lending purposes** (CHECK THIS)
+
+---
+
+### 4. Test Instructions
+
+#### Credentials:
+- **Username:** *(Leave blank)*
+- **Password:** *(Leave blank)*
+
+#### Additional instructions (Paste into 0/500 text area):
+```text
+No credentials required. Anyone can test freely:
+
+1. Visit https://flow.viasocket.com and create a free account.
+2. Open any workflow. The green SOCKET mascot orb appears automatically on the canvas.
+3. Click the mascot orb or press Shift + Space to toggle the interactive chat window.
+4. Drag the mascot or chat panel anywhere to test UI docking and responsiveness.
+5. Right-click extension icon -> Options to view settings, audio output preferences, and speech recognition options.
+```
+
