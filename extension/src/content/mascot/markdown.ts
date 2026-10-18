@@ -59,8 +59,25 @@ function appendInline(parent: Node, text: string, allowBold = true): void {
         parent.appendChild(document.createTextNode(m[2]))
       }
     } else if (m[3] !== undefined && m[4] !== undefined) {
-      const url = safeHttpsUrl(m[4])
-      parent.appendChild(url ? labelledLink(m[3], url) : document.createTextNode(m[0]))
+      if (/^#(?:prompt|action):/.test(m[4])) {
+        let promptText = m[4].replace(/^#(?:prompt|action):/, '')
+        try {
+          promptText = decodeURIComponent(promptText)
+        } catch {
+          // ignore malformed URI components
+        }
+        parent.appendChild(
+          h('button', {
+            type: 'button',
+            class: 'chat-chip',
+            'data-prompt': promptText.trim() || m[3],
+            text: m[3],
+          }),
+        )
+      } else {
+        const url = safeHttpsUrl(m[4])
+        parent.appendChild(url ? labelledLink(m[3], url) : document.createTextNode(m[0]))
+      }
     } else if (m[5] !== undefined) {
       const raw = m[5].replace(TRAILING_PUNCT, '')
       consumed = raw.length

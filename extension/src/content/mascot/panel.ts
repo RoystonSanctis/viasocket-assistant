@@ -59,7 +59,7 @@ export class Panel {
   private readonly menu: HTMLDivElement
   private readonly banner: HTMLDivElement
   private readonly bannerText: HTMLSpanElement
-  private readonly chat = new ChatView()
+  private readonly chat: ChatView
   private readonly plan: PlanCard
   private readonly cards: HTMLDivElement
   private readonly transcript: HTMLDivElement
@@ -123,6 +123,12 @@ export class Panel {
         // The user says what to change in their own words; the model then replaces the plan.
         this.input.placeholder = CHANGE_PLAN_PLACEHOLDER
         this.input.focus()
+        hooks.onActivity()
+      },
+    })
+    this.chat = new ChatView({
+      onPrompt: (text) => {
+        cb.onUserText(text)
         hooks.onActivity()
       },
     })

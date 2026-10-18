@@ -442,6 +442,38 @@ export const STYLES = `
 .md pre code { background: none; padding: 0; white-space: pre; }
 .md a { color: var(--link); text-decoration: underline; }
 .md strong { font-weight: 650; }
+.chat-chip {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 5px 6px 3px 0;
+  padding: 5px 12px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 999px;
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.chat-chip:hover {
+  background: color-mix(in srgb, var(--accent) 24%, var(--surface));
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+.chat-chip:active {
+  transform: translateY(0);
+}
+.chat-chip:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
 
 .cards { display: flex; flex-direction: column; gap: 8px; flex: none; max-height: 34vh; overflow-y: auto; }
 .cards:not(:empty) { padding: 8px 12px; border-top: 1px solid var(--border); }

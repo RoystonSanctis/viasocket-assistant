@@ -8,14 +8,24 @@ import { renderMarkdown } from './markdown'
 const MAX_LINES = 200
 const NEAR_BOTTOM_PX = 48
 
+export interface ChatViewHooks {
+  onPrompt?(text: string): void
+}
+
 export class ChatView {
   readonly el: HTMLDivElement
   private readonly empty: HTMLDivElement
   private readonly nodes = new Map<string, HTMLElement>()
 
-  constructor() {
+  constructor(private readonly hooks?: ChatViewHooks) {
     this.empty = h('div', { class: 'chat-empty' })
     this.el = h('div', { class: 'chat', role: 'log', 'aria-live': 'polite', 'aria-label': 'Conversation', tabindex: '0' }, this.empty)
+    this.el.addEventListener('click', (e) => {
+      const chip = (e.target as HTMLElement).closest<HTMLElement>('.chat-chip')
+      if (chip && chip.dataset.prompt && this.hooks?.onPrompt) {
+        this.hooks.onPrompt(chip.dataset.prompt)
+      }
+    })
   }
 
   setEmptyText(text: string): void {
