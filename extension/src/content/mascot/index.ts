@@ -662,6 +662,7 @@ class Mascot implements MascotController {
 
   private onDragStart(): void {
     this.bubble.setDragging(true)
+    this.panel.resetPosition()
     if (this.spot.active) this.clearHighlight()
     this.kick()
   }
@@ -670,6 +671,7 @@ class Mascot implements MascotController {
     this.bubble.setDragging(false)
     this.bubble.setParked(true)
     this.parkLoadSeq++
+    this.panel.resetPosition()
     if (this.page) void savePark(this.page.kind, spot)
     this.positionPanel()
     this.kick()

@@ -653,6 +653,46 @@ export class Panel {
     this.hooks.onResize()
   }
 
+  /** Returns the bounding box of the automation flow area (center canvas / step nodes), or the center corridor */
+  private getAutomationArea(vp: Rect): Rect {
+    const nodes = document.querySelectorAll(
+      '[data-testid^="step-node-"], [data-testid^="inflow-node-"], [data-testid^="delay-step-node-"], [data-testid^="if-component-"], [data-testid^="break-component-"], [data-testid="add-step-button"], [data-testid="vertical-stick-add-step"], [data-testid="select-trigger-prompt"], [data-testid="ai-first-empty-state"]',
+    )
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    let count = 0
+
+    for (const node of nodes) {
+      const r = node.getBoundingClientRect()
+      if (r.width > 20 && r.height > 20) {
+        minX = Math.min(minX, r.left)
+        minY = Math.min(minY, r.top)
+        maxX = Math.max(maxX, r.right)
+        maxY = Math.max(maxY, r.bottom)
+        count++
+      }
+    }
+
+    if (count > 0 && Number.isFinite(minX) && maxX > minX) {
+      return {
+        left: Math.max(vp.left, minX - 24),
+        top: Math.max(vp.top, minY - 24),
+        right: Math.min(vp.right, maxX + 24),
+        bottom: Math.min(vp.bottom, maxY + 24),
+      }
+    }
+
+    const vw = vp.right - vp.left
+    return {
+      left: vp.left + vw * 0.3,
+      top: vp.top + 40,
+      right: vp.left + vw * 0.7,
+      bottom: vp.bottom - 40,
+    }
+  }
+
   /** Places the panel beside the orb, inside the viewport, preferring a side that doesn't cover `avoid` */
   position(orb: Point, size: number, avoid: Rect | null, sideDrawer?: Rect | null): void {
     if (!this.opened) return
@@ -673,58 +713,75 @@ export class Panel {
     }
 
     const orbBox = boxAt(orb, size)
+    const midX = (vp.left + vp.right) / 2
 
-    // When the flow side panel / drawer is open on the right:
-    // Move the chat panel to the LEFT side of the screen so it does not obstruct the flow canvas or the drawer.
-    if (sideDrawer && sideDrawer.left > (vp.right + EDGE) * 0.35) {
-      let leftEdge = vp.left + 8
-      const leftNav = document.querySelector(
-        '[data-testid="custom-sidebar"], [data-testid="project-sidebar"], [data-testid="sidebar"], aside, nav',
-      )
-      if (leftNav) {
-        const nr = rectOf(leftNav)
-        if (hasArea(nr) && nr.left < 20 && nr.right > 20 && nr.right < 140) {
-          leftEdge = Math.max(leftEdge, Math.round(nr.right + GAP))
-        }
-      }
-      let top = clamp(orb.y + size / 2 - hgt / 2, vp.top + 40, vp.bottom - hgt)
-      let l = Math.round(leftEdge)
-      let t = Math.round(top)
+    // Check if the flow side panel / drawer is open on the right
+    const hasRightDrawer = Boolean(sideDrawer && sideDrawer.left > (vp.right + EDGE) * 0.35)
 
-      // Ensure the panel does not cover the orb
-      const testRect = { left: l, top: t, right: l + w, bottom: t + hgt }
-      if (intersects(testRect, orbBox)) {
-        const rightOfOrb = orb.x + size + GAP
-        if (rightOfOrb + w <= sideDrawer.left - GAP) {
-          l = Math.round(rightOfOrb)
-        } else if (orb.y - hgt - GAP >= vp.top + 30) {
-          t = Math.round(orb.y - hgt - GAP)
-        } else if (orb.y + size + GAP + hgt <= vp.bottom) {
-          t = Math.round(orb.y + size + GAP)
-        }
+    // Left edge boundary taking into account any left navigation bar
+    let leftEdge = vp.left + 8
+    const leftNav = document.querySelector(
+      '[data-testid="custom-sidebar"], [data-testid="project-sidebar"], [data-testid="sidebar"], aside, nav',
+    )
+    if (leftNav) {
+      const nr = rectOf(leftNav)
+      if (hasArea(nr) && nr.left < 20 && nr.right > 20 && nr.right < 140) {
+        leftEdge = Math.max(leftEdge, Math.round(nr.right + GAP))
       }
-
-      if (l !== this.appliedLeft || t !== this.appliedTop) {
-        this.appliedLeft = l
-        this.appliedTop = t
-        this.el.style.left = `${l}px`
-        this.el.style.top = `${t}px`
-      }
-      this.el.classList.toggle('from-left', true)
-      return
     }
 
-    const top = clamp(orb.y + size / 2 - hgt / 2, vp.top, vp.bottom - hgt)
-    const right = clamp(orb.x + size + GAP, vp.left, vp.right - w)
-    const left = clamp(orb.x - GAP - w, vp.left, vp.right - w)
-    const fits = (x: number): boolean => {
-      const r = { left: x, top, right: x + w, bottom: top + hgt }
-      return !intersects(r, orbBox) && !(avoid && intersects(r, avoid))
+    const autoArea = this.getAutomationArea(vp)
+
+    // Keep the chat window towards the outside edges (never in the center flow area):
+    // If the right drawer is open, or the orb is on the left half of the screen, place on the left outside.
+    // Otherwise place on the right outside.
+    const placeOnLeft = hasRightDrawer || (orb.x + size / 2) < midX
+
+    let targetX: number
+    if (placeOnLeft) {
+      targetX = leftEdge
+      // Ensure we don't extend into the automation area from the left
+      if (autoArea && targetX + w > autoArea.left) {
+        const maxLeft = autoArea.left - w - GAP
+        if (maxLeft >= leftEdge) {
+          targetX = Math.round(maxLeft)
+        }
+      }
+    } else {
+      targetX = Math.round(vp.right - w - 8)
+      // Ensure we don't extend into the automation area from the right
+      if (autoArea && targetX < autoArea.right) {
+        const minRight = autoArea.right + GAP
+        if (minRight <= vp.right - w - 8) {
+          targetX = Math.round(minRight)
+        }
+      }
     }
-    const vw = vp.right + EDGE
-    const order = orb.x + size / 2 > vw / 2 ? [left, right] : [right, left]
-    const x = order.find(fits) ?? order.find((c) => !intersects({ left: c, top, right: c + w, bottom: top + hgt }, orbBox)) ?? order[0] ?? vp.left
-    const l = Math.round(x)
+
+    // Follow the orb vertically
+    let top = clamp(orb.y + size / 2 - hgt / 2, vp.top + 30, vp.bottom - hgt)
+
+    // Ensure the panel does not cover the orb:
+    // If overlapping, place the panel above or below the orb along the outer edge.
+    const testRect = { left: targetX, top, right: targetX + w, bottom: top + hgt }
+    if (intersects(testRect, orbBox)) {
+      if (orb.y - hgt - GAP >= vp.top + 30) {
+        top = Math.round(orb.y - hgt - GAP)
+      } else if (orb.y + size + GAP + hgt <= vp.bottom) {
+        top = Math.round(orb.y + size + GAP)
+      }
+    }
+
+    // Avoid covering any active highlight target
+    if (avoid && intersects({ left: targetX, top, right: targetX + w, bottom: top + hgt }, avoid)) {
+      if (avoid.top - hgt - GAP >= vp.top + 30) {
+        top = Math.round(avoid.top - hgt - GAP)
+      } else if (avoid.bottom + GAP + hgt <= vp.bottom) {
+        top = Math.round(avoid.bottom + GAP)
+      }
+    }
+
+    const l = Math.round(targetX)
     const t = Math.round(top)
     if (l !== this.appliedLeft || t !== this.appliedTop) {
       this.appliedLeft = l
@@ -732,7 +789,7 @@ export class Panel {
       this.el.style.left = `${l}px`
       this.el.style.top = `${t}px`
     }
-    this.el.classList.toggle('from-left', x < orb.x)
+    this.el.classList.toggle('from-left', l <= midX)
   }
 
   destroy(): void {
