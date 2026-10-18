@@ -36,6 +36,7 @@ const ORG_ALIGN_TTL_MS = 5 * 60_000
 
 /** Tail of the mutation queue per `${apiBase}|${scriptId}`; module-level so tabs on the same flow share it. */
 const FLOW_QUEUES = new Map<string, Promise<unknown>>()
+const ACTIVE_MUTATIONS = new Set<string>()
 
 export class ViaSocketClient {
   private orgAlignedAt = 0
@@ -112,8 +113,18 @@ export class ViaSocketClient {
    */
   mutate<T>(scriptId: string, fn: () => Promise<T>): Promise<T> {
     const key = `${this.env.apiBase}|${scriptId}`
+    if (ACTIVE_MUTATIONS.has(key)) {
+      return fn()
+    }
     const prev = FLOW_QUEUES.get(key) ?? Promise.resolve()
-    const next = prev.catch(() => undefined).then(fn)
+    const next = prev.catch(() => undefined).then(async () => {
+      ACTIVE_MUTATIONS.add(key)
+      try {
+        return await fn()
+      } finally {
+        ACTIVE_MUTATIONS.delete(key)
+      }
+    })
     const tail = next.catch(() => undefined)
     FLOW_QUEUES.set(key, tail)
     void tail.then(() => {

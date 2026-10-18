@@ -14,7 +14,7 @@ import {
 } from './builtins'
 import { normalizeInputJson, type ActionRow } from './catalog'
 import { configure, type Configured } from './configure'
-import { resolveConnection } from './connections'
+import { connectApp, isExpired, listConnections, resolveConnection, summarizeConnection, type ConnectionRow } from './connections'
 import { call, isAbortError, ToolError } from './errors'
 import {
   choiceKeys, clearPending, holdValues, loadFieldOptions, mergePending, stepKey, withDynamicInput, type AppliedDefault, type NeedInput, type SavedState,
@@ -917,6 +917,48 @@ const addStep = defineTool<AddStepArgs>({
         warnings.push("The agent runs in the background: its answer is not available right away, and later steps wait for it (minutes). Prefer the Instant agent when later steps need the answer quickly.")
       }
 
+      // Open the side panel immediately so the user sees the newly added step configuration drawer
+      if (a.type !== 'comment' && a.type !== 'break') {
+        const branch = childId && after ? slugForStepId(after, childId) : undefined
+        await (branch && childId ? openPanel(ctx, t.scriptId, childId, branch) : openStepPanel(ctx, t, block, slug))
+      }
+
+      // Check connections for app steps when not explicitly provided
+      let availableConns: ConnectionRow[] = []
+      if (PLUGIN_LIKE.has(a.type) && action && !hiddenAuth && action.authtype !== 'NoAuth' && !authData) {
+        const serviceId = action.pluginrecordid
+        const authLookup = action.authidlookup
+        if (serviceId && authLookup) {
+          try {
+            const conns = await listConnections(ctx, serviceId, authLookup, t)
+            availableConns = conns.filter((c) => !isExpired(c))
+            if (availableConns.length === 0) {
+              // Zero connections: open the connection popup tab
+              ctx.ui.say('No connection found for this app. Opening connection tab…')
+              const connectRes = await connectApp(ctx, { serviceId, authIdLookup: authLookup, actionVersionId: action.rowid }, t)
+              if (connectRes.connected && isRecord(connectRes.connection) && typeof connectRes.connection.id === 'string') {
+                authData = {
+                  id: connectRes.connection.id,
+                  type: str(connectRes.connection.type),
+                  connection_label: str(connectRes.connection.name),
+                }
+                result.connected = true
+                result.connection = connectRes.connection
+              } else if (connectRes.message) {
+                warnings.push(String(connectRes.message))
+              }
+            } else {
+              // Connections exist: ask user to choose
+              result.availableConnections = availableConns.map(summarizeConnection)
+              result.needsUserChoice = 'connection'
+              result.askUser = `Connections exist for this app. Ask the user to choose which connection to use: ${availableConns.map((c) => c.connection_label || c.id).join(', ')}.`
+            }
+          } catch (err) {
+            console.warn('[assistant] failed to check connections in vs_add_step:', err)
+          }
+        }
+      }
+
       try {
         const saved = await saveNewStep(ctx, t, a, slug, block as Block, after as JsonScript, authData, childId, getCat, kind)
         Object.assign(result, saved.result)
@@ -942,7 +984,9 @@ const addStep = defineTool<AddStepArgs>({
         const branch = typeof result.branch === 'string' ? result.branch : undefined
         Object.assign(result, panelResult(branch && childId ? await openPanel(ctx, t.scriptId, childId, branch) : await openStepPanel(ctx, t, block, slug)))
       }
-      if (result.saved === true && NAMED.has(a.type)) {
+      if (availableConns.length > 0 && !authData) {
+        result.next = `Connections exist for this app (${availableConns.map((c) => c.connection_label || c.id).join(', ')}). Ask the user which connection they want to use before configuring fields.`
+      } else if (result.saved === true && NAMED.has(a.type)) {
         result.next =
           kind === 'delay'
             ? `Test it with vs_test_step "${slug}" to see the minutes it waits. Whole-flow tests skip the pause (vs_test_flow). Steps after it run once the pause ends.`

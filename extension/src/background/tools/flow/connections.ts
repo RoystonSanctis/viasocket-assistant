@@ -35,7 +35,7 @@ const POLL_MS = 3000
 const POLL_TIMEOUT_MS = 180_000
 const CLOSED_GRACE_MS = 4000
 
-function isExpired(c: ConnectionRow): boolean {
+export function isExpired(c: ConnectionRow): boolean {
   return c.isExpired === true || asRecord(parseMaybeJson(c.meta_data)).isExpired === true
 }
 
