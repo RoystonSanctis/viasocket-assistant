@@ -56,8 +56,11 @@ interface PendingCard {
 export class Panel {
   readonly el: HTMLDivElement
   private readonly status: HTMLDivElement
+  private readonly proactivityBtn: HTMLButtonElement
   private readonly audioBtn: HTMLButtonElement
   private readonly menuBtn: HTMLButtonElement
+  private readonly proactivityMenu: HTMLDivElement
+  private readonly audioMenu: HTMLDivElement
   private readonly menu: HTMLDivElement
   private readonly banner: HTMLDivElement
   private readonly bannerText: HTMLSpanElement
@@ -108,10 +111,21 @@ export class Panel {
 
     // ----- header -----
     this.status = h('div', { class: 'status', 'aria-live': 'polite', text: 'Ready' })
+    this.proactivityBtn = h('button', {
+      type: 'button',
+      class: 'icon-btn hdr-proactivity-btn',
+      'aria-label': 'Bot proactivity',
+      'aria-haspopup': 'menu',
+      'aria-expanded': 'false',
+      title: 'Bot proactivity',
+    })
+    this.proactivityBtn.append(icon('zap'))
     this.audioBtn = h('button', {
       type: 'button',
       class: 'icon-btn hdr-audio-btn',
       'aria-label': 'Audio output',
+      'aria-haspopup': 'menu',
+      'aria-expanded': 'false',
       title: 'Audio output',
     })
     this.audioBtn.append(icon('volumeFull'))
@@ -124,6 +138,7 @@ export class Panel {
       { class: 'hdr' },
       h('span', { class: 'dot', 'aria-hidden': 'true' }),
       h('div', { class: 'hdr-text' }, h('div', { class: 'title', id: 'vsa-title', text: 'SOCKET' }), this.status),
+      this.proactivityBtn,
       this.audioBtn,
       this.menuBtn,
       closeBtn,
@@ -135,9 +150,7 @@ export class Panel {
     header.addEventListener('lostpointercapture', this.onHeaderEnd)
     header.addEventListener('dblclick', this.onHeaderDblClick)
 
-    // ----- menu -----
-    const clearItem = h('button', { type: 'button', role: 'menuitem', class: 'menu-item', text: 'Clear conversation' })
-
+    // ----- menus -----
     const buildRadioItem = (opts: {
       iconName?: 'volumeFull' | 'volumeLow' | 'volumeMute'
       title: string
@@ -159,12 +172,25 @@ export class Panel {
       return item
     }
 
+    // 1. More menu (three-dot menu: Clear conversation and Settings only)
+    const clearItem = h('button', { type: 'button', role: 'menuitem', class: 'menu-item', text: 'Clear conversation' })
+    const settingsItem = h('button', { type: 'button', role: 'menuitem', class: 'menu-item', text: 'Settings' })
+
+    this.menu = h(
+      'div',
+      { class: 'menu more-menu', role: 'menu', 'aria-label': 'SOCKET options', hidden: true },
+      clearItem,
+      h('div', { class: 'menu-divider', role: 'separator' }),
+      settingsItem,
+    )
+
+    // 2. Audio menu (outside icon popover)
     const setAudio = (mode: AudioOutputMode) => {
       this.settings.audioOutput = mode
       this.settings.speakReplies = mode !== 'off'
       this.syncAudioBtn()
       this.syncMenuChecks()
-      this.toggleMenu(false)
+      this.toggleAudioMenu(false)
       hooks.onActivity()
       void saveSettings({ audioOutput: mode })
     }
@@ -191,10 +217,21 @@ export class Panel {
     this.audioItems.set('minimal', audioMinimal)
     this.audioItems.set('off', audioOff)
 
+    this.audioMenu = h(
+      'div',
+      { class: 'menu audio-menu', role: 'menu', 'aria-label': 'Audio output options', hidden: true },
+      h('div', { class: 'menu-label', text: 'Audio output' }),
+      audioFull,
+      audioMinimal,
+      audioOff,
+    )
+
+    // 3. Proactivity menu (outside icon popover)
     const setProactivity = (mode: Proactivity) => {
       this.settings.proactivity = mode
+      this.syncProactivityBtn()
       this.syncMenuChecks()
-      this.toggleMenu(false)
+      this.toggleProactivityMenu(false)
       hooks.onActivity()
       void saveSettings({ proactivity: mode })
     }
@@ -218,34 +255,18 @@ export class Panel {
     this.proactivityItems.set('helpful', proHelpful)
     this.proactivityItems.set('quiet', proQuiet)
 
-    const settingsItem = h('button', { type: 'button', role: 'menuitem', class: 'menu-item', text: 'Settings' })
-
-    this.menu = h(
+    this.proactivityMenu = h(
       'div',
-      { class: 'menu', role: 'menu', 'aria-label': 'SOCKET options', hidden: true },
-      clearItem,
-      h('div', { class: 'menu-divider', role: 'separator' }),
-      h('div', { class: 'menu-label', text: 'Audio output' }),
-      audioFull,
-      audioMinimal,
-      audioOff,
-      h('div', { class: 'menu-divider', role: 'separator' }),
+      { class: 'menu proactivity-menu', role: 'menu', 'aria-label': 'Bot proactivity options', hidden: true },
       h('div', { class: 'menu-label', text: 'Bot proactivity' }),
       proProactive,
       proHelpful,
       proQuiet,
-      h('div', { class: 'menu-divider', role: 'separator' }),
-      settingsItem,
     )
 
     this.syncAudioBtn()
+    this.syncProactivityBtn()
     this.syncMenuChecks()
-
-    this.audioBtn.addEventListener('click', () => {
-      const cur = this.settings.audioOutput ?? (this.settings.speakReplies === false ? 'off' : 'full')
-      const nextMode: AudioOutputMode = cur === 'full' ? 'minimal' : cur === 'minimal' ? 'off' : 'full'
-      setAudio(nextMode)
-    })
 
     // ----- banner -----
     this.bannerText = h('span', { class: 'banner-text' })
@@ -295,6 +316,8 @@ export class Panel {
       'div',
       { class: 'panel', role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'vsa-title', hidden: true },
       header,
+      this.proactivityMenu,
+      this.audioMenu,
       this.menu,
       this.banner,
       this.plan.el,
@@ -309,6 +332,8 @@ export class Panel {
 
     // ----- wiring -----
     closeBtn.addEventListener('click', () => this.close(true))
+    this.proactivityBtn.addEventListener('click', () => this.toggleProactivityMenu())
+    this.audioBtn.addEventListener('click', () => this.toggleAudioMenu())
     this.menuBtn.addEventListener('click', () => this.toggleMenu())
     clearItem.addEventListener('click', () => {
       this.toggleMenu(false)
@@ -319,7 +344,9 @@ export class Panel {
       cb.onOpenSettings()
     })
     bannerBtn.addEventListener('click', () => cb.onOpenSettings())
-    this.menu.addEventListener('keydown', (e) => this.menuKeys(e))
+    this.menu.addEventListener('keydown', (e) => this.handleMenuKeys(this.menu, e, () => this.toggleMenu(false)))
+    this.audioMenu.addEventListener('keydown', (e) => this.handleMenuKeys(this.audioMenu, e, () => this.toggleAudioMenu(false)))
+    this.proactivityMenu.addEventListener('keydown', (e) => this.handleMenuKeys(this.proactivityMenu, e, () => this.toggleProactivityMenu(false)))
 
     this.input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
@@ -345,15 +372,31 @@ export class Panel {
     this.el.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return
       e.preventDefault()
-      if (!this.menu.hidden) {
-        this.toggleMenu(false)
-        this.menuBtn.focus()
+      if (!this.menu.hidden || !this.audioMenu.hidden || !this.proactivityMenu.hidden) {
+        if (!this.menu.hidden) {
+          this.toggleMenu(false)
+          this.menuBtn.focus()
+        }
+        if (!this.audioMenu.hidden) {
+          this.toggleAudioMenu(false)
+          this.audioBtn.focus()
+        }
+        if (!this.proactivityMenu.hidden) {
+          this.toggleProactivityMenu(false)
+          this.proactivityBtn.focus()
+        }
       } else this.close(true)
     })
     this.el.addEventListener('pointerdown', (e) => {
       hooks.onActivity()
       if (!this.menu.hidden && !this.menu.contains(e.target as Node) && e.target !== this.menuBtn && !this.menuBtn.contains(e.target as Node)) {
         this.toggleMenu(false)
+      }
+      if (!this.audioMenu.hidden && !this.audioMenu.contains(e.target as Node) && e.target !== this.audioBtn && !this.audioBtn.contains(e.target as Node)) {
+        this.toggleAudioMenu(false)
+      }
+      if (!this.proactivityMenu.hidden && !this.proactivityMenu.contains(e.target as Node) && e.target !== this.proactivityBtn && !this.proactivityBtn.contains(e.target as Node)) {
+        this.toggleProactivityMenu(false)
       }
     })
     this.el.addEventListener('input', () => hooks.onActivity())
@@ -396,7 +439,7 @@ export class Panel {
     this.panelDrag = null
     this.el.classList.remove('dragging')
     this.isMicToggled = false
-    this.toggleMenu(false)
+    this.closeAllMenus()
     this.el.classList.remove('open')
     this.el.hidden = true
     this.releaseMic()
@@ -534,6 +577,7 @@ export class Panel {
   setSettings(settings: UserSettings): void {
     this.settings = settings
     this.syncAudioBtn()
+    this.syncProactivityBtn()
     this.syncMenuChecks()
   }
 
@@ -961,15 +1005,50 @@ export class Panel {
     })
   }
 
+  private closeAllMenus(): void {
+    this.toggleMenu(false)
+    this.toggleAudioMenu(false)
+    this.toggleProactivityMenu(false)
+  }
+
   private toggleMenu(force?: boolean): void {
-    const open = force ?? this.menu.hidden
+    const open = force ?? Boolean(this.menu.hidden)
+    if (open) {
+      this.toggleAudioMenu(false)
+      this.toggleProactivityMenu(false)
+    }
     this.menu.hidden = !open
     this.menuBtn.setAttribute('aria-expanded', String(open))
+    this.menuBtn.classList.toggle('active', open)
     if (open) this.menu.querySelector<HTMLButtonElement>('.menu-item')?.focus()
   }
 
-  private menuKeys(e: KeyboardEvent): void {
-    const items = Array.from(this.menu.querySelectorAll<HTMLButtonElement>('.menu-item'))
+  private toggleAudioMenu(force?: boolean): void {
+    const open = force ?? Boolean(this.audioMenu.hidden)
+    if (open) {
+      this.toggleMenu(false)
+      this.toggleProactivityMenu(false)
+    }
+    this.audioMenu.hidden = !open
+    this.audioBtn.setAttribute('aria-expanded', String(open))
+    this.audioBtn.classList.toggle('active', open)
+    if (open) this.audioMenu.querySelector<HTMLButtonElement>('.menu-item.active, .menu-item')?.focus()
+  }
+
+  private toggleProactivityMenu(force?: boolean): void {
+    const open = force ?? Boolean(this.proactivityMenu.hidden)
+    if (open) {
+      this.toggleMenu(false)
+      this.toggleAudioMenu(false)
+    }
+    this.proactivityMenu.hidden = !open
+    this.proactivityBtn.setAttribute('aria-expanded', String(open))
+    this.proactivityBtn.classList.toggle('active', open)
+    if (open) this.proactivityMenu.querySelector<HTMLButtonElement>('.menu-item.active, .menu-item')?.focus()
+  }
+
+  private handleMenuKeys(menuEl: HTMLElement, e: KeyboardEvent, onClose: () => void): void {
+    const items = Array.from(menuEl.querySelectorAll<HTMLButtonElement>('.menu-item'))
     const root = this.el.getRootNode() as ShadowRoot | Document
     const i = items.indexOf(root.activeElement as HTMLButtonElement)
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -977,7 +1056,7 @@ export class Panel {
       const next = (i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length
       items[next]?.focus()
     } else if (e.key === 'Tab') {
-      this.toggleMenu(false)
+      onClose()
     }
   }
 
@@ -1005,15 +1084,29 @@ export class Panel {
   private syncAudioBtn(): void {
     const mode = this.settings.audioOutput ?? (this.settings.speakReplies === false ? 'off' : 'full')
     const iconName = mode === 'full' ? 'volumeFull' : mode === 'minimal' ? 'volumeLow' : 'volumeMute'
-    const title =
+    const label =
       mode === 'full'
-        ? 'Audio output: Full (click to cycle)'
+        ? 'Full response'
         : mode === 'minimal'
-          ? 'Audio output: Minimal (click to cycle)'
-          : 'Audio output: Muted (click to cycle)'
-    this.audioBtn.title = title
-    this.audioBtn.setAttribute('aria-label', title)
+          ? 'Minimal response'
+          : 'Muted'
+    this.audioBtn.title = `Audio output: ${label}`
+    this.audioBtn.setAttribute('aria-label', `Audio output: ${label}`)
     this.audioBtn.replaceChildren(icon(iconName))
+  }
+
+  private syncProactivityBtn(): void {
+    const mode = this.settings.proactivity ?? 'proactive'
+    const label =
+      mode === 'proactive'
+        ? 'Proactive'
+        : mode === 'helpful'
+          ? 'Helpful'
+          : 'Quiet'
+    this.proactivityBtn.title = `Bot proactivity: ${label}`
+    this.proactivityBtn.setAttribute('aria-label', `Bot proactivity: ${label}`)
+    this.proactivityBtn.classList.toggle('proactive-mode', mode === 'proactive')
+    this.proactivityBtn.classList.toggle('quiet-mode', mode === 'quiet')
   }
 
   private syncMenuChecks(): void {

@@ -342,6 +342,11 @@ export const STYLES = `
 
 .hdr-audio-btn { transition: color 0.15s ease; }
 .hdr-audio-btn svg { width: 17px; height: 17px; }
+.hdr-proactivity-btn { transition: color 0.15s ease, opacity 0.15s ease; }
+.hdr-proactivity-btn svg { width: 17px; height: 17px; }
+.hdr-proactivity-btn.proactive-mode { color: var(--accent); }
+.hdr-proactivity-btn.quiet-mode { opacity: 0.55; }
+.hdr .icon-btn.active, .hdr .icon-btn[aria-expanded="true"] { background: var(--surface); color: var(--fg); }
 
 .menu {
   position: absolute; right: 10px; top: 46px; z-index: 2;
