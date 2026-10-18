@@ -12,7 +12,7 @@ import { knownFlowProject } from './flow/known'
 import { SUGGESTABLE_TOOLS } from './flow/names'
 import { defineTool, params, S, validateArgs } from './flow/schema'
 import { appPath, DH_SECTION_KEYS, pagePathWithParams, type AppTarget, type DhSectionKey } from './flow/urls'
-import { label, PROJECT_ID_RE, SLUG_RE } from './flow/util'
+import { label, ORG_ID_RE, PROJECT_ID_RE, SLUG_RE } from './flow/util'
 
 /** selectors.json keys the model may point at (stepNode is a template and is reached through slugName). */
 const ELEMENT_KEYS = [
@@ -203,7 +203,8 @@ const refreshPage = defineTool<{ reason: string }>({
 })
 
 interface NavigateArgs {
-  to: 'flow' | 'project' | 'home' | 'dh-plugin' | 'dh-section'
+  to: 'flow' | 'project' | 'home' | 'workspace-select' | 'dh-plugin' | 'dh-section'
+  orgId?: string
   projectId?: string
   scriptId?: string
   pluginId?: string
@@ -217,10 +218,11 @@ const ALNUM = '^[A-Za-z0-9]{1,40}$'
 const navigate = defineTool<NavigateArgs>({
   name: 'ui_navigate',
   description:
-    'Go to another page of viaSocket in the open workspace: a flow ("flow", scriptId from vs_list_flows), a project ("project"), the home page ("home"), a Developer Hub plugin ("dh-plugin", pluginId) or one of its sections ("dh-section", pluginId + sectionKey, optional sectionId and versionId).',
+    'Go to another page of viaSocket: a flow ("flow", scriptId from vs_list_flows), a project or workspace flows page ("project", optional orgId and projectId), the home page ("home"), the workspace selection page ("workspace-select"), a Developer Hub plugin ("dh-plugin", pluginId) or one of its sections ("dh-section", pluginId + sectionKey, optional sectionId and versionId).',
   parameters: params(
     {
-      to: S.enum(['flow', 'project', 'home', 'dh-plugin', 'dh-section'], 'Destination.'),
+      to: S.enum(['flow', 'project', 'home', 'workspace-select', 'dh-plugin', 'dh-section'], 'Destination.'),
+      orgId: S.str('Workspace/org id to open or switch to.', { pattern: ORG_ID_RE.source }),
       projectId: S.str('Project id (to "project").', { pattern: PROJECT_ID_RE.source }),
       scriptId: S.str('Flow id (to "flow").', { pattern: '^[A-Za-z0-9]{12}$' }),
       pluginId: S.str('Developer Hub plugin id.', { pattern: ALNUM }),
@@ -231,22 +233,33 @@ const navigate = defineTool<NavigateArgs>({
     ['to'],
   ),
   danger: 'safe',
-  describe: (a) => `Going to ${a.to === 'flow' ? 'the flow' : a.to === 'home' ? 'home' : a.to.startsWith('dh') ? 'the Developer Hub' : 'the project'}`,
+  describe: (a) => `Going to ${a.to === 'flow' ? 'the flow' : a.to === 'home' ? 'home' : a.to === 'workspace-select' ? 'workspaces' : a.to.startsWith('dh') ? 'the Developer Hub' : 'the project'}`,
   async run(a, ctx) {
-    const orgId = requireOrg(ctx)
+    if (a.to === 'workspace-select') {
+      const path = appPath({ to: 'workspace-select' })
+      ctx.ui.navigate(path)
+      return { navigated: path }
+    }
+    const orgId = a.orgId ?? ctx.page.orgId
+    if (!orgId || !ORG_ID_RE.test(orgId)) {
+      throw new ToolError('Workspace id is required or open a viaSocket workspace first.')
+    }
     let target: AppTarget
     switch (a.to) {
       case 'flow': {
         if (!a.scriptId) throw new ToolError('scriptId is required.')
-        const projectId = a.scriptId === ctx.page.scriptId ? ctx.page.projectId : knownFlowProject(orgId, a.scriptId)
+        const projectId = a.projectId ?? (a.scriptId === ctx.page.scriptId ? ctx.page.projectId : knownFlowProject(orgId, a.scriptId))
         if (!projectId) throw new ToolError('Unknown flow. Use a scriptId from vs_list_flows or vs_create_flow.')
         target = { to: 'flow', orgId, projectId, scriptId: a.scriptId }
         break
       }
       case 'project':
-        if (!a.projectId) throw new ToolError('projectId is required.')
-        await verifyProject(ctx, orgId, a.projectId)
-        target = { to: 'project', orgId, projectId: a.projectId }
+        if (a.projectId) {
+          await verifyProject(ctx, orgId, a.projectId)
+          target = { to: 'project', orgId, projectId: a.projectId }
+        } else {
+          target = { to: 'project', orgId }
+        }
         break
       case 'home':
         target = { to: 'home', orgId }
@@ -259,6 +272,13 @@ const navigate = defineTool<NavigateArgs>({
         if (!a.pluginId || !a.sectionKey) throw new ToolError('pluginId and sectionKey are required.')
         target = { to: 'dh-section', orgId, pluginId: a.pluginId, sectionKey: a.sectionKey, sectionId: a.sectionId, versionId: a.versionId }
         break
+    }
+    if (a.orgId && a.orgId !== ctx.page.orgId) {
+      try {
+        await ctx.vs.request({ method: 'POST', path: '/orgs/switchOrg', body: { id: a.orgId } })
+      } catch {
+        // Navigation will still update the page URL
+      }
     }
     const path = appPath(target)
     ctx.ui.navigate(path)

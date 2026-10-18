@@ -9,6 +9,7 @@
     "ui_navigate": { "enabled": true },
     "ui_plan": { "enabled": true },
 
+    "vs_list_workspaces": { "enabled": true },
     "vs_list_projects": { "enabled": true },
     "vs_list_flows": { "enabled": true },
     "vs_create_flow": { "enabled": true },

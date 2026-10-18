@@ -25,6 +25,32 @@ export const SCRIPT_ID_PARAM = S.str('Flow id (12 characters) from vs_list_flows
   pattern: '^[A-Za-z0-9]{12}$',
 })
 
+const listWorkspaces = defineTool<Record<string, never>>({
+  name: 'vs_list_workspaces',
+  description:
+    'List all viaSocket workspaces (organizations) the user belongs to, including their names and orgIds. Use when the user asks what workspaces they have, or on the workspace selection screen to find which workspace to open.',
+  parameters: params({}),
+  danger: 'safe',
+  pages: ['flow-editor', 'project', 'home', 'workspace-select', 'developer-hub', 'developer-hub-plugin', 'other'],
+  describe: () => 'Looking up your workspaces',
+  async run(_a, ctx) {
+    const body = await call('Listing workspaces', () =>
+      ctx.vs.request({ method: 'GET', path: '/orgs/user-org/details', signal: ctx.signal }),
+    )
+    const userOrgs = asArray(asRecord(asRecord(body).data).data)
+    const firstUser = isRecord(userOrgs[0]) ? userOrgs[0] : {}
+    const companies = asArray(firstUser.c_companies).filter(isRecord)
+    const currentCompany = isRecord(firstUser.currentCompany) ? firstUser.currentCompany : undefined
+    return {
+      currentWorkspace: currentCompany ? { orgId: str(currentCompany.id), name: str(currentCompany.name) } : undefined,
+      workspaces: companies.map((c) => ({
+        orgId: str(c.id),
+        name: str(c.name),
+      })),
+    }
+  },
+})
+
 const listProjects = defineTool<Record<string, never>>({
   name: 'vs_list_projects',
   description:
@@ -379,6 +405,7 @@ const getRecentRunTool = defineTool<{ scriptId?: string }>({
 })
 
 export const READ_TOOLS: Tool<any>[] = [
+  listWorkspaces,
   listProjects,
   listFlows,
   getFlowTool,

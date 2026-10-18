@@ -4,6 +4,7 @@ export type PageKind =
   | 'flow-editor'
   | 'project'
   | 'home'
+  | 'workspace-select'
   | 'developer-hub'
   | 'developer-hub-plugin'
   | 'other'
@@ -27,10 +28,12 @@ export interface PageContext {
 }
 
 const FLOW_EDITOR = /^\/projects\/([^/]+)\/([^/]+)\/(?:service\/([^/]+)\/)?workflow\/([^/]+)(?:\/([^/]+))?(\/slider)?/
-const PROJECT = /^\/projects\/([^/]+)\/([^/]+)\/?$/
+const PROJECT = /^\/projects\/([^/]+)(?:\/([^/]+))?\/?$/
 const HOME = /^\/home\/([^/]+)/
 const DH_PLUGIN = /^\/developer\/([^/]+)\/plugin\/([^/]+)(?:\/([^/]+))?(?:\/([^/]+))?/
 const DH = /^\/developer\/([^/]+)/
+const WORKSPACE_SELECT = /^\/(?:org(?:s)?|projects)\/?$/
+const ORG_PAGE = /^\/org(?:s)?\/([^/]+)\/?$/
 
 export function parsePage(href: string): PageContext {
   const u = new URL(href)
@@ -59,8 +62,12 @@ export function parsePage(href: string): PageContext {
   }
   m = DH.exec(path)
   if (m) return { ...base, kind: 'developer-hub', orgId: m[1] }
+  m = WORKSPACE_SELECT.exec(path)
+  if (m) return { ...base, kind: 'workspace-select' }
+  m = ORG_PAGE.exec(path)
+  if (m) return { ...base, kind: 'home', orgId: m[1] }
   m = PROJECT.exec(path)
-  if (m) return { ...base, kind: 'project', orgId: m[1], projectId: m[2] }
+  if (m) return { ...base, kind: 'project', orgId: m[1], projectId: m[2] || undefined }
   m = HOME.exec(path)
   if (m) return { ...base, kind: 'home', orgId: m[1] }
   return base

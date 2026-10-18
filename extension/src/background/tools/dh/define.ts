@@ -10,7 +10,7 @@ import { notePage } from './sync'
 
 export const DH_PAGES: PageKind[] = ['developer-hub', 'developer-hub-plugin']
 /** Every page kind: the plug search is useful anywhere in the workspace. */
-export const ALL_PAGES: PageKind[] = ['flow-editor', 'project', 'home', 'developer-hub', 'developer-hub-plugin', 'other']
+export const ALL_PAGES: PageKind[] = ['flow-editor', 'project', 'home', 'workspace-select', 'developer-hub', 'developer-hub-plugin', 'other']
 
 interface DhToolSpec<S extends z.ZodType> {
   name: string

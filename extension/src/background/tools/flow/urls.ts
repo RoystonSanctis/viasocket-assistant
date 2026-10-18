@@ -7,8 +7,9 @@ export type DhSectionKey = (typeof DH_SECTION_KEYS)[number]
 
 export type AppTarget =
   | { to: 'flow'; orgId: string; projectId: string; scriptId: string; tab?: 'draft' | 'published' | 'logs' }
-  | { to: 'project'; orgId: string; projectId: string }
+  | { to: 'project'; orgId: string; projectId?: string }
   | { to: 'home'; orgId: string }
+  | { to: 'workspace-select' }
   | { to: 'dh-home'; orgId: string }
   | { to: 'dh-plugin'; orgId: string; pluginId: string }
   | { to: 'dh-section'; orgId: string; pluginId: string; sectionKey: DhSectionKey; sectionId?: string; versionId?: string }
@@ -21,12 +22,13 @@ function id(v: string, what: string): string {
 }
 
 export function appPath(t: AppTarget): string {
+  if (t.to === 'workspace-select') return '/org'
   const org = id(t.orgId, 'workspace id')
   switch (t.to) {
     case 'flow':
       return `/projects/${org}/${id(t.projectId, 'project id')}/workflow/${id(t.scriptId, 'flow id')}/${t.tab ?? 'draft'}`
     case 'project':
-      return `/projects/${org}/${id(t.projectId, 'project id')}`
+      return t.projectId ? `/projects/${org}/${id(t.projectId, 'project id')}` : `/projects/${org}`
     case 'home':
       return `/home/${org}`
     case 'dh-home':
