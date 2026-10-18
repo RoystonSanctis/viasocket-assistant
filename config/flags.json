@@ -3,7 +3,7 @@
   "maxAgentSteps": 24,
   "maxToolResultChars": 12000,
   "conversationMaxMessages": 40,
-  "defaultProactivity": "helpful",
+  "defaultProactivity": "proactive",
   "enableDevHub": true,
   "enableTriggerTools": true,
   "alwaysConfirm": [],

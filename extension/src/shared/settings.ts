@@ -44,7 +44,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   providerId: 'openrouter',
   model: '',
   fallbackModels: [],
-  proactivity: 'helpful',
+  proactivity: 'proactive',
   voiceEnabled: true,
   wakeWordEnabled: false,
   wakeWordSilenceDelay: 3,
@@ -71,9 +71,12 @@ export async function loadSettings(): Promise<UserSettings> {
     const raw = (await chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY] as Partial<UserSettings> | undefined
     const base = { ...DEFAULT_SETTINGS, ...(raw ?? {}), hotkey: { ...DEFAULT_SETTINGS.hotkey, ...(raw?.hotkey ?? {}) } }
     if (!raw?.audioOutput) {
-      base.audioOutput = base.speakReplies ? 'minimal' : 'off'
+      base.audioOutput = raw?.speakReplies === false ? 'off' : 'full'
     } else {
       base.speakReplies = base.audioOutput !== 'off'
+    }
+    if (!raw?.proactivity) {
+      base.proactivity = 'proactive'
     }
     if (!raw?.chatToggleShortcut) {
       base.chatToggleShortcut = raw?.spacebarShortcutEnabled === false ? 'off' : 'shift-space'
@@ -88,7 +91,7 @@ export async function saveSettings(patch: Partial<UserSettings>): Promise<UserSe
   if (patch.audioOutput !== undefined) {
     patch.speakReplies = patch.audioOutput !== 'off'
   } else if (patch.speakReplies !== undefined) {
-    patch.audioOutput = patch.speakReplies ? 'minimal' : 'off'
+    patch.audioOutput = patch.speakReplies ? 'full' : 'off'
   }
   const next = { ...(await loadSettings()), ...patch }
   if (typeof chrome !== 'undefined' && chrome.storage?.local) {

@@ -117,7 +117,7 @@ export const flagsFileSchema = z.object({
   maxAgentSteps: z.number().int().min(1).max(60).default(24),
   maxToolResultChars: z.number().int().min(500).max(60000).default(12000),
   conversationMaxMessages: z.number().int().min(4).max(200).default(40),
-  defaultProactivity: z.enum(['quiet', 'helpful', 'proactive']).default('helpful'),
+  defaultProactivity: z.enum(['quiet', 'helpful', 'proactive']).default('proactive'),
   enableDevHub: z.boolean().default(true),
   enableTriggerTools: z.boolean().default(true),
   /** Tools that always ask the user first, on top of the ones the code already marks as dangerous */

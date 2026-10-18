@@ -339,7 +339,7 @@ export function stopSpeaking(): void {
 /** Speaks an assistant reply when the user has audio output on (full or minimal). */
 export async function speakReply(text: string, session?: Session): Promise<void> {
   const [settings, config] = await Promise.all([loadSettings(), getConfig()])
-  const mode = settings.audioOutput ?? (settings.speakReplies ? 'minimal' : 'off')
+  const mode = settings.audioOutput ?? (settings.speakReplies === false ? 'off' : 'full')
   if (mode === 'off' || !settings.speakReplies) {
     if (session) session.send({ type: 'tts-state', speaking: false })
     return

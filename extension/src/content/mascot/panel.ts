@@ -242,7 +242,7 @@ export class Panel {
     this.syncMenuChecks()
 
     this.audioBtn.addEventListener('click', () => {
-      const cur = this.settings.audioOutput ?? (this.settings.speakReplies ? 'minimal' : 'off')
+      const cur = this.settings.audioOutput ?? (this.settings.speakReplies === false ? 'off' : 'full')
       const nextMode: AudioOutputMode = cur === 'full' ? 'minimal' : cur === 'minimal' ? 'off' : 'full'
       setAudio(nextMode)
     })
@@ -1003,7 +1003,7 @@ export class Panel {
   }
 
   private syncAudioBtn(): void {
-    const mode = this.settings.audioOutput ?? (this.settings.speakReplies ? 'minimal' : 'off')
+    const mode = this.settings.audioOutput ?? (this.settings.speakReplies === false ? 'off' : 'full')
     const iconName = mode === 'full' ? 'volumeFull' : mode === 'minimal' ? 'volumeLow' : 'volumeMute'
     const title =
       mode === 'full'
@@ -1017,13 +1017,13 @@ export class Panel {
   }
 
   private syncMenuChecks(): void {
-    const curAudio = this.settings.audioOutput ?? (this.settings.speakReplies ? 'minimal' : 'off')
+    const curAudio = this.settings.audioOutput ?? (this.settings.speakReplies === false ? 'off' : 'full')
     for (const [mode, btn] of this.audioItems) {
       const active = mode === curAudio
       btn.classList.toggle('active', active)
       btn.setAttribute('aria-checked', String(active))
     }
-    const curProactivity = this.settings.proactivity ?? 'helpful'
+    const curProactivity = this.settings.proactivity ?? 'proactive'
     for (const [mode, btn] of this.proactivityItems) {
       const active = mode === curProactivity
       btn.classList.toggle('active', active)

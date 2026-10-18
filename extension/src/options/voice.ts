@@ -113,7 +113,7 @@ function render(): void {
   siteMic.hidden = local
   renderModels()
   renderLanguage(local)
-  setChecked('audio-output', s.audioOutput ?? (s.speakReplies ? 'minimal' : 'off'))
+  setChecked('audio-output', s.audioOutput ?? (s.speakReplies === false ? 'off' : 'full'))
 }
 
 function renderModels(): void {
