@@ -68,7 +68,7 @@ async function copyConfig() {
   if (!existsSync(manifestPath)) throw new Error(`Config repo not found at ${configRepo}; the bundled fallback is required.`)
   const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
   const { prompts = {}, ...files } = manifest.files ?? {}
-  const listed = ['manifest.json', ...Object.values(files), ...Object.values(prompts)]
+  const listed = [...Object.values(files), ...Object.values(prompts)]
   for (const rel of listed) {
     if (typeof rel !== 'string' || !/^[A-Za-z0-9_-][A-Za-z0-9._/-]*$/.test(rel) || rel.split('/').includes('..')) {
       throw new Error(`Unsafe path in config manifest: ${rel}`)
@@ -77,6 +77,9 @@ async function copyConfig() {
     await mkdir(dirname(dest), { recursive: true })
     await cp(join(configRepo, rel), dest)
   }
+  // Copy config manifest as config-manifest.json so Chrome Web Store validator
+  // does not reject the package for having multiple files named manifest.json.
+  await cp(manifestPath, join(dist, 'defaults', 'config-manifest.json'))
 }
 
 // ONNX Runtime ships its WASM separately; MV3 forbids loading code from a CDN, so it must live in the package.

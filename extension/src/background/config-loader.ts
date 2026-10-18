@@ -182,13 +182,14 @@ async function fetchJson<S extends z.ZodType>(base: string, path: string, schema
 type LoadResult = { notModified: true } | { notModified: false; config: FullConfig; manifest: Manifest; etag?: string }
 
 async function loadFrom(base: string, source: 'remote' | 'bundled', channel: Channel, etag?: string): Promise<LoadResult> {
-  const m = await fetchText(`${base}/manifest.json`, MAX_JSON_BYTES, etag)
+  const manifestFileName = source === 'bundled' ? 'config-manifest.json' : 'manifest.json'
+  const m = await fetchText(`${base}/${manifestFileName}`, MAX_JSON_BYTES, etag)
   if (m.notModified) return m
   let manifest: Manifest
   try {
     manifest = configManifestSchema.parse(JSON.parse(m.text))
   } catch (e) {
-    throw new Error(`manifest.json: ${describe(e)}`)
+    throw new Error(`${manifestFileName}: ${describe(e)}`)
   }
   if (compareSemver(manifest.minExtensionVersion, EXT_VERSION) > 0) {
     const why = `config ${manifest.configVersion} needs extension ${manifest.minExtensionVersion}, this is ${EXT_VERSION}`
