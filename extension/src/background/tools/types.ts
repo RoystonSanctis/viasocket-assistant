@@ -37,6 +37,7 @@ export interface UiBridge {
 
 export interface ToolContext {
   page: PageContext
+  tabId?: number
   vs: ViaSocketClient
   ui: UiBridge
   signal: AbortSignal

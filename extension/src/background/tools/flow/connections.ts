@@ -124,41 +124,42 @@ export async function connectApp(ctx: ToolContext, a: ConnectArgs, flow?: FlowTa
   }
   for (const [k, v] of Object.entries(query)) if (v) url.searchParams.set(k, v)
 
-  let windowId: number | undefined
+  let tabId: number | undefined
   try {
-    // From an incognito tab the popup must open in incognito too, so it signs in with that profile's viaSocket session.
-    const win = await chrome.windows.create({
+    const tab = await chrome.tabs.create({
       url: url.href,
-      type: 'popup',
-      width: 560,
-      height: 720,
-      focused: true,
-      ...(ctx.vs.opts.incognito ? { incognito: true } : {}),
+      active: true,
+      ...(ctx.tabId !== undefined ? { openerTabId: ctx.tabId } : {}),
     })
-    windowId = win?.id
+    tabId = tab?.id
   } catch {
-    throw new ToolError('Could not open the connection popup. Ask the user to allow popups and try again.')
+    throw new ToolError('Could not open the connection tab. Ask the user to allow opening tabs and try again.')
   }
 
   let closedAt = 0
-  const onRemoved = (id: number) => {
-    if (id === windowId) closedAt = Date.now()
+  const onTabRemoved = (id: number) => {
+    if (id === tabId) closedAt = Date.now()
   }
-  chrome.windows.onRemoved.addListener(onRemoved)
-  ctx.ui.say('Finish connecting in the popup…')
+  chrome.tabs.onRemoved.addListener(onTabRemoved)
+  ctx.ui.say('Finish connecting in the new tab…')
   try {
     const deadline = Date.now() + POLL_TIMEOUT_MS
     while (Date.now() < deadline) {
       await sleep(POLL_MS, ctx.signal)
       const rows = await listConnections(ctx, a.serviceId, a.authIdLookup, flow)
       const fresh = rows.find((c) => !before.has(c.id))
-      if (fresh) return { connected: true, connection: summarizeConnection(fresh) }
+      if (fresh) {
+        if (tabId !== undefined) {
+          chrome.tabs.remove(tabId).catch(() => undefined)
+        }
+        return { connected: true, connection: summarizeConnection(fresh) }
+      }
       if (closedAt && Date.now() - closedAt > CLOSED_GRACE_MS) {
-        return { connected: false, message: 'The popup was closed before a new connection was created.' }
+        return { connected: false, message: 'The connection tab was closed before a new connection was created.' }
       }
     }
     return { connected: false, message: 'No new connection after 3 minutes. Ask the user whether they finished connecting.' }
   } finally {
-    chrome.windows.onRemoved.removeListener(onRemoved)
+    chrome.tabs.onRemoved.removeListener(onTabRemoved)
   }
 }

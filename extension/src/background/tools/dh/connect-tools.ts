@@ -218,25 +218,21 @@ const connect = dhTool({
     for (const [k, v] of Object.entries(query)) if (v) url.searchParams.set(k, v)
 
     try {
-      // From an incognito tab the window must open in incognito too, so it uses that profile's viaSocket session.
-      await chrome.windows.create({
+      await chrome.tabs.create({
         url: url.href,
-        type: 'popup',
-        width: 560,
-        height: 720,
-        focused: true,
-        ...(ctx.vs.opts.incognito ? { incognito: true } : {}),
+        active: true,
+        ...(ctx.tabId !== undefined ? { openerTabId: ctx.tabId } : {}),
       })
     } catch {
-      fail('Could not open the connection window. Ask the user to allow popups and try again.')
+      fail('Could not open the connection tab. Ask the user to allow opening tabs and try again.')
     }
-    ctx.ui.say('Finish connecting in the window that just opened, then tell me when it is done.')
+    ctx.ui.say('Finish connecting in the tab that just opened, then tell me when it is done.')
     return {
       connected: false,
       windowOpened: true,
       authId: t.authId,
       next:
-        'Ask the user to finish in the connection window and say when it is done; then call dh_check_connection once ' +
+        'Ask the user to finish in the connection tab and say when it is done; then call dh_check_connection once ' +
         '(same authId). If it still finds none, say the dry run was skipped (untested) and do not loop.',
       tip: 'For OAuth the client ID/secret must be saved on the connection in the Developer Hub, and the redirect URL whitelisted at the provider.',
       open: authOpen(t.pluginId, t.authId),

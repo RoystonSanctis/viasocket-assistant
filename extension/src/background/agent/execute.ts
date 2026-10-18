@@ -163,6 +163,7 @@ export async function executeTool(
 
   const ctx: ToolContext = {
     page: target.page,
+    tabId: session.tabId,
     vs: target.vs,
     ui,
     signal,
