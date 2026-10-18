@@ -69,6 +69,36 @@ The extension build copies `config/` into `dist/defaults` as its bundled fallbac
 
 Use a test workspace while trying it: step tests and publishing perform real actions.
 
+### Running locally with Ollama (macOS)
+
+You can run viaSocket Assistant with 100% private, free local models using [Ollama](https://ollama.com):
+
+1. **Install and start Ollama with extension access**:
+   ```bash
+   # Single chained command:
+   brew install ollama && launchctl setenv OLLAMA_ORIGINS "chrome-extension://*" && brew services start ollama && ollama run llama3.2
+   ```
+   Or execute the steps individually:
+   ```bash
+   # 1. Install Ollama using Homebrew
+   brew install ollama
+
+   # 2. Allow Chrome extensions to communicate with Ollama
+   launchctl setenv OLLAMA_ORIGINS "chrome-extension://*"
+
+   # 3. Start the Ollama background service
+   brew services start ollama
+
+   # 4. Download and start the Llama 3.2 model
+   ollama run llama3.2
+   ```
+2. **Connect in the extension**:
+   - Once the terminal displays the `>>>` prompt, open the extension options page.
+   - Select **Ollama (on this computer)** as the provider.
+   - Select `llama3.2` as the model and click **Connect and test** to verify integration.
+
+For more details, see [docs/ollama-setup.md](docs/ollama-setup.md).
+
 ## Changing the config
 
 ```sh

@@ -114,6 +114,20 @@ The assistant needs a model that supports tool calling. Built-in providers: Open
 
 **OpenRouter free tier:** free models allow 20 requests a minute and 50 requests a day, or 1,000 a day after a one-time purchase of $10 in credits (free models don't use the credits). One assistant task often takes several requests, one per tool step, so the 50-a-day limit runs out quickly. You can set fallback models on the options page.
 
+**Running locally with Ollama (macOS):**
+To use local, private models without an API key, install and configure Ollama:
+```bash
+# Single chained command:
+brew install ollama && launchctl setenv OLLAMA_ORIGINS "chrome-extension://*" && brew services start ollama && ollama run llama3.2
+```
+Or step-by-step:
+1. `brew install ollama`
+2. `launchctl setenv OLLAMA_ORIGINS "chrome-extension://*"` (allows browser extensions to communicate with Ollama)
+3. `brew services start ollama`
+4. `ollama run llama3.2`
+
+Once the terminal finishes downloading and displays the `>>>` prompt, open the extension options page, choose **Ollama (on this computer)**, select `llama3.2`, and click **Connect and test**. See [docs/ollama-setup.md](../docs/ollama-setup.md) for more details.
+
 Free tiers of some providers may use your prompts to improve their products; check your provider's terms.
 
 ## Remote config
