@@ -469,7 +469,10 @@ class Mascot implements MascotController {
     const tracking = this.spot.update(now)
     const moving = this.ready ? this.motion.step(now) : false
     if (this.panel.isOpen) this.positionPanel()
-    if (this.motion.placed) this.bubble.setVisible(true)
+    if (this.motion.placed) {
+      this.thinking.place(this.motion.position.x, this.size, this.getSidePanelRect())
+      this.bubble.setVisible(true)
+    }
     this.bubble.setLook(this.motion.look.x, this.motion.look.y)
     this.checkSleep(now)
     // Something above (e.g. a lost highlight) may already have kicked off the next frame; never run two chains.
@@ -597,7 +600,7 @@ class Mascot implements MascotController {
   }
 
   private onMoved(x: number): void {
-    this.thinking.place(x, this.size)
+    this.thinking.place(x, this.size, this.getSidePanelRect())
     this.positionPanel()
   }
 

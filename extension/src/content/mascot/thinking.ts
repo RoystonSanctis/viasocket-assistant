@@ -3,6 +3,7 @@
 // transient lines take over and it comes back once they fade.
 
 import { h } from './dom'
+import type { Rect } from './geometry'
 
 const TYPE_MS = 18
 const FADE_AFTER_MS = 6000
@@ -24,6 +25,8 @@ export class ThinkingLine {
   private fadeTimer = 0
   private lastX = 0
   private size = 44
+  private lastSideDrawer: Rect | null = null
+  private appliedMaxWidth = -1
 
   constructor() {
     this.text = h('span', { class: 'think-text' })
@@ -45,6 +48,7 @@ export class ThinkingLine {
     // Measure the final width once so the side does not flip while typing.
     this.text.textContent = this.full
     this.el.classList.add('show')
+    this.el.style.maxWidth = ''
     this.width = this.el.offsetWidth
     this.place(this.lastX, this.size)
 
@@ -83,15 +87,62 @@ export class ThinkingLine {
     else if (!this.showingResting && this.shown >= this.full.length) this.scheduleFade()
   }
 
-  /** Called whenever the orb moves: sit on whichever side has room */
-  place(x: number, size: number): void {
+  /** Called whenever the orb moves: sit on whichever side has room and avoid side panels */
+  place(x: number, size: number, sideDrawer?: Rect | null): void {
     this.lastX = x
     this.size = size
+    if (sideDrawer !== undefined) this.lastSideDrawer = sideDrawer
     if (!this.full) return
+
     const vw = document.documentElement.clientWidth || window.innerWidth
-    const roomRight = vw - (x + size + GAP) - EDGE
-    const roomLeft = x - GAP - EDGE
-    const side = roomRight >= this.width || roomRight >= roomLeft ? 'right' : 'left'
+    const drawer = this.lastSideDrawer ?? getSideDrawerRect()
+
+    // Right boundary: if side drawer is open on the right, keep tooltip completely out of it
+    const rightBoundary = drawer && drawer.left > vw * 0.35 ? drawer.left : vw
+
+    // Left boundary: account for any left sidebar / navigation
+    let leftBoundary = 0
+    const leftNav = document.querySelector(
+      '[data-testid="custom-sidebar"], [data-testid="project-sidebar"], [data-testid="sidebar"], aside, nav',
+    )
+    if (leftNav) {
+      const nr = leftNav.getBoundingClientRect()
+      if (nr.width > 0 && nr.left < 20 && nr.right > 20 && nr.right < 140) {
+        leftBoundary = nr.right
+      }
+    }
+
+    const roomRight = Math.max(0, rightBoundary - (x + size + GAP) - EDGE)
+    const roomLeft = Math.max(0, x - GAP - leftBoundary - EDGE)
+
+    const fitsRight = roomRight >= this.width
+    const fitsLeft = roomLeft >= this.width
+
+    let side: 'left' | 'right'
+    if (fitsRight && !fitsLeft) {
+      side = 'right'
+    } else if (fitsLeft && !fitsRight) {
+      side = 'left'
+    } else if (fitsRight && fitsLeft) {
+      // Both fit: if right boundary is constrained by a drawer, prefer left to stay away from the drawer
+      if (drawer && drawer.left > vw * 0.35) {
+        side = 'left'
+      } else {
+        side = roomRight >= roomLeft ? 'right' : 'left'
+      }
+    } else {
+      // Neither fits completely: pick whichever has more room
+      side = roomLeft >= roomRight ? 'left' : 'right'
+    }
+
+    const available = side === 'right' ? roomRight : roomLeft
+    const maxW = Math.min(320, Math.max(60, available))
+    const maxWInt = Math.floor(maxW)
+    if (maxWInt !== this.appliedMaxWidth) {
+      this.appliedMaxWidth = maxWInt
+      this.el.style.maxWidth = `${maxWInt}px`
+    }
+
     if (side !== this.side) {
       this.side = side
       this.el.classList.toggle('left', side === 'left')
@@ -139,6 +190,7 @@ export class ThinkingLine {
     this.showingResting = true
     this.text.textContent = this.full
     this.el.classList.add('show')
+    this.el.style.maxWidth = ''
     this.width = this.el.offsetWidth
     this.place(this.lastX, this.size)
   }
@@ -154,4 +206,24 @@ export class ThinkingLine {
 function fit(clean: string, maxChars: number): string {
   const limit = Math.max(8, Math.floor(maxChars))
   return clean.length > limit ? `${clean.slice(0, limit - 1).trimEnd()}…` : clean
+}
+
+function getSideDrawerRect(): Rect | null {
+  const vpWidth = document.documentElement.clientWidth || window.innerWidth
+  const candidates = [
+    document.querySelector('[data-testid="step-config-slider"]'),
+    document.querySelector('.MuiDrawer-paper'),
+    document.querySelector('[data-testid="slider-close-button"]')?.closest(
+      '[data-testid="step-config-slider"], .MuiDrawer-paper, [class*="slider"]',
+    ),
+    ...Array.from(document.querySelectorAll('[class*="slider"]')),
+  ]
+  for (const el of candidates) {
+    if (!el) continue
+    const r = el.getBoundingClientRect()
+    if (r.width > 50 && r.height > 100 && r.left > vpWidth * 0.35 && r.right >= vpWidth - 40) {
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }
+    }
+  }
+  return null
 }
