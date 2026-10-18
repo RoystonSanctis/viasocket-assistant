@@ -12,7 +12,7 @@ import { Bubble } from './bubble'
 import { DEFAULT_MASCOT } from './defaults'
 import { h, isEditable } from './dom'
 import { resolveTarget, Spotlight, type ResolvedTarget } from './highlight'
-import { viewport, type Rect } from './geometry'
+import { rectOf, viewport, type Rect } from './geometry'
 import { Motion } from './motion'
 import { OrbInput } from './orb-input'
 import { Panel } from './panel'
@@ -158,6 +158,7 @@ class Mascot implements MascotController {
       isHeld: () => this.isHeld(),
       isPanelOpen: () => this.panel.isOpen,
       highlightAnchor: () => this.spot.anchor(),
+      panelRect: () => (this.panel.isOpen ? rectOf(this.panel.el) : null),
       onMoved: (x) => this.onMoved(x),
     })
 
@@ -614,6 +615,7 @@ class Mascot implements MascotController {
     this.motion.ensurePlaced()
     const sideDrawer = this.getSidePanelRect()
     this.panel.position(this.motion.position, this.size, this.spot.anchor()?.rect ?? null, sideDrawer)
+    this.kick()
   }
 
   private onPanelOpenChange(open: boolean): void {
@@ -676,6 +678,7 @@ class Mascot implements MascotController {
   private onUnpark(): void {
     this.bubble.setParked(false)
     this.parkLoadSeq++
+    this.panel.resetPosition()
     if (this.page) void savePark(this.page.kind, null)
     this.kick()
   }

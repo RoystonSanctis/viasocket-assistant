@@ -37,6 +37,7 @@ export interface MotionDeps {
   isHeld(): boolean
   isPanelOpen?(): boolean
   highlightAnchor(): HighlightAnchor | null
+  panelRect?(): Rect | null
   onMoved(x: number, y: number): void
 }
 
@@ -188,6 +189,16 @@ export class Motion {
       }
     }
 
+    const panelBox = this.deps.panelRect?.()
+    if (panelBox && hasArea(panelBox)) {
+      const from = target ?? { x: this.x, y: this.y }
+      const paddedPanel = inflate(panelBox, 4)
+      if (intersects(boxAt(from, this.size), paddedPanel)) {
+        target = this.evade(from, paddedPanel, vp) ?? target
+        speed = FLY_SPEED
+      }
+    }
+
     // Window resized or orb pushed off-screen while hovering
     if (!target && !contains(vp, boxAt({ x: this.x, y: this.y }, this.size))) target = { x: this.x, y: this.y }
     if (!target) return this.settle()
@@ -302,6 +313,10 @@ export class Motion {
         const r = rectOf(el)
         if (hasArea(r)) rects.push(inflate(r, OBSTACLE_PAD))
       }
+    }
+    const panelBox = this.deps.panelRect?.()
+    if (panelBox && hasArea(panelBox)) {
+      rects.push(inflate(panelBox, OBSTACLE_PAD))
     }
     return rects
   }
@@ -457,14 +472,16 @@ export class Motion {
 
   private evade(from: Point, avoid: Rect, vp: Rect): Point | null {
     const s = this.size
-    const options = [
-      { x: avoid.left - s - GAP, y: from.y },
-      { x: avoid.right + GAP, y: from.y },
-      { x: from.x, y: avoid.top - s - GAP },
-      { x: from.x, y: avoid.bottom + GAP },
-    ].filter((p) => contains(vp, boxAt(p, s)))
-    options.sort((a, b) => distance(a, from) - distance(b, from))
-    return options[0] ?? null
+    const candidates = [
+      clampPoint({ x: avoid.left - s - GAP, y: from.y }, s, vp),
+      clampPoint({ x: avoid.right + GAP, y: from.y }, s, vp),
+      clampPoint({ x: from.x, y: avoid.top - s - GAP }, s, vp),
+      clampPoint({ x: from.x, y: avoid.bottom + GAP }, s, vp),
+    ]
+    const valid = candidates.filter((p) => !intersects(boxAt(p, s), avoid))
+    if (valid.length === 0) return null
+    valid.sort((a, b) => distance(a, from) - distance(b, from))
+    return valid[0] ?? null
   }
 
   private lookAt(p: Point): void {

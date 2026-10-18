@@ -91,6 +91,17 @@ export class Panel {
   private thinking = ''
   private appliedLeft = Number.NaN
   private appliedTop = Number.NaN
+  private panelDrag: {
+    id: number
+    startX: number
+    startY: number
+    startLeft: number
+    startTop: number
+    moved: boolean
+  } | null = null
+  private userMoved = false
+  private userLeft = Number.NaN
+  private userTop = Number.NaN
 
   constructor(private readonly hooks: PanelHooks) {
     const cb = hooks.callbacks
@@ -117,6 +128,12 @@ export class Panel {
       this.menuBtn,
       closeBtn,
     )
+    header.addEventListener('pointerdown', this.onHeaderDown)
+    header.addEventListener('pointermove', this.onHeaderMove)
+    header.addEventListener('pointerup', this.onHeaderEnd)
+    header.addEventListener('pointercancel', this.onHeaderEnd)
+    header.addEventListener('lostpointercapture', this.onHeaderEnd)
+    header.addEventListener('dblclick', this.onHeaderDblClick)
 
     // ----- menu -----
     const clearItem = h('button', { type: 'button', role: 'menuitem', class: 'menu-item', text: 'Clear conversation' })
@@ -376,6 +393,8 @@ export class Panel {
     if (!this.opened) return
     const hadFocus = this.hasFocus()
     this.opened = false
+    this.panelDrag = null
+    this.el.classList.remove('dragging')
     this.isMicToggled = false
     this.toggleMenu(false)
     this.el.classList.remove('open')
@@ -383,6 +402,12 @@ export class Panel {
     this.releaseMic()
     this.hooks.onOpenChange(false)
     if (restoreFocus && hadFocus) this.hooks.focusOrb()
+  }
+
+  resetPosition(): void {
+    this.userMoved = false
+    this.userLeft = Number.NaN
+    this.userTop = Number.NaN
   }
 
   toggle(): void {
@@ -564,12 +589,90 @@ export class Panel {
     }
   }
 
+  private readonly onHeaderDown = (e: PointerEvent): void => {
+    if (e.button !== 0) return
+    const target = e.target as Element | null
+    if (target?.closest('button, .icon-btn, .menu, a, input, textarea')) return
+    const rect = this.el.getBoundingClientRect()
+    this.panelDrag = {
+      id: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startLeft: rect.left,
+      startTop: rect.top,
+      moved: false,
+    }
+    try {
+      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+    } catch {
+      /* pointer already released */
+    }
+  }
+
+  private readonly onHeaderMove = (e: PointerEvent): void => {
+    const d = this.panelDrag
+    if (!d || e.pointerId !== d.id) return
+    const dx = e.clientX - d.startX
+    const dy = e.clientY - d.startY
+    if (!d.moved) {
+      if (Math.hypot(dx, dy) < 4) return
+      d.moved = true
+      this.el.classList.add('dragging')
+    }
+    const vp = viewport(EDGE)
+    const w = this.el.offsetWidth || PANEL_WIDTH
+    const hgt = this.el.offsetHeight || 420
+    const nextLeft = clamp(Math.round(d.startLeft + dx), vp.left, Math.max(vp.left, vp.right - w))
+    const nextTop = clamp(Math.round(d.startTop + dy), vp.top, Math.max(vp.top, vp.bottom - hgt))
+
+    this.userLeft = nextLeft
+    this.userTop = nextTop
+    this.userMoved = true
+
+    this.appliedLeft = nextLeft
+    this.appliedTop = nextTop
+    this.el.style.left = `${nextLeft}px`
+    this.el.style.top = `${nextTop}px`
+    this.hooks.onActivity()
+    this.hooks.onResize()
+  }
+
+  private readonly onHeaderEnd = (e: PointerEvent): void => {
+    const d = this.panelDrag
+    if (!d || e.pointerId !== d.id) return
+    this.panelDrag = null
+    this.el.classList.remove('dragging')
+    this.hooks.onActivity()
+    this.hooks.onResize()
+  }
+
+  private readonly onHeaderDblClick = (e: MouseEvent): void => {
+    const target = e.target as Element | null
+    if (target?.closest('button, .icon-btn, .menu, a, input, textarea')) return
+    this.resetPosition()
+    this.hooks.onResize()
+  }
+
   /** Places the panel beside the orb, inside the viewport, preferring a side that doesn't cover `avoid` */
   position(orb: Point, size: number, avoid: Rect | null, sideDrawer?: Rect | null): void {
     if (!this.opened) return
     const vp = viewport(EDGE)
     const w = Math.min(PANEL_WIDTH, vp.right - vp.left)
     const hgt = Math.min(this.el.offsetHeight || 420, vp.bottom - vp.top)
+
+    if (this.userMoved && Number.isFinite(this.userLeft) && Number.isFinite(this.userTop)) {
+      const l = clamp(this.userLeft, vp.left, Math.max(vp.left, vp.right - w))
+      const t = clamp(this.userTop, vp.top, Math.max(vp.top, vp.bottom - hgt))
+      if (l !== this.appliedLeft || t !== this.appliedTop) {
+        this.appliedLeft = l
+        this.appliedTop = t
+        this.el.style.left = `${l}px`
+        this.el.style.top = `${t}px`
+      }
+      return
+    }
+
+    const orbBox = boxAt(orb, size)
 
     // When the flow side panel / drawer is open on the right:
     // Move the chat panel to the LEFT side of the screen so it does not obstruct the flow canvas or the drawer.
@@ -584,9 +687,23 @@ export class Panel {
           leftEdge = Math.max(leftEdge, Math.round(nr.right + GAP))
         }
       }
-      const top = clamp(orb.y + size / 2 - hgt / 2, vp.top + 40, vp.bottom - hgt)
-      const l = Math.round(leftEdge)
-      const t = Math.round(top)
+      let top = clamp(orb.y + size / 2 - hgt / 2, vp.top + 40, vp.bottom - hgt)
+      let l = Math.round(leftEdge)
+      let t = Math.round(top)
+
+      // Ensure the panel does not cover the orb
+      const testRect = { left: l, top: t, right: l + w, bottom: t + hgt }
+      if (intersects(testRect, orbBox)) {
+        const rightOfOrb = orb.x + size + GAP
+        if (rightOfOrb + w <= sideDrawer.left - GAP) {
+          l = Math.round(rightOfOrb)
+        } else if (orb.y - hgt - GAP >= vp.top + 30) {
+          t = Math.round(orb.y - hgt - GAP)
+        } else if (orb.y + size + GAP + hgt <= vp.bottom) {
+          t = Math.round(orb.y + size + GAP)
+        }
+      }
+
       if (l !== this.appliedLeft || t !== this.appliedTop) {
         this.appliedLeft = l
         this.appliedTop = t
@@ -600,7 +717,6 @@ export class Panel {
     const top = clamp(orb.y + size / 2 - hgt / 2, vp.top, vp.bottom - hgt)
     const right = clamp(orb.x + size + GAP, vp.left, vp.right - w)
     const left = clamp(orb.x - GAP - w, vp.left, vp.right - w)
-    const orbBox = boxAt(orb, size)
     const fits = (x: number): boolean => {
       const r = { left: x, top, right: x + w, bottom: top + hgt }
       return !intersects(r, orbBox) && !(avoid && intersects(r, avoid))

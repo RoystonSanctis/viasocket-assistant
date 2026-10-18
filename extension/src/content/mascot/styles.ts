@@ -63,6 +63,7 @@ export const STYLES = `
   pointer-events: none;
   will-change: transform;
   opacity: 0;
+  z-index: 100;
   transition: opacity 0.3s ease;
 }
 .mover.placed { opacity: 1; }
@@ -244,6 +245,7 @@ export const STYLES = `
   border-radius: 10px;
   pointer-events: none;
   opacity: 0;
+  z-index: 40;
   transition: opacity 0.2s ease;
   box-shadow: 0 0 0 2px var(--hl), 0 0 0 6px color-mix(in srgb, var(--hl) 28%, transparent);
 }
@@ -266,6 +268,7 @@ export const STYLES = `
   font-size: 12.5px;
   pointer-events: auto;
   opacity: 0; visibility: hidden;
+  z-index: 80;
   transition: opacity 0.2s ease, visibility 0s linear 0.2s;
 }
 .note.on { opacity: 1; visibility: visible; transition: opacity 0.2s ease; }
@@ -288,8 +291,14 @@ export const STYLES = `
   pointer-events: auto;
   overflow: hidden;
   opacity: 0;
+  z-index: 50;
   transform: translateY(6px) scale(0.98);
   transition: opacity 0.16s ease, transform 0.16s ease, left 0.22s ease, top 0.22s ease;
+}
+.panel.dragging {
+  transition: none !important;
+  user-select: none;
+  -webkit-user-select: none;
 }
 .panel.from-left { transform-origin: 100% 50%; }
 .panel:not(.from-left) { transform-origin: 0 50%; }
@@ -309,7 +318,16 @@ export const STYLES = `
 .icon-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .icon-btn svg { width: 18px; height: 18px; display: block; }
 
-.hdr { display: flex; align-items: center; gap: 6px; padding: 9px 8px 9px 14px; border-bottom: 1px solid var(--border); flex: none; }
+.hdr {
+  display: flex; align-items: center; gap: 6px; padding: 9px 8px 9px 14px;
+  border-bottom: 1px solid var(--border); flex: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.panel.dragging .hdr { cursor: grabbing; }
+.hdr .icon-btn, .hdr button { cursor: pointer; }
 .dot {
   width: 10px; height: 10px; flex: none;
   border-radius: 50%;
