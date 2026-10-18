@@ -1,4 +1,4 @@
-// Injects "Export flow (JSON)" and "Import flow (JSON)" into the flow-level three-dot menu of the flow
+// Injects "Export Flow" and "Import Flow" into the flow-level three-dot menu of the flow
 // editor's navbar. The menu is recognised by its anchor — the navbar's more-options button, expanded exactly
 // while its menu is open — never by menu-item text, and only on flow-editor pages: the same menu id is reused
 // by the avatar and workspace-selector menus, which must stay untouched.
@@ -58,7 +58,7 @@ export function initFlowMenu(): FlowMenuController {
     const exportLi = buildMenuItem(template, {
       action: 'flow-export',
       testid: 'assistant-flow-export',
-      label: 'Export flow (JSON)',
+      label: 'Export Flow',
       iconSvg: EXPORT_SVG,
       onActivate: () => {
         closeMenuPopover(popover)
@@ -68,7 +68,7 @@ export function initFlowMenu(): FlowMenuController {
     const importLi = buildMenuItem(template, {
       action: 'flow-import',
       testid: 'assistant-flow-import',
-      label: 'Import flow (JSON)',
+      label: 'Import Flow',
       iconSvg: IMPORT_SVG,
       onActivate: () => {
         closeMenuPopover(popover)
