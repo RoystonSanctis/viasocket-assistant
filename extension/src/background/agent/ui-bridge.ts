@@ -103,6 +103,7 @@ function requestConfirm(session: Session, title: string, detail: string, danger:
       resolve(approved)
     })
     session.send({ type: 'confirm-request', request: { id, title, detail, danger, confirmLabel } })
+    speakReply(`${title}. Please confirm or cancel.`, session).catch(() => undefined)
   })
 }
 

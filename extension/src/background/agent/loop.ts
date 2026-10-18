@@ -281,7 +281,7 @@ async function agentLoop(run: RunContext): Promise<void> {
       await saveMessages(thread, messages, flags.conversationMaxMessages)
       postLine(session, 'assistant', reply)
       if (cutOff) postLine(session, 'system-note', "That answer was cut off at the model's output limit.")
-      speakReply(reply).catch(() => undefined)
+      speakReply(reply, session).catch(() => undefined)
       ui.mascot(published ? 'celebrate' : 'happy')
       session.settleMascot(published ? 4000 : 2500)
       return

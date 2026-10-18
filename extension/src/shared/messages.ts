@@ -54,6 +54,7 @@ export type BackgroundToContent =
   | { type: 'transcript'; text: string; final: boolean }
   | { type: 'busy'; busy: boolean }
   | { type: 'status'; llmReady: boolean; reason?: string }
+  | { type: 'tts-state'; speaking: boolean }
 
 export type VoiceState = 'off' | 'loading-model' | 'ready' | 'listening' | 'transcribing' | 'error' | 'needs-permission'
 

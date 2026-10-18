@@ -405,6 +405,10 @@ class Mascot implements MascotController {
     this.panel.open(takeFocus)
   }
 
+  isPanelOpen(): boolean {
+    return !this.destroyed && this.panel.isOpen
+  }
+
   setVoiceEnabled(enabled: boolean): void {
     if (this.destroyed) return
     this.panel.setVoiceEnabled(enabled)
@@ -590,6 +594,7 @@ class Mascot implements MascotController {
       this.activity()
     }
     this.syncBadge()
+    this.cb.onPanelOpenChange?.(open)
     this.kick()
   }
 

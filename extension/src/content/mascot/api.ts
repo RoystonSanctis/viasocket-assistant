@@ -20,6 +20,7 @@ export interface MascotCallbacks {
   onClearThread(): void
   /** A highlight() target never showed up, or stayed out of sight, so the user did not see it */
   onHighlightMissed(): void
+  onPanelOpenChange?(open: boolean): void
 }
 
 export interface MascotController {
@@ -55,6 +56,7 @@ export interface MascotController {
   setBusy(busy: boolean): void
   /** Open the chat panel directly (e.g. from wake word) */
   openPanel(takeFocus?: boolean): void
+  isPanelOpen(): boolean
   /** Controls visibility of the voice mic button in the composer */
   setVoiceEnabled(enabled: boolean): void
   setStatus(llmReady: boolean, reason?: string): void

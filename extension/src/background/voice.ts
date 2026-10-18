@@ -8,6 +8,7 @@ import { getConfig } from './config-loader'
 import { runAgent } from './agent/loop'
 import { postLine } from './agent/conversation'
 import { allSessions, type Session } from './agent/session'
+import { isVoiceExit, parseConfirmIntent } from '../shared/voice-intent'
 
 const OFFSCREEN_URL = 'offscreen.html'
 const VOICE_STATES: readonly VoiceState[] = ['off', 'loading-model', 'ready', 'listening', 'transcribing', 'error', 'needs-permission']
@@ -261,7 +262,23 @@ export async function handleOffscreenMessage(msg: FromOffscreen): Promise<void> 
       const config = await getConfig()
       const text = correctTranscript(cleanTranscript(msg.text), config.voice.stt.vocabulary)
       owner.send({ type: 'transcript', text, final: true })
-      if (text) await runAgent(owner, text, 'voice')
+      if (!text) return
+      if (owner.pendingConfirms.size > 0) {
+        const intent = parseConfirmIntent(text)
+        if (intent !== null) {
+          const firstId = owner.pendingConfirms.keys().next().value
+          if (firstId) {
+            owner.resolveConfirm(firstId, intent)
+            owner.send({ type: 'confirm-cancel', id: firstId })
+            return
+          }
+        }
+      }
+      if (isVoiceExit(text)) {
+        postLine(owner, 'system-note', 'Voice session ended.')
+        return
+      }
+      await runAgent(owner, text, 'voice')
       return
     }
   }
@@ -275,20 +292,58 @@ function cleanTranscript(text: string): string {
 
 // ---------- speech output ----------
 
-export function speak(text: string, tts: VoiceConfig['tts']): void {
-  if (!tts.enabled || !text) return
-  chrome.tts.speak(text, { rate: tts.rate, pitch: tts.pitch, enqueue: false }).catch(() => undefined)
+let activeTtsSession: Session | null = null
+
+export function speak(text: string, tts: VoiceConfig['tts'], session?: Session): void {
+  if (!tts.enabled || !text) {
+    if (session) session.send({ type: 'tts-state', speaking: false })
+    return
+  }
+  activeTtsSession = session ?? null
+  if (session) session.send({ type: 'tts-state', speaking: true })
+  let doneReported = false
+  const notifyDone = () => {
+    if (doneReported) return
+    doneReported = true
+    if (activeTtsSession) {
+      activeTtsSession.send({ type: 'tts-state', speaking: false })
+      activeTtsSession = null
+    }
+  }
+  try {
+    chrome.tts.speak(text, {
+      rate: tts.rate,
+      pitch: tts.pitch,
+      enqueue: false,
+      onEvent: (event) => {
+        if (event.type === 'end' || event.type === 'interrupted' || event.type === 'cancelled' || event.type === 'error') {
+          notifyDone()
+        }
+      },
+    })
+  } catch {
+    notifyDone()
+  }
 }
 
 export function stopSpeaking(): void {
-  chrome.tts.stop()
+  try {
+    chrome.tts.stop()
+  } catch {}
+  if (activeTtsSession) {
+    activeTtsSession.send({ type: 'tts-state', speaking: false })
+    activeTtsSession = null
+  }
 }
 
 /** Speaks the start of an assistant reply when the user has spoken replies on. */
-export async function speakReply(text: string): Promise<void> {
+export async function speakReply(text: string, session?: Session): Promise<void> {
   const [settings, config] = await Promise.all([loadSettings(), getConfig()])
-  if (!settings.speakReplies) return
-  speak(speechText(text, config.voice.tts.maxChars), config.voice.tts)
+  if (!settings.speakReplies) {
+    if (session) session.send({ type: 'tts-state', speaking: false })
+    return
+  }
+  speak(speechText(text, config.voice.tts.maxChars), config.voice.tts, session)
 }
 
 // Periods in these do not end a sentence ("e.g. the Slack app"). Swapped for a stand-in while the sentence is found.

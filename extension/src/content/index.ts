@@ -8,6 +8,7 @@ import type { ChatLine } from '../shared/mascot'
 import type { BackgroundToContent, VoiceState } from '../shared/messages'
 import { DEFAULT_SETTINGS, loadSettings, SETTINGS_KEY, type UserSettings } from '../shared/settings'
 import { createBrowserStt, browserSttSupported } from './browser-stt'
+import { isVoiceExit, parseConfirmIntent } from '../shared/voice-intent'
 import { initFlowMenu } from './flow-menu'
 import { createHotkey } from './hotkey'
 import { createMascot } from './mascot'
@@ -65,6 +66,13 @@ async function main(): Promise<void> {
   let heardSpeechInTurn = false
   let wakeWord: WakeWordListener | null = null
 
+  let continuousVoice = false
+  let pendingConfirmId: string | null = null
+  let pendingConfirmLabel: string | undefined = undefined
+  let ttsSpeaking = false
+  let isBusy = false
+  let autoListenTimer: ReturnType<typeof setTimeout> | undefined
+
   function clearSilenceTimers(): void {
     if (initialSilenceTimer) {
       clearTimeout(initialSilenceTimer)
@@ -77,12 +85,30 @@ async function main(): Promise<void> {
     heardSpeechInTurn = false
   }
 
+  function scheduleAutoListen(delayMs = 350): void {
+    if (autoListenTimer) {
+      clearTimeout(autoListenTimer)
+      autoListenTimer = undefined
+    }
+    if (!continuousVoice || talking || ttsSpeaking || dead) return
+    if (isBusy && !pendingConfirmId) return
+    if (!mascot.isPanelOpen()) return
+    autoListenTimer = setTimeout(() => {
+      autoListenTimer = undefined
+      if (!continuousVoice || talking || ttsSpeaking || dead) return
+      if (isBusy && !pendingConfirmId) return
+      if (!mascot.isPanelOpen()) return
+      voiceStart('wake-word')
+    }, delayMs)
+  }
+
   function startInitialSilenceTimer(): void {
     initialSilenceTimer = setTimeout(() => {
       if (talking && activeVoiceSource === 'wake-word' && !heardSpeechInTurn) {
+        continuousVoice = false
         voiceCancel()
       }
-    }, 7000)
+    }, 7500)
   }
 
   function onSpeechActivity(): void {
@@ -110,7 +136,7 @@ async function main(): Promise<void> {
       if (state !== 'listening') {
         talking = false
         clearSilenceTimers()
-        wakeWord?.resume()
+        if (!continuousVoice && !ttsSpeaking) wakeWord?.resume()
       }
       const note = state === 'listening' && activeVoiceSource === 'wake-word' ? '(auto-sends on pause)' : detail
       if (!dead) mascot.setVoiceState(state, note)
@@ -121,11 +147,50 @@ async function main(): Promise<void> {
         onSpeechActivity()
       }
     },
-    onFinal: (text) => port.send({ type: 'user-input', text: text.slice(0, MAX_USER_TEXT), source: 'voice' }),
+    onFinal: (text) => {
+      const trimmed = text.trim()
+      if (!trimmed) return
+
+      if (isVoiceExit(trimmed)) {
+        continuousVoice = false
+        if (pendingConfirmId) {
+          const id = pendingConfirmId
+          pendingConfirmId = null
+          pendingConfirmLabel = undefined
+          mascot.dismissConfirm(id)
+          port.send({ type: 'confirm-response', id, approved: false })
+        }
+        voiceCancel()
+        mascot.addChat(systemNote('Voice session ended.'))
+        return
+      }
+
+      if (pendingConfirmId) {
+        const intent = parseConfirmIntent(trimmed, pendingConfirmLabel)
+        if (intent !== null) {
+          const id = pendingConfirmId
+          pendingConfirmId = null
+          pendingConfirmLabel = undefined
+          mascot.dismissConfirm(id)
+          mascot.addChat({ id: `local-voice-${Date.now()}`, role: 'user', text: trimmed, at: Date.now() })
+          port.send({ type: 'confirm-response', id, approved: intent })
+          return
+        }
+      }
+
+      port.send({ type: 'user-input', text: trimmed.slice(0, MAX_USER_TEXT), source: 'voice' })
+    },
   })
 
   function voiceStart(source: VoiceSource = 'manual'): void {
     if (!settings.voiceEnabled || talking || dead) return
+    if (autoListenTimer) {
+      clearTimeout(autoListenTimer)
+      autoListenTimer = undefined
+    }
+    if (source === 'wake-word' || source === 'manual') {
+      continuousVoice = true
+    }
     activeVoiceSource = source
     clearSilenceTimers()
     talking = true
@@ -163,15 +228,19 @@ async function main(): Promise<void> {
     if (stopped || (state === 'ready' && workerListened)) {
       talking = false
       clearSilenceTimers()
-      wakeWord?.resume()
+      if (!continuousVoice && !ttsSpeaking) wakeWord?.resume()
     }
   }
 
   function voiceCancel(): void {
     clearSilenceTimers()
+    if (autoListenTimer) {
+      clearTimeout(autoListenTimer)
+      autoListenTimer = undefined
+    }
     if (!talking) return
     talking = false
-    wakeWord?.resume()
+    if (!continuousVoice && !ttsSpeaking) wakeWord?.resume()
     if (settings.sttEngine === 'browser' || usingFallbackStt) {
       stt.cancel()
     } else {
@@ -190,20 +259,50 @@ async function main(): Promise<void> {
 
   const callbacks: MascotCallbacks = {
     onUserText(text) {
+      continuousVoice = false
+      if (autoListenTimer) {
+        clearTimeout(autoListenTimer)
+        autoListenTimer = undefined
+      }
       const t = text.trim()
       if (t) port.send({ type: 'user-input', text: t.slice(0, MAX_USER_TEXT), source: 'text' })
     },
     onMicDown: () => voiceStart('manual'),
     onMicUp: voiceStop,
-    onConfirm: (id, approved) => port.send({ type: 'confirm-response', id, approved }),
+    onConfirm: (id, approved) => {
+      if (pendingConfirmId === id) {
+        pendingConfirmId = null
+        pendingConfirmLabel = undefined
+      }
+      port.send({ type: 'confirm-response', id, approved })
+    },
     onSuggestion: (id, action) => port.send({ type: 'suggestion-response', id, action }),
     onCancel() {
+      continuousVoice = false
+      if (autoListenTimer) {
+        clearTimeout(autoListenTimer)
+        autoListenTimer = undefined
+      }
+      pendingConfirmId = null
+      pendingConfirmLabel = undefined
       voiceCancel()
       port.send({ type: 'cancel' })
     },
     onOpenSettings: (section) => port.send(section ? { type: 'open-options', section } : { type: 'open-options' }),
     onClearThread: () => port.send({ type: 'clear-thread' }),
     onHighlightMissed: () => mascot.addChat(systemNote(CANT_SEE)),
+    onPanelOpenChange: (open) => {
+      if (!open) {
+        continuousVoice = false
+        if (autoListenTimer) {
+          clearTimeout(autoListenTimer)
+          autoListenTimer = undefined
+        }
+        pendingConfirmId = null
+        pendingConfirmLabel = undefined
+        voiceCancel()
+      }
+    },
   }
   const mascot: MascotController = createMascot(callbacks)
 
@@ -213,10 +312,29 @@ async function main(): Promise<void> {
     enabled: () => active() && settings.voiceEnabled && settings.wakeWordEnabled,
     onWake(trailingText) {
       mascot.openPanel()
+      continuousVoice = true
       if (trailingText) {
-        port.send({ type: 'user-input', text: trailingText.slice(0, MAX_USER_TEXT), source: 'voice' })
+        const trimmed = trailingText.trim()
+        if (isVoiceExit(trimmed)) {
+          continuousVoice = false
+          mascot.addChat(systemNote('Voice session ended.'))
+          return
+        }
+        if (pendingConfirmId) {
+          const intent = parseConfirmIntent(trimmed, pendingConfirmLabel)
+          if (intent !== null) {
+            const id = pendingConfirmId
+            pendingConfirmId = null
+            pendingConfirmLabel = undefined
+            mascot.dismissConfirm(id)
+            mascot.addChat({ id: `local-voice-${Date.now()}`, role: 'user', text: trimmed, at: Date.now() })
+            port.send({ type: 'confirm-response', id, approved: intent })
+            return
+          }
+        }
+        port.send({ type: 'user-input', text: trimmed.slice(0, MAX_USER_TEXT), source: 'voice' })
         setTimeout(() => {
-          if (!talking && !dead) wakeWord?.resume()
+          if (!talking && !dead && !continuousVoice && !ttsSpeaking) wakeWord?.resume()
         }, 1200)
       } else {
         voiceStart('wake-word')
@@ -293,9 +411,18 @@ async function main(): Promise<void> {
         location.reload()
         break
       case 'confirm-request':
+        pendingConfirmId = msg.request.id
+        pendingConfirmLabel = msg.request.confirmLabel
         mascot.showConfirm(msg.request)
+        if (!ttsSpeaking && continuousVoice) {
+          scheduleAutoListen(350)
+        }
         break
       case 'confirm-cancel':
+        if (pendingConfirmId === msg.id) {
+          pendingConfirmId = null
+          pendingConfirmLabel = undefined
+        }
         mascot.dismissConfirm(msg.id)
         break
       case 'voice-command':
@@ -327,9 +454,28 @@ async function main(): Promise<void> {
         if (msg.text.trim().length > 0) {
           onSpeechActivity()
         }
+        if (msg.final && isVoiceExit(msg.text)) {
+          continuousVoice = false
+          if (pendingConfirmId) {
+            mascot.dismissConfirm(pendingConfirmId)
+            pendingConfirmId = null
+            pendingConfirmLabel = undefined
+          }
+          voiceCancel()
+        }
         break
       case 'busy':
+        isBusy = msg.busy
         mascot.setBusy(msg.busy)
+        if (!isBusy && !ttsSpeaking && continuousVoice) {
+          scheduleAutoListen(350)
+        }
+        break
+      case 'tts-state':
+        ttsSpeaking = msg.speaking
+        if (!ttsSpeaking && continuousVoice && (!isBusy || pendingConfirmId)) {
+          scheduleAutoListen(250)
+        }
         break
       case 'status':
         mascot.setStatus(msg.llmReady, msg.reason)
@@ -419,6 +565,13 @@ async function main(): Promise<void> {
     safe(() => stepMenu.destroy())
     safe(() => flowMenu.destroy())
     safe(() => destroyToasts())
+    safe(() => {
+      continuousVoice = false
+      if (autoListenTimer) {
+        clearTimeout(autoListenTimer)
+        autoListenTimer = undefined
+      }
+    })
     safe(() => clearSilenceTimers())
     safe(() => wakeWord?.destroy())
     safe(() => stt.cancel())
