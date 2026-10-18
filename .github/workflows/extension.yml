@@ -28,7 +28,14 @@ jobs:
       - run: npm run build
       # Validates the bundled config/ against the extension's own schemas and tool list.
       - run: npm run check-config
-      # Download from the run page, unzip, then Load unpacked in chrome://extensions.
+      # Packages the extension into a Chrome Web Store compliant ZIP archive.
+      - run: npm run package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: viasocket-assistant-0.3.0-webstore-package
+          path: extension/viasocket-assistant-0.3.0.zip
+          retention-days: 14
+      # Download unpacked dist for local developer loading in chrome://extensions.
       - uses: actions/upload-artifact@v4
         with:
           name: viasocket-assistant-dist
