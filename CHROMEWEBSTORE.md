@@ -78,19 +78,46 @@ English
 
 ---
 
-## Privacy & Data Use
+## Developer Console Submission Form (Exact Answers)
 
-### Data Collection
-**Does the extension collect user data?** No user data is collected, sold, or shared with third parties.
+### 1. Host Permission Justification
+*Paste this into the **Host permission justification** box (0/1,000 chars):*
 
-| Data Type | Collected? | Transmitted Off-Device? | Purpose | Shared with Third Parties? |
-|-----------|-----------|------------------------|---------|---------------------------|
-| Personally identifiable info | No | No | N/A | No |
-| Authentication info | Yes (cookies) | Only to viaSocket API | Authenticates user's existing viaSocket session | No |
-| User activity | Yes (workflow context) | Only to viaSocket / LLM provider | Analyzes current workflow canvas to build steps | No |
-| Website content | Yes (viaSocket canvas DOM) | Only to viaSocket / LLM provider | Inspects step nodes to guide and explain flows | No |
+```text
+viaSocket Assistant operates on viaSocket workflow builder pages to help users build and inspect automations:
 
-### Data Use Certification
-- [x] Data is NOT sold to third parties
-- [x] Data is NOT used for purposes unrelated to the extension's single purpose
-- [x] Data is NOT used for creditworthiness or lending decisions
+1. *.viasocket.com & *.sokt.io: Injects the assistant mascot on viaSocket flow canvases (production, beta, dev) and interacts with viaSocket APIs to inspect step configurations, test executions, and apply changes requested by the user.
+2. raw.githubusercontent.com: Downloads public, open-source selector maps and tool configuration updates so the extension remains resilient to minor UI updates.
+3. *.huggingface.co & *.hf.co: Downloads public open-source Whisper speech-to-text model weights for on-device, private audio transcription directly in the browser.
+
+No user browsing history or personal data is collected or tracked.
+```
+
+---
+
+### 2. Are you using remote code?
+- Select: **⚪ No, I am not using remote code**
+> **CRITICAL**: Do NOT select "Yes". All JavaScript and WebAssembly (ONNX Runtime WASM) are bundled directly inside the extension package. Fetching JSON configs and model weight tensors is pure data, not remote code execution.
+
+---
+
+### 3. Data Usage / Privacy Disclosures
+
+#### What user data do you plan to collect from users now or in the future?
+- **Leave all 9 checkboxes UNCHECKED**:
+  - [ ] Personally identifiable information
+  - [ ] Health information
+  - [ ] Financial and payment information
+  - [ ] Authentication information
+  - [ ] Personal communications
+  - [ ] Location
+  - [ ] Web history
+  - [ ] User activity
+  - [ ] Website content
+
+*(The extension has no telemetry or analytics servers. Developers collect zero user data. All processing occurs locally or directly with the user's own configured accounts.)*
+
+#### I certify that the following disclosures are true:
+- [x] **I do not sell or transfer user data to third parties, apart from the approved use cases** (CHECK THIS)
+- [x] **I do not use or transfer user data for purposes that are unrelated to my item's single purpose** (CHECK THIS)
+- [x] **I do not use or transfer user data to determine creditworthiness or for lending purposes** (CHECK THIS)
