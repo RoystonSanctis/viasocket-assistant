@@ -18,6 +18,9 @@ export interface UserSettings {
   /** Extra models tried in order when the main one fails (OpenRouter sends these as `models`) */
   fallbackModels: string[]
   proactivity: Proactivity
+  voiceEnabled: boolean
+  wakeWordEnabled: boolean
+  hotkeyEnabled: boolean
   sttEngine: 'whisper-local' | 'browser'
   sttModel: string
   sttLanguage: string
@@ -36,6 +39,9 @@ export const DEFAULT_SETTINGS: UserSettings = {
   model: '',
   fallbackModels: [],
   proactivity: 'helpful',
+  voiceEnabled: true,
+  wakeWordEnabled: false,
+  hotkeyEnabled: true,
   sttEngine: 'browser',
   sttModel: '',
   sttLanguage: '',

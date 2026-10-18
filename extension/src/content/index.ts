@@ -17,6 +17,7 @@ import { watchPage } from './page-watch'
 import { connectPort } from './port'
 import { initStepMenu } from './step-menu'
 import { destroyToasts } from './toast'
+import { createWakeWordListener, type WakeWordListener } from './wake-word'
 
 const RUN_MARK = '__vsAssistantContentRunning'
 const DEFAULT_HOLD_MS = 180
@@ -57,10 +58,15 @@ async function main(): Promise<void> {
 
   // ---------- voice ----------
 
+  let wakeWord: WakeWordListener | null = null
+
   const stt = createBrowserStt({
     language: () => settings.sttLanguage,
     onState(state, detail) {
-      if (state !== 'listening') talking = false
+      if (state !== 'listening') {
+        talking = false
+        wakeWord?.resume()
+      }
       if (!dead) mascot.setVoiceState(state, detail)
     },
     onTranscript: (text, final) => {
@@ -70,10 +76,11 @@ async function main(): Promise<void> {
   })
 
   function voiceStart(): void {
-    if (talking || dead) return
+    if (!settings.voiceEnabled || talking || dead) return
     talking = true
     workerListened = false
     usingFallbackStt = false
+    wakeWord?.pause()
     if (settings.sttEngine === 'browser') {
       stt.start()
     } else {
@@ -98,12 +105,16 @@ async function main(): Promise<void> {
   function syncTalking(state: VoiceState): void {
     if (state === 'listening') workerListened = true
     const stopped = state === 'transcribing' || state === 'error' || state === 'needs-permission' || state === 'off'
-    if (stopped || (state === 'ready' && workerListened)) talking = false
+    if (stopped || (state === 'ready' && workerListened)) {
+      talking = false
+      wakeWord?.resume()
+    }
   }
 
   function voiceCancel(): void {
     if (!talking) return
     talking = false
+    wakeWord?.resume()
     if (settings.sttEngine === 'browser' || usingFallbackStt) {
       stt.cancel()
     } else {
@@ -113,7 +124,7 @@ async function main(): Promise<void> {
 
   /** The browser keyboard command (chrome.commands) arrives via the worker; push-to-talk state lives here. */
   function voiceCommand(action: 'start' | 'stop' | 'toggle'): void {
-    if (!active()) return
+    if (!active() || !settings.voiceEnabled) return
     if (action === 'start' || (action === 'toggle' && !talking)) voiceStart()
     else voiceStop()
   }
@@ -139,6 +150,23 @@ async function main(): Promise<void> {
   }
   const mascot: MascotController = createMascot(callbacks)
 
+  // ---------- wake word ----------
+
+  wakeWord = createWakeWordListener({
+    enabled: () => active() && settings.voiceEnabled && settings.wakeWordEnabled,
+    onWake(trailingText) {
+      mascot.openPanel()
+      if (trailingText) {
+        port.send({ type: 'user-input', text: trailingText.slice(0, MAX_USER_TEXT), source: 'voice' })
+        setTimeout(() => {
+          if (!talking && !dead) wakeWord?.resume()
+        }, 1200)
+      } else {
+        voiceStart()
+      }
+    },
+  })
+
   // ---------- route ----------
 
   const pageWatch = watchPage((page) => {
@@ -148,8 +176,16 @@ async function main(): Promise<void> {
   mascot.setPage(pageWatch.current())
   function applyEnabled(): void {
     mascot.setSttEngine(settings.sttEngine)
+    mascot.setVoiceEnabled(settings.voiceEnabled)
     mascot.setEnabled(settings.mascotEnabled && hostAllowed())
-    if (!active()) voiceCancel()
+    if (!active() || !settings.voiceEnabled) {
+      voiceCancel()
+      wakeWord?.stop()
+    } else if (settings.wakeWordEnabled) {
+      wakeWord?.start()
+    } else {
+      wakeWord?.stop()
+    }
   }
   applyEnabled()
 
@@ -255,7 +291,7 @@ async function main(): Promise<void> {
   const hotkey = createHotkey({
     setting: () => settings.hotkey,
     holdMs: () => config?.voice.hotkey.holdMs ?? DEFAULT_HOLD_MS,
-    enabled: active,
+    enabled: () => active() && settings.voiceEnabled && settings.hotkeyEnabled,
     onStart: voiceStart,
     onStop: voiceStop,
     onCancel: voiceCancel,
@@ -319,6 +355,7 @@ async function main(): Promise<void> {
     safe(() => stepMenu.destroy())
     safe(() => flowMenu.destroy())
     safe(() => destroyToasts())
+    safe(() => wakeWord?.destroy())
     safe(() => stt.cancel())
     safe(() => hotkey.destroy())
     safe(() => bridge.destroy())

@@ -31,7 +31,7 @@ export class Bubble {
         class: 'orb-btn',
         'aria-haspopup': 'dialog',
         'aria-expanded': 'false',
-        'aria-label': 'viaSocket Assistant. Click to chat, drag to move.',
+        'aria-label': 'SOCKET. Click to chat, drag to move.',
       },
       anim,
       h('span', { class: 'badge', 'aria-hidden': 'true' }),
@@ -87,8 +87,8 @@ export class Bubble {
     this.button.setAttribute(
       'aria-label',
       parked
-        ? 'viaSocket Assistant (parked). Click to chat, double-click to let it roam again.'
-        : 'viaSocket Assistant. Click to chat, drag to move.',
+        ? 'SOCKET (parked). Click to chat, double-click to let it roam again.'
+        : 'SOCKET. Click to chat, drag to move.',
     )
   }
 

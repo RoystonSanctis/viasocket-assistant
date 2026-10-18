@@ -98,7 +98,7 @@ export class Panel {
       'div',
       { class: 'hdr' },
       h('span', { class: 'dot', 'aria-hidden': 'true' }),
-      h('div', { class: 'hdr-text' }, h('div', { class: 'title', id: 'vsa-title', text: 'viaSocket Assistant' }), this.status),
+      h('div', { class: 'hdr-text' }, h('div', { class: 'title', id: 'vsa-title', text: 'SOCKET' }), this.status),
       this.menuBtn,
       closeBtn,
     )
@@ -371,6 +371,10 @@ export class Panel {
     // Old unanswered suggestions are dropped quietly; they were only ever offers.
     const suggestions = [...this.pending.entries()].filter(([, p]) => p.kind === 'suggestion')
     for (const [id] of suggestions.slice(0, Math.max(0, suggestions.length - MAX_SUGGESTIONS))) this.removeCard(id)
+  }
+
+  setVoiceEnabled(enabled: boolean): void {
+    this.micBtn.hidden = !enabled
   }
 
   setSttEngine(engine: SttEngine): void {

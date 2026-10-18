@@ -148,125 +148,148 @@
       <section id="voice" class="card-section" aria-labelledby="voice-heading">
         <h2 id="voice-heading" tabindex="-1">Voice</h2>
 
-        <fieldset>
-          <legend>Speech recognition</legend>
-          <div class="choice-list">
-            <div class="choice">
-              <input type="radio" name="stt-engine" id="stt-engine-local" value="whisper-local" aria-describedby="stt-engine-local-desc">
-              <label for="stt-engine-local">On-device Whisper</label>
-              <p id="stt-engine-local-desc" class="hint">Private: audio never leaves this computer. Needs a one-time model download.</p>
+        <div class="field checkbox-field">
+          <input id="voice-enabled" type="checkbox" aria-describedby="voice-enabled-hint">
+          <label for="voice-enabled"><strong>Enable voice features</strong></label>
+        </div>
+        <p id="voice-enabled-hint" class="hint">When disabled, SOCKET operates in chat-only mode. Microphone input, wake-word listener, and push-to-talk shortcuts are disabled.</p>
+
+        <div id="voice-settings-body">
+          <div class="subsection">
+            <h3>Hands-free wake word</h3>
+            <div class="field checkbox-field">
+              <input id="wake-word-enabled" type="checkbox" aria-describedby="wake-word-hint">
+              <label for="wake-word-enabled"><strong>Wake with "Hey SOCKET"</strong></label>
             </div>
-            <div class="choice">
-              <input type="radio" name="stt-engine" id="stt-engine-browser" value="browser" aria-describedby="stt-engine-browser-desc">
-              <label for="stt-engine-browser">Browser speech</label>
-              <p id="stt-engine-browser-desc" class="hint">No download, but Chrome sends your audio to Google to transcribe it.</p>
-            </div>
-          </div>
-        </fieldset>
-
-        <div id="whisper-options">
-          <div class="field">
-            <label for="stt-model">Speech model</label>
-            <select id="stt-model" aria-describedby="stt-model-note"></select>
-            <p id="stt-model-note" class="hint"></p>
-          </div>
-        </div>
-
-        <div class="field">
-          <label for="stt-language">Language you speak</label>
-          <select id="stt-language" aria-describedby="stt-language-note">
-            <option value="">Auto</option>
-            <option value="en">English</option>
-            <option value="hi">Hindi</option>
-            <option value="es">Spanish</option>
-            <option value="fr">French</option>
-            <option value="de">German</option>
-            <option value="pt">Portuguese</option>
-            <option value="ar">Arabic</option>
-            <option value="ja">Japanese</option>
-            <option value="zh">Chinese</option>
-          </select>
-          <p id="stt-language-note" class="hint"></p>
-        </div>
-
-        <div id="stt-download-row" class="subsection-tight">
-          <div class="button-row">
-            <button type="button" id="stt-download" class="button">Download model now</button>
-          </div>
-          <progress id="stt-progress" max="100" value="0" aria-label="Speech model download" hidden></progress>
-          <p id="stt-status" class="status" role="status" aria-live="polite"></p>
-        </div>
-
-        <div id="site-mic" class="subsection" tabindex="-1" aria-labelledby="site-mic-heading" hidden>
-          <h3 id="site-mic-heading">Microphone for browser speech</h3>
-          <p class="hint">Browser speech listens from the viaSocket page itself, so it uses that site's microphone permission, not this extension's. If Chrome blocked the microphone there, open the site's settings, set Microphone to Allow, then reload the viaSocket tab.</p>
-          <div id="site-mic-buttons" class="button-row"></div>
-        </div>
-
-        <div id="mic" class="subsection" tabindex="-1" aria-labelledby="mic-heading">
-          <h3 id="mic-heading">Microphone &amp; Audio Testing</h3>
-          <p>Microphone permission: <strong id="mic-status">Checking…</strong></p>
-          <div class="button-row">
-            <button type="button" id="mic-allow" class="button button-primary">Start microphone test</button>
-            <button type="button" id="speaker-test" class="button">Test speaker output</button>
+            <p id="wake-word-hint" class="hint">Listens continuously in the background for "Hey SOCKET" (or "OK SOCKET", "Hello SOCKET"). Saying it brings up the assistant and starts listening to your command hands-free.</p>
           </div>
 
-          <div id="mic-meter-box" class="mic-meter-box" hidden>
-            <div class="mic-meter-label-row">
-              <span id="mic-meter-state">Listening… Speak into your microphone</span>
-              <span id="mic-meter-val" class="mic-meter-val">0%</span>
-            </div>
-            <div class="mic-meter-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-              <div id="mic-meter-fill" class="mic-meter-fill"></div>
-            </div>
-
-            <div id="mic-stt-preview" class="mic-stt-preview" hidden>
-              <div class="mic-stt-header">
-                <span class="mic-stt-badge">Speech detected</span>
-                <span class="mic-stt-label">Live transcript:</span>
+          <fieldset>
+            <legend>Speech recognition</legend>
+            <div class="choice-list">
+              <div class="choice">
+                <input type="radio" name="stt-engine" id="stt-engine-local" value="whisper-local" aria-describedby="stt-engine-local-desc">
+                <label for="stt-engine-local">On-device Whisper</label>
+                <p id="stt-engine-local-desc" class="hint">Private: audio never leaves this computer. Needs a one-time model download.</p>
               </div>
-              <p id="mic-stt-text" class="mic-stt-text">Say something…</p>
+              <div class="choice">
+                <input type="radio" name="stt-engine" id="stt-engine-browser" value="browser" aria-describedby="stt-engine-browser-desc">
+                <label for="stt-engine-browser">Browser speech</label>
+                <p id="stt-engine-browser-desc" class="hint">No download, but Chrome sends your audio to Google to transcribe it.</p>
+              </div>
             </div>
+          </fieldset>
 
-            <div id="mic-playback-row" class="mic-playback-row" hidden>
-              <span class="hint">Play back your recorded voice:</span>
-              <audio id="mic-audio-player" controls preload="none"></audio>
+          <div id="whisper-options">
+            <div class="field">
+              <label for="stt-model">Speech model</label>
+              <select id="stt-model" aria-describedby="stt-model-note"></select>
+              <p id="stt-model-note" class="hint"></p>
             </div>
           </div>
 
-          <div id="mic-help" class="hint" hidden>
-            <p>Chrome has blocked the microphone for this extension. Open the extension's site settings, set Microphone to Allow, then come back and press the button again.</p>
+          <div class="field">
+            <label for="stt-language">Language you speak</label>
+            <select id="stt-language" aria-describedby="stt-language-note">
+              <option value="">Auto</option>
+              <option value="en">English</option>
+              <option value="hi">Hindi</option>
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+              <option value="de">German</option>
+              <option value="pt">Portuguese</option>
+              <option value="ar">Arabic</option>
+              <option value="ja">Japanese</option>
+              <option value="zh">Chinese</option>
+            </select>
+            <p id="stt-language-note" class="hint"></p>
+          </div>
+
+          <div id="stt-download-row" class="subsection-tight">
             <div class="button-row">
-              <button type="button" id="mic-settings" class="button">Open microphone settings</button>
+              <button type="button" id="stt-download" class="button">Download model now</button>
             </div>
+            <progress id="stt-progress" max="100" value="0" aria-label="Speech model download" hidden></progress>
+            <p id="stt-status" class="status" role="status" aria-live="polite"></p>
           </div>
-          <p id="mic-result" class="status" role="status" aria-live="polite"></p>
-        </div>
 
-        <div class="subsection">
-          <h3>Replies</h3>
-          <div class="field checkbox-field">
-            <input id="speak-replies" type="checkbox" aria-describedby="speak-replies-hint">
-            <label for="speak-replies">Speak replies out loud</label>
+          <div id="site-mic" class="subsection" tabindex="-1" aria-labelledby="site-mic-heading" hidden>
+            <h3 id="site-mic-heading">Microphone for browser speech</h3>
+            <p class="hint">Browser speech listens from the viaSocket page itself, so it uses that site's microphone permission, not this extension's. If Chrome blocked the microphone there, open the site's settings, set Microphone to Allow, then reload the viaSocket tab.</p>
+            <div id="site-mic-buttons" class="button-row"></div>
           </div>
-          <p id="speak-replies-hint" class="hint">Uses your computer's built-in voice. Only the first sentence is read.</p>
-        </div>
 
-        <div class="subsection" aria-labelledby="hotkey-heading">
-          <h3 id="hotkey-heading">Push-to-talk keys</h3>
-          <p class="hint">Hold these keys on a viaSocket page to talk, and let go to send.</p>
-          <p class="hotkey-line">Current: <span id="hotkey-display" class="hotkey-display"></span></p>
-          <div class="button-row">
-            <button type="button" id="hotkey-change" class="button" aria-describedby="hotkey-hint">Change</button>
-            <button type="button" id="hotkey-reset" class="button">Reset to default</button>
+          <div id="mic" class="subsection" tabindex="-1" aria-labelledby="mic-heading">
+            <h3 id="mic-heading">Microphone &amp; Audio Testing</h3>
+            <p>Microphone permission: <strong id="mic-status">Checking…</strong></p>
+            <div class="button-row">
+              <button type="button" id="mic-allow" class="button button-primary">Start microphone test</button>
+              <button type="button" id="speaker-test" class="button">Test speaker output</button>
+            </div>
+
+            <div id="mic-meter-box" class="mic-meter-box" hidden>
+              <div class="mic-meter-label-row">
+                <span id="mic-meter-state">Listening… Speak into your microphone</span>
+                <span id="mic-meter-val" class="mic-meter-val">0%</span>
+              </div>
+              <div class="mic-meter-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div id="mic-meter-fill" class="mic-meter-fill"></div>
+              </div>
+
+              <div id="mic-stt-preview" class="mic-stt-preview" hidden>
+                <div class="mic-stt-header">
+                  <span class="mic-stt-badge">Speech detected</span>
+                  <span class="mic-stt-label">Live transcript:</span>
+                </div>
+                <p id="mic-stt-text" class="mic-stt-text">Say something…</p>
+              </div>
+
+              <div id="mic-playback-row" class="mic-playback-row" hidden>
+                <span class="hint">Play back your recorded voice:</span>
+                <audio id="mic-audio-player" controls preload="none"></audio>
+              </div>
+            </div>
+
+            <div id="mic-help" class="hint" hidden>
+              <p>Chrome has blocked the microphone for this extension. Open the extension's site settings, set Microphone to Allow, then come back and press the button again.</p>
+              <div class="button-row">
+                <button type="button" id="mic-settings" class="button">Open microphone settings</button>
+              </div>
+            </div>
+            <p id="mic-result" class="status" role="status" aria-live="polite"></p>
           </div>
-          <p id="hotkey-hint" class="status" role="status" aria-live="polite"></p>
-          <p id="hotkey-warning" class="status" data-tone="warn" hidden></p>
 
-          <h3>Chrome keyboard shortcut</h3>
-          <p class="hint">Chrome also has its own shortcut to start or stop talking from any viaSocket tab: <strong id="shortcut-current">Alt+Shift+V</strong>. You can change it on Chrome's shortcuts page.</p>
-          <div class="button-row">
-            <button type="button" id="shortcut-open" class="button">Open Chrome shortcuts</button>
+          <div class="subsection">
+            <h3>Replies</h3>
+            <div class="field checkbox-field">
+              <input id="speak-replies" type="checkbox" aria-describedby="speak-replies-hint">
+              <label for="speak-replies">Speak replies out loud</label>
+            </div>
+            <p id="speak-replies-hint" class="hint">Uses your computer's built-in voice. Only the first sentence is read.</p>
+          </div>
+
+          <div class="subsection" aria-labelledby="hotkey-heading">
+            <h3 id="hotkey-heading">Push-to-talk keys</h3>
+            <div class="field checkbox-field">
+              <input id="hotkey-enabled" type="checkbox" aria-describedby="hotkey-enabled-hint">
+              <label for="hotkey-enabled"><strong>Enable push-to-talk shortcut</strong></label>
+            </div>
+            <p id="hotkey-enabled-hint" class="hint">Hold these keys on a viaSocket page to talk, and let go to send.</p>
+            <div id="hotkey-details-group">
+              <p class="hotkey-line">Current: <span id="hotkey-display" class="hotkey-display"></span></p>
+              <div class="button-row">
+                <button type="button" id="hotkey-change" class="button" aria-describedby="hotkey-hint">Change</button>
+                <button type="button" id="hotkey-reset" class="button">Reset to default</button>
+              </div>
+              <p id="hotkey-hint" class="status" role="status" aria-live="polite"></p>
+              <p id="hotkey-warning" class="status" data-tone="warn" hidden></p>
+            </div>
+
+            <h3>Chrome keyboard shortcut</h3>
+            <p class="hint">Chrome also has its own shortcut to start or stop talking from any viaSocket tab: <strong id="shortcut-current">Alt+Shift+V</strong>. You can change it on Chrome's shortcuts page.</p>
+            <div class="button-row">
+              <button type="button" id="shortcut-open" class="button">Open Chrome shortcuts</button>
+            </div>
           </div>
         </div>
       </section>

@@ -8,6 +8,11 @@ import { rpc } from './rpc'
 import { store, subscribe, updateSettings } from './store'
 
 const whisperOptions = byId('whisper-options', HTMLDivElement)
+const voiceEnabled = byId('voice-enabled', HTMLInputElement)
+const voiceSettingsBody = byId('voice-settings-body', HTMLDivElement)
+const wakeWordEnabled = byId('wake-word-enabled', HTMLInputElement)
+const hotkeyEnabled = byId('hotkey-enabled', HTMLInputElement)
+const hotkeyDetailsGroup = byId('hotkey-details-group', HTMLDivElement)
 const sttModel = byId('stt-model', HTMLSelectElement)
 const sttModelNote = byId('stt-model-note', HTMLParagraphElement)
 const sttLanguage = byId('stt-language', HTMLSelectElement)
@@ -28,6 +33,9 @@ let downloading = false
 
 export function initVoice(): void {
   subscribe(render)
+  voiceEnabled.addEventListener('change', () => void save({ voiceEnabled: voiceEnabled.checked }))
+  wakeWordEnabled.addEventListener('change', () => void save({ wakeWordEnabled: wakeWordEnabled.checked }))
+  hotkeyEnabled.addEventListener('change', () => void save({ hotkeyEnabled: hotkeyEnabled.checked }))
   for (const r of radios('stt-engine')) {
     r.addEventListener('change', () => {
       if (r.checked) void save({ sttEngine: checkedValue('stt-engine') === 'browser' ? 'browser' : 'whisper-local' })
@@ -69,6 +77,12 @@ function selectedSttModel() {
 
 function render(): void {
   const s = store.settings
+  voiceEnabled.checked = s.voiceEnabled
+  voiceSettingsBody.hidden = !s.voiceEnabled
+  wakeWordEnabled.checked = s.wakeWordEnabled
+  hotkeyEnabled.checked = s.hotkeyEnabled
+  hotkeyDetailsGroup.hidden = !s.hotkeyEnabled
+
   setChecked('stt-engine', s.sttEngine)
   const local = s.sttEngine === 'whisper-local'
   whisperOptions.hidden = !local

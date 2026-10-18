@@ -53,6 +53,10 @@ export interface MascotController {
   setVoiceLevel(level: number): void
   setTranscript(text: string, final: boolean): void
   setBusy(busy: boolean): void
+  /** Open the chat panel directly (e.g. from wake word) */
+  openPanel(takeFocus?: boolean): void
+  /** Controls visibility of the voice mic button in the composer */
+  setVoiceEnabled(enabled: boolean): void
   setStatus(llmReady: boolean, reason?: string): void
   destroy(): void
 }

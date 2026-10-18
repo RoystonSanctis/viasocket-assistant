@@ -399,6 +399,17 @@ class Mascot implements MascotController {
     this.kick()
   }
 
+  openPanel(takeFocus = true): void {
+    if (this.destroyed || !this.enabled) return
+    this.activity()
+    this.panel.open(takeFocus)
+  }
+
+  setVoiceEnabled(enabled: boolean): void {
+    if (this.destroyed) return
+    this.panel.setVoiceEnabled(enabled)
+  }
+
   setStatus(llmReady: boolean, reason?: string): void {
     if (this.destroyed) return
     this.panel.setStatus(llmReady, reason)
