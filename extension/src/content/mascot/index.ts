@@ -11,6 +11,7 @@ import { Bubble } from './bubble'
 import { DEFAULT_MASCOT } from './defaults'
 import { h, isEditable } from './dom'
 import { resolveTarget, Spotlight, type ResolvedTarget } from './highlight'
+import { viewport, type Rect } from './geometry'
 import { Motion } from './motion'
 import { OrbInput } from './orb-input'
 import { Panel } from './panel'
@@ -154,6 +155,7 @@ class Mascot implements MascotController {
       host: this.host,
       sel: this.sel,
       isHeld: () => this.isHeld(),
+      isPanelOpen: () => this.panel.isOpen,
       highlightAnchor: () => this.spot.anchor(),
       onMoved: (x) => this.onMoved(x),
     })
@@ -447,6 +449,7 @@ class Mascot implements MascotController {
     if (!this.running()) return
     const tracking = this.spot.update(now)
     const moving = this.ready ? this.motion.step(now) : false
+    if (this.panel.isOpen) this.positionPanel()
     if (this.motion.placed) this.bubble.setVisible(true)
     this.bubble.setLook(this.motion.look.x, this.motion.look.y)
     this.checkSleep(now)
@@ -579,10 +582,20 @@ class Mascot implements MascotController {
     this.positionPanel()
   }
 
+  private getSidePanelRect(): Rect | null {
+    const r = this.motion.getDockRect()
+    const vp = viewport()
+    if (r && r.left > (vp.right - vp.left) * 0.35 && r.right >= vp.right - 40) {
+      return r
+    }
+    return null
+  }
+
   private positionPanel(): void {
     if (!this.panel.isOpen) return
     this.motion.ensurePlaced()
-    this.panel.position(this.motion.position, this.size, this.spot.anchor()?.rect ?? null)
+    const sideDrawer = this.getSidePanelRect()
+    this.panel.position(this.motion.position, this.size, this.spot.anchor()?.rect ?? null, sideDrawer)
   }
 
   private onPanelOpenChange(open: boolean): void {

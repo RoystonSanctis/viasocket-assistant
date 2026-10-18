@@ -35,6 +35,7 @@ export interface MotionDeps {
   sel: Selectors
   /** True when the orb should hover in place instead of roaming (busy, listening, user typing, panel open…) */
   isHeld(): boolean
+  isPanelOpen?(): boolean
   highlightAnchor(): HighlightAnchor | null
   onMoved(x: number, y: number): void
 }
@@ -343,6 +344,10 @@ export class Motion {
 
   // ---------- docking / placement ----------
 
+  getDockRect(now = performance.now()): Rect | null {
+    return this.dockRect(now)
+  }
+
   private dockRect(now: number): Rect | null {
     if (now - this.dockAt > DOM_CACHE_MS || (this.dockEl && !this.dockEl.isConnected)) {
       this.dockEl = this.findDock()
@@ -357,14 +362,50 @@ export class Motion {
 
   private findDock(): Element | null {
     const sel = this.deps.sel
-    const panel = queryOne(sel.flow('stepPanel'))
-    if (panel) return panel
-    if (this.page?.kind === 'developer-hub-plugin' && this.page.sectionKey) return queryOne(sel.devHub('section'))
+    const stepSel = sel.flow('stepPanel')
+    const candidates = [
+      ...(stepSel ? queryAll(stepSel) : []),
+      ...queryAll('[data-testid="step-config-slider"]'),
+      ...queryAll('[data-testid="slider-close-button"]').map(
+        (el) => el.closest('[data-testid="step-config-slider"], .MuiDrawer-paper, [class*="slider"]') ?? el.parentElement,
+      ),
+    ]
+    for (const el of candidates) {
+      if (!el) continue
+      const r = rectOf(el)
+      if (hasArea(r)) return el
+    }
+    if (this.page?.kind === 'developer-hub-plugin' && this.page.sectionKey) {
+      const dh = queryOne(sel.devHub('section'))
+      if (dh && hasArea(rectOf(dh))) return dh
+    }
     return null
   }
 
   /** Beside the panel, or null when there is no room beside it (the orb then roams or holds instead) */
   private dockPoint(dock: Rect, vp: Rect): Point | null {
+    const isRightDock = dock.left > (vp.right + MARGIN) * 0.35 && dock.right >= vp.right - 40
+    if (isRightDock) {
+      // Flow step panel (or right drawer) is open:
+      // The chat panel is placed on the left side of the screen.
+      // Position the orb on the left as well, docked right beside the chat panel (or on the left if closed).
+      let leftEdge = vp.left + 8
+      const sidebar =
+        queryOne(this.deps.sel.devHub('sidebar')) ??
+        queryOne('[data-testid="custom-sidebar"], [data-testid="project-sidebar"], [data-testid="sidebar"], aside, nav')
+      if (sidebar) {
+        const s = rectOf(sidebar)
+        if (hasArea(s) && s.left < 20 && s.right > 20 && s.right < 140) {
+          leftEdge = Math.max(leftEdge, s.right + GAP)
+        }
+      }
+      const y = clampPoint({ x: 0, y: (dock.top + dock.bottom) / 2 - this.size / 2 }, this.size, vp).y
+      const panelWidth = Math.min(360, vp.right - vp.left)
+      const isPanelOpen = this.deps.isPanelOpen?.() ?? false
+      const x = isPanelOpen ? leftEdge + panelWidth + GAP : leftEdge + GAP
+      return clampPoint({ x, y }, this.size, vp)
+    }
+
     const y = (dock.top + dock.bottom) / 2 - this.size / 2
     let x = dock.left - this.size - GAP
     // DH: the section may start right after the sidebar; sit just inside the section instead of on the sidebar.

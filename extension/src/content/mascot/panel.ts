@@ -8,7 +8,7 @@ import type { MascotCallbacks } from './api'
 import { confirmCard, suggestionCard, type Card } from './cards'
 import { ChatView } from './chat-view'
 import { h, icon, iconButton } from './dom'
-import { boxAt, intersects, viewport, type Point, type Rect } from './geometry'
+import { boxAt, hasArea, intersects, rectOf, viewport, type Point, type Rect } from './geometry'
 import { PlanCard } from './plan-card'
 import { VoiceRow } from './voice-row'
 
@@ -84,6 +84,8 @@ export class Panel {
   private inputPrefix = ''
   private transcriptTimer = 0
   private thinking = ''
+  private appliedLeft = Number.NaN
+  private appliedTop = Number.NaN
 
   constructor(private readonly hooks: PanelHooks) {
     const cb = hooks.callbacks
@@ -436,11 +438,38 @@ export class Panel {
   }
 
   /** Places the panel beside the orb, inside the viewport, preferring a side that doesn't cover `avoid` */
-  position(orb: Point, size: number, avoid: Rect | null): void {
+  position(orb: Point, size: number, avoid: Rect | null, sideDrawer?: Rect | null): void {
     if (!this.opened) return
     const vp = viewport(EDGE)
     const w = Math.min(PANEL_WIDTH, vp.right - vp.left)
     const hgt = Math.min(this.el.offsetHeight || 420, vp.bottom - vp.top)
+
+    // When the flow side panel / drawer is open on the right:
+    // Move the chat panel to the LEFT side of the screen so it does not obstruct the flow canvas or the drawer.
+    if (sideDrawer && sideDrawer.left > (vp.right + EDGE) * 0.35) {
+      let leftEdge = vp.left + 8
+      const leftNav = document.querySelector(
+        '[data-testid="custom-sidebar"], [data-testid="project-sidebar"], [data-testid="sidebar"], aside, nav',
+      )
+      if (leftNav) {
+        const nr = rectOf(leftNav)
+        if (hasArea(nr) && nr.left < 20 && nr.right > 20 && nr.right < 140) {
+          leftEdge = Math.max(leftEdge, Math.round(nr.right + GAP))
+        }
+      }
+      const top = clamp(orb.y + size / 2 - hgt / 2, vp.top + 40, vp.bottom - hgt)
+      const l = Math.round(leftEdge)
+      const t = Math.round(top)
+      if (l !== this.appliedLeft || t !== this.appliedTop) {
+        this.appliedLeft = l
+        this.appliedTop = t
+        this.el.style.left = `${l}px`
+        this.el.style.top = `${t}px`
+      }
+      this.el.classList.toggle('from-left', true)
+      return
+    }
+
     const top = clamp(orb.y + size / 2 - hgt / 2, vp.top, vp.bottom - hgt)
     const right = clamp(orb.x + size + GAP, vp.left, vp.right - w)
     const left = clamp(orb.x - GAP - w, vp.left, vp.right - w)
@@ -452,8 +481,14 @@ export class Panel {
     const vw = vp.right + EDGE
     const order = orb.x + size / 2 > vw / 2 ? [left, right] : [right, left]
     const x = order.find(fits) ?? order.find((c) => !intersects({ left: c, top, right: c + w, bottom: top + hgt }, orbBox)) ?? order[0] ?? vp.left
-    this.el.style.left = `${Math.round(x)}px`
-    this.el.style.top = `${Math.round(top)}px`
+    const l = Math.round(x)
+    const t = Math.round(top)
+    if (l !== this.appliedLeft || t !== this.appliedTop) {
+      this.appliedLeft = l
+      this.appliedTop = t
+      this.el.style.left = `${l}px`
+      this.el.style.top = `${t}px`
+    }
     this.el.classList.toggle('from-left', x < orb.x)
   }
 
