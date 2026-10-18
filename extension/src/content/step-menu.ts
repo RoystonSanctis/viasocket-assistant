@@ -112,6 +112,10 @@ export function buildMenuItem(template: Element, item: InjectedMenuItem): HTMLEl
 // ---------- step menu ----------
 
 export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
+  if (typeof chrome === 'undefined' || !chrome.runtime?.id) {
+    return { destroy() {} }
+  }
+
   let lastCopied: CopiedStepData | null = null
 
   // Older builds mirrored the clipboard into page localStorage; scrub any leftover copy — it can hold
@@ -122,9 +126,10 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
     // Page storage blocked; nothing to scrub then.
   }
 
-  chrome.storage.local
-    .get(COPIED_STEP_STORAGE_KEY)
+  chrome.storage?.local
+    ?.get(COPIED_STEP_STORAGE_KEY)
     .then((items) => {
+      if (!items) return
       const stored = items[COPIED_STEP_STORAGE_KEY] as CopiedStepData | undefined
       if (stored && !lastCopied) {
         lastCopied = stored
@@ -139,7 +144,9 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
     // An open step menu may need its Paste item added or removed.
     scan()
   }
-  chrome.storage.onChanged.addListener(onStorageChanged)
+  if (chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener(onStorageChanged)
+  }
 
   /**
    * The open step menu and the slug of the step it belongs to, or null for any other open menu. The menu is
@@ -328,7 +335,9 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
       // Called when this copy of the script is orphaned, where chrome.* APIs throw "Extension context
       // invalidated" - the rest of the shutdown must still run.
       try {
-        chrome.storage.onChanged.removeListener(onStorageChanged)
+        if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+          chrome.storage.onChanged.removeListener(onStorageChanged)
+        }
       } catch {
         // context already invalidated
       }

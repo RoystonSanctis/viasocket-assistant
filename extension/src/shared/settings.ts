@@ -50,12 +50,23 @@ export const DEFAULT_SETTINGS: UserSettings = {
 export const SETTINGS_KEY = 'settings'
 
 export async function loadSettings(): Promise<UserSettings> {
-  const raw = (await chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY] as Partial<UserSettings> | undefined
-  return { ...DEFAULT_SETTINGS, ...(raw ?? {}), hotkey: { ...DEFAULT_SETTINGS.hotkey, ...(raw?.hotkey ?? {}) } }
+  if (typeof chrome === 'undefined' || !chrome.storage?.local) return DEFAULT_SETTINGS
+  try {
+    const raw = (await chrome.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY] as Partial<UserSettings> | undefined
+    return { ...DEFAULT_SETTINGS, ...(raw ?? {}), hotkey: { ...DEFAULT_SETTINGS.hotkey, ...(raw?.hotkey ?? {}) } }
+  } catch {
+    return DEFAULT_SETTINGS
+  }
 }
 
 export async function saveSettings(patch: Partial<UserSettings>): Promise<UserSettings> {
   const next = { ...(await loadSettings()), ...patch }
-  await chrome.storage.local.set({ [SETTINGS_KEY]: next })
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    try {
+      await chrome.storage.local.set({ [SETTINGS_KEY]: next })
+    } catch {
+      // Context invalidated
+    }
+  }
   return next
 }

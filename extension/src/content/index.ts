@@ -32,6 +32,7 @@ function systemNote(text: string): ChatLine {
 
 async function main(): Promise<void> {
   if (window.top !== window) return
+  if (typeof chrome === 'undefined' || !chrome.runtime?.id) return
   const env = resolveEnv(location.host)
   if (!env) return
   // Guards against a second injection of this script into the same tab.
@@ -272,7 +273,9 @@ async function main(): Promise<void> {
       })
       .catch(() => undefined)
   }
-  chrome.storage.onChanged.addListener(onStorage)
+  if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+    chrome.storage.onChanged.addListener(onStorage)
+  }
 
   // Connected last: connectPort() may report a dead context synchronously, and shutdown() needs everything above.
   const port = connectPort({
@@ -308,7 +311,11 @@ async function main(): Promise<void> {
         // context already invalidated
       }
     }
-    safe(() => chrome.storage.onChanged.removeListener(onStorage))
+    safe(() => {
+      if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+        chrome.storage.onChanged.removeListener(onStorage)
+      }
+    })
     safe(() => stepMenu.destroy())
     safe(() => flowMenu.destroy())
     safe(() => destroyToasts())
