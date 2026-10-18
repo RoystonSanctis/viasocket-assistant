@@ -3,6 +3,7 @@
 
 export type Proactivity = 'quiet' | 'helpful' | 'proactive'
 export type AudioOutputMode = 'full' | 'minimal' | 'off'
+export type ChatToggleShortcut = 'shift-space' | 'space' | 'alt-space' | 'off'
 
 export interface HotkeySetting {
   ctrl: boolean
@@ -29,7 +30,8 @@ export interface UserSettings {
   speakReplies: boolean
   audioOutput: AudioOutputMode
   hotkey: HotkeySetting
-  spacebarShortcutEnabled: boolean
+  spacebarShortcutEnabled?: boolean
+  chatToggleShortcut: ChatToggleShortcut
   configChannel: 'stable' | 'beta'
   /** Power users can replace the remote system prompt entirely */
   customSystemPrompt: string
@@ -54,6 +56,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   audioOutput: 'full',
   hotkey: { ctrl: true, alt: true, shift: false, meta: false, code: '' },
   spacebarShortcutEnabled: true,
+  chatToggleShortcut: 'shift-space',
   configChannel: 'stable',
   customSystemPrompt: '',
   mascotEnabled: true,
@@ -71,6 +74,9 @@ export async function loadSettings(): Promise<UserSettings> {
       base.audioOutput = base.speakReplies ? 'minimal' : 'off'
     } else {
       base.speakReplies = base.audioOutput !== 'off'
+    }
+    if (!raw?.chatToggleShortcut) {
+      base.chatToggleShortcut = raw?.spacebarShortcutEnabled === false ? 'off' : 'shift-space'
     }
     return base
   } catch {

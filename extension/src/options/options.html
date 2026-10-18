@@ -311,11 +311,16 @@
               <p id="hotkey-warning" class="status" data-tone="warn" hidden></p>
             </div>
 
-            <div class="field checkbox-field">
-              <input id="spacebar-shortcut-enabled" type="checkbox" aria-describedby="spacebar-shortcut-hint">
-              <label for="spacebar-shortcut-enabled"><strong>Spacebar shortcut to toggle chat window</strong></label>
+            <div class="field" style="margin-top: 18px;">
+              <label for="chat-toggle-shortcut"><strong>Shortcut to open / close chat window</strong></label>
+              <select id="chat-toggle-shortcut" aria-describedby="chat-toggle-shortcut-hint">
+                <option value="shift-space">Shift + Space (Recommended)</option>
+                <option value="space">Spacebar (when outside text inputs)</option>
+                <option value="alt-space">Alt / Option + Space</option>
+                <option value="off">Disabled</option>
+              </select>
+              <p id="chat-toggle-shortcut-hint" class="hint">Press this shortcut on any viaSocket page to quickly open or close the SOCKET chat window.</p>
             </div>
-            <p id="spacebar-shortcut-hint" class="hint">Press Spacebar to quickly open or close the SOCKET chat window when not typing inside a text field or editor.</p>
 
             <h3>Chrome keyboard shortcut</h3>
             <p class="hint">Chrome also has its own shortcut to start or stop talking from any viaSocket tab: <strong id="shortcut-current">Alt+Shift+V</strong>. You can change it on Chrome's shortcuts page.</p>

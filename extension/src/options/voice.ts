@@ -3,7 +3,7 @@
 
 import { SUPPORTED_APP_HOSTS } from '../background/tools/env'
 import type { FromOffscreen } from '../shared/messages'
-import type { AudioOutputMode } from '../shared/settings'
+import type { AudioOutputMode, ChatToggleShortcut } from '../shared/settings'
 import { byId, checkedValue, errorMessage, h, openBrowserPage, radios, setChecked, setStatus } from './dom'
 import { rpc } from './rpc'
 import { store, subscribe, updateSettings } from './store'
@@ -16,7 +16,7 @@ const wakeWordSilenceDelay = byId('wake-word-silence-delay', HTMLSelectElement)
 const wakeWordDelayRow = byId('wake-word-delay-row', HTMLDivElement)
 const hotkeyEnabled = byId('hotkey-enabled', HTMLInputElement)
 const hotkeyDetailsGroup = byId('hotkey-details-group', HTMLDivElement)
-const spacebarShortcut = byId('spacebar-shortcut-enabled', HTMLInputElement)
+const chatToggleShortcut = byId('chat-toggle-shortcut', HTMLSelectElement)
 const sttModel = byId('stt-model', HTMLSelectElement)
 const sttModelNote = byId('stt-model-note', HTMLParagraphElement)
 const sttLanguage = byId('stt-language', HTMLSelectElement)
@@ -44,7 +44,9 @@ export function initVoice(): void {
     void save({ wakeWordSilenceDelay: val })
   })
   hotkeyEnabled.addEventListener('change', () => void save({ hotkeyEnabled: hotkeyEnabled.checked }))
-  spacebarShortcut.addEventListener('change', () => void save({ spacebarShortcutEnabled: spacebarShortcut.checked }))
+  chatToggleShortcut.addEventListener('change', () => {
+    void save({ chatToggleShortcut: chatToggleShortcut.value as ChatToggleShortcut })
+  })
   for (const r of radios('stt-engine')) {
     r.addEventListener('change', () => {
       if (r.checked) void save({ sttEngine: checkedValue('stt-engine') === 'browser' ? 'browser' : 'whisper-local' })
@@ -100,7 +102,7 @@ function render(): void {
   wakeWordDelayRow.hidden = !s.wakeWordEnabled
   hotkeyEnabled.checked = s.hotkeyEnabled
   hotkeyDetailsGroup.hidden = !s.hotkeyEnabled
-  spacebarShortcut.checked = s.spacebarShortcutEnabled !== false
+  chatToggleShortcut.value = s.chatToggleShortcut || 'shift-space'
 
   setChecked('stt-engine', s.sttEngine)
   const local = s.sttEngine === 'whisper-local'

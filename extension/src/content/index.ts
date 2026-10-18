@@ -555,13 +555,27 @@ async function main(): Promise<void> {
   }
 
   const onWindowKeyDown = (e: KeyboardEvent): void => {
-    if (e.code !== 'Space' && e.key !== ' ') return
-    if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return
-    if (e.repeat) return
-    if (settings.spacebarShortcutEnabled === false) return
-    if (!active()) return
+    const shortcut = settings.chatToggleShortcut ?? 'shift-space'
+    if (shortcut === 'off') return
 
-    if (isEditingText(e.target) || isInteractiveElement(e.target)) return
+    const isSpaceKey = e.code === 'Space' || e.key === ' '
+    if (!isSpaceKey) return
+
+    let matched = false
+    if (shortcut === 'shift-space') {
+      matched = e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey
+    } else if (shortcut === 'alt-space') {
+      matched = e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey
+    } else if (shortcut === 'space') {
+      matched = !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey
+      if (matched && (isEditingText(e.target) || isInteractiveElement(e.target))) {
+        return
+      }
+    }
+
+    if (!matched) return
+    if (e.repeat) return
+    if (!active()) return
 
     e.preventDefault()
     e.stopPropagation()
