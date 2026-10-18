@@ -13,7 +13,8 @@
     "dev": "node scripts/build.mjs --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check-config": "node scripts/check-config.mjs",
-    "check": "npm run typecheck && npm run check-config && npm run build"
+    "check": "npm run typecheck && npm run check-config && npm run build",
+    "package": "npm run check && (cd dist && zip -q -r ../viasocket-assistant-0.3.0.zip . -x '*.map' '*.DS_Store')"
   },
   "devDependencies": {
     "@types/chrome": "0.3.5",
