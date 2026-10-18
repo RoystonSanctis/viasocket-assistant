@@ -40,18 +40,14 @@ launchctl setenv OLLAMA_ORIGINS "chrome-extension://*"
 brew services start ollama
 ```
 
-### 4. Download and Start the Llama 3.2 Model
-[Llama 3.2](https://ollama.com/library/llama3.2) supports tool-calling and fits well within memory on Apple Silicon Macs:
+### 4. Download and Start the Recommended Model: Qwen 2.5 7B
+For viaSocket Assistant, [Qwen 2.5 7B](https://ollama.com/library/qwen2.5:7b) is strongly recommended over smaller 3B models. It provides world-class function/tool-calling accuracy, excels at complex structured JSON, and runs smoothly with 100% Metal GPU offload on Apple Silicon Macs:
 
 ```bash
-ollama run llama3.2
+ollama run qwen2.5:7b
 ```
 
-When you see the interactive prompt:
-```
->>> Send a message (/? for help)
-```
-the model is loaded into memory and ready to serve requests at `http://localhost:11434`.
+*(Alternatively, `llama3.2` can be used for very low-memory devices, but `qwen2.5:7b` provides significantly better tool execution and workflow reasoning).*
 
 ---
 
@@ -59,7 +55,7 @@ the model is loaded into memory and ready to serve requests at `http://localhost
 
 1. Open the extension's settings by right-clicking the extension icon in your Chrome toolbar and choosing **Options** (or go to `chrome://extensions` → **Details** → **Extension options**).
 2. Under **AI Provider**, select **Ollama (on this computer)**.
-3. Under **Model**, select `llama3.2` (or type in any other tool-capable model you downloaded, e.g. `qwen2.5:7b`).
+3. Under **Model**, select or type **`qwen2.5:7b`**.
 4. Click the **Connect and test** button.
 5. You should see a green checkmark confirming that viaSocket Assistant connected to your local Ollama server and verified tool-calling support.
 
