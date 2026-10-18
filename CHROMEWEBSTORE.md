@@ -8,22 +8,22 @@
 viaSocket Assistant
 
 **Short Description**
-A voice-first mascot assistant that builds, tests, and improves your viaSocket workflows and plugs.
+A voice-first AI assistant featuring SOCKET, your interactive companion that builds, tests, and improves viaSocket workflows.
 
 **Detailed Description**
-viaSocket Assistant is an interactive AI-powered assistant designed specifically for viaSocket users. It sits quietly as a friendly, movable mascot in the corner of your viaSocket canvas and helps you construct, debug, and explain automation workflows using natural language or voice commands.
+viaSocket Assistant is an interactive AI-powered assistant designed specifically for viaSocket users. It features SOCKET, a friendly, animated companion that lives directly on your viaSocket canvas and helps you construct, debug, and explain automation workflows using natural language or voice commands.
 
 Key Features:
-- Voice-First Interaction: Wake up the assistant hands-free or with a quick keyboard shortcut (Shift + Space or Alt + Shift + V) to dictate workflow changes, fix errors, or configure new steps.
-- Interactive Mascot: Draggable anywhere on the screen, intelligently avoids covering your workflow nodes, and automatically docks to clear the way when configuring steps.
+- Voice-First Interaction: Wake up SOCKET hands-free or with a quick keyboard shortcut (Shift + Space or Alt + Shift + V) to dictate workflow changes, fix errors, or configure new steps.
+- Interactive SOCKET Companion: Draggable anywhere on the screen, intelligently avoids covering your workflow nodes, and automatically docks to clear the way when configuring steps.
 - Explain & Inspect Workflows: Understand complex automation logic with step-by-step interactive walkthroughs and visual highlights.
 - Full Audio & Proactivity Settings: Easily switch between full spoken answers, minimal audio replies, or silent text mode. Adjust speech pause sensitivity to match your speaking pace.
-- Flexible Draggable Chat Window: Pop open the SOCKET panel anywhere you need it, move it freely, and double-click the header to reset it back beside your mascot.
+- Flexible Draggable Chat Window: Pop open the SOCKET chat panel anywhere you need it, move it freely, and double-click the header to reset it back beside SOCKET.
 - Local & Private Speech Options: Transcribe speech on-device or via browser recognition without sending private recordings to unknown servers.
 
 How to use it:
 1. Open any viaSocket flow (e.g. flow.viasocket.com).
-2. Click the green SOCKET mascot orb or press Shift + Space to open the assistant.
+2. Click SOCKET (the green orb in the corner) or press Shift + Space to open the assistant.
 3. Type or speak your instructions (e.g. "Add a step to send a Slack alert when a row is created in Google Sheets").
 4. Review the generated plan, approve steps, and watch your automation build out smoothly.
 
@@ -135,9 +135,9 @@ No user browsing history or personal data is collected or tracked.
 No credentials required. Anyone can test freely:
 
 1. Visit https://flow.viasocket.com and create a free account.
-2. Open any workflow. The green SOCKET mascot orb appears automatically on the canvas.
-3. Click the mascot orb or press Shift + Space to toggle the interactive chat window.
-4. Drag the mascot or chat panel anywhere to test UI docking and responsiveness.
+2. Open any workflow. SOCKET (the green orb assistant) appears automatically on the canvas.
+3. Click SOCKET or press Shift + Space to toggle the interactive chat window.
+4. Drag SOCKET or the chat panel anywhere to test UI docking and responsiveness.
 5. Right-click extension icon -> Options to view settings, audio output preferences, and speech recognition options.
 ```
 

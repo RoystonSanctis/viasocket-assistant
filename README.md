@@ -1,15 +1,15 @@
 # viaSocket Assistant
 
-An open-source (AGPL-3.0-or-later) Chrome extension that puts a voice-first, animated assistant on the viaSocket workflow canvas. A roaming bubble mascot with thinking text builds, edits and tests viaSocket workflows and Developer Hub plugs, using your own AI key, and reacts to what you do on the page.
+An open-source (AGPL-3.0-or-later) Chrome extension that puts a voice-first, animated assistant on the viaSocket workflow canvas. Featuring **SOCKET**, an interactive companion with live expressions and thinking text that builds, edits and tests viaSocket workflows and Developer Hub plugs, using your own AI key, and reacts to what you do on the page.
 
 Works on <https://flow.viasocket.com> and <https://beta-flow.viasocket.com>.
 
-## Mascot reactions & canvas behavior
+## SOCKET reactions & canvas behavior
 
-The assistant lives directly on your viaSocket workflow canvas as an animated bubble mascot. As you build, test, and publish workflows or Developer Hub plugs, the mascot changes its expression, color, and motion to reflect what's happening.
+The assistant lives directly on your viaSocket workflow canvas as **SOCKET**, an animated companion. As you build, test, and publish workflows or Developer Hub plugs, SOCKET changes its expression, color, and motion to reflect what's happening.
 
 <p align="center">
-  <img src="docs/mascot-reactions.svg" alt="viaSocket Assistant Mascot Reactions" width="100%">
+  <img src="docs/mascot-reactions.svg" alt="viaSocket Assistant SOCKET Reactions" width="100%">
 </p>
 
 > 🎮 **Interactive Prototype:** Open [docs/reactions-demo.html](docs/reactions-demo.html) in your browser to test roaming, dragging, parking, and all 8 reaction states.
@@ -29,8 +29,8 @@ The assistant lives directly on your viaSocket workflow canvas as an animated bu
 
 ### Canvas interaction & control
 
-- **Park anytime**: Click and drag the bubble mascot to pin it anywhere on the canvas (e.g. to keep it out of your way).
-- **Resume roaming**: Double-click the parked mascot to release it back into roaming mode.
+- **Park anytime**: Click and drag SOCKET to pin it anywhere on the canvas (e.g. to keep it out of your way).
+- **Resume roaming**: Double-click parked SOCKET to release it back into roaming mode.
 - **Proactivity tiers**: Configured in settings or [`config/mascot.json`](config/mascot.json):
   - **Quiet**: Only reacts on explicit user request or failed tests (offers "Explain").
   - **Helpful** *(default)*: Explains failures and offers one actionable suggestion after problems.

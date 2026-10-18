@@ -9,7 +9,7 @@ Run free, 100% private models on your computer with viaSocket Assistant using [O
 If you prefer to install, configure, and start everything at once, run this single chained command in your macOS Terminal:
 
 ```bash
-brew install ollama && launchctl setenv OLLAMA_ORIGINS "chrome-extension://*" && brew services start ollama && ollama run llama3.2
+brew install ollama && launchctl setenv OLLAMA_ORIGINS "chrome-extension://*" && brew services start ollama && ollama run qwen2.5:7b
 ```
 
 Once the terminal finishes downloading the weights and presents the `>>>` prompt, your local LLM is running and ready.

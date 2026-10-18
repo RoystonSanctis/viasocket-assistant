@@ -23,7 +23,7 @@ A community, open-source assistant for [viaSocket](https://viasocket.com): a sma
  |        |  window.postMessage {__vsAssistant: {..., nonce}}        |
  |        v                                                          |
  | content.js     isolated world                                     |
- |   mascot + chat panel in its own shadow root, highlights,         |
+ |   SOCKET + chat panel in its own shadow root, highlights,         |
  |   push-to-talk keys, router-friendly navigation                   |
  +--------|----------------------------------------------------------+
           |  chrome.runtime port "assistant"
@@ -74,7 +74,7 @@ Source layout:
 | Folder | What lives there |
 |---|---|
 | `src/background/` | Service worker: agent loop, LLM adapters, tools, viaSocket client, config loader, key storage |
-| `src/content/` | Content script controller and the mascot UI |
+| `src/content/` | Content script controller and the SOCKET UI |
 | `src/main-world/` | The MAIN-world network observer |
 | `src/offscreen/` | Microphone capture and speech recognition |
 | `src/options/` | Options page |
@@ -92,7 +92,7 @@ Prompts, selectors, provider lists and wording live in the [`config/` folder](..
 | `alarms` | Re-checks the remote config every 10 minutes. |
 | `tts` | Speaks short replies with Chrome's text-to-speech. |
 | `scripting` | Starts the assistant in viaSocket tabs that were already open when the extension was installed or updated. |
-| `https://flow.viasocket.com/*`, `https://beta-flow.viasocket.com/*`, `https://dev-flow.viasocket.com/*` | The app pages the mascot runs on, and the session cookie read for them. |
+| `https://flow.viasocket.com/*`, `https://beta-flow.viasocket.com/*`, `https://dev-flow.viasocket.com/*` | The app pages SOCKET runs on, and the session cookie read for them. |
 | `https://flow-api.viasocket.com/*`, `https://dev-api.viasocket.com/*` | viaSocket's API, called as you. |
 | `https://flow.sokt.io/*`, `https://dev.sokt.io/*` | viaSocket's flow runtime, used only to test-run a draft flow. |
 | `https://raw.githubusercontent.com/*` | Downloads the public config. |
@@ -118,15 +118,15 @@ The assistant needs a model that supports tool calling. Built-in providers: Open
 To use local, private models without an API key, install and configure Ollama:
 ```bash
 # Single chained command:
-brew install ollama && launchctl setenv OLLAMA_ORIGINS "chrome-extension://*" && brew services start ollama && ollama run llama3.2
+brew install ollama && launchctl setenv OLLAMA_ORIGINS "chrome-extension://*" && brew services start ollama && ollama run qwen2.5:7b
 ```
 Or step-by-step:
 1. `brew install ollama`
 2. `launchctl setenv OLLAMA_ORIGINS "chrome-extension://*"` (allows browser extensions to communicate with Ollama)
 3. `brew services start ollama`
-4. `ollama run llama3.2`
+4. `ollama run qwen2.5:7b`
 
-Once the terminal finishes downloading and displays the `>>>` prompt, open the extension options page, choose **Ollama (on this computer)**, select `llama3.2`, and click **Connect and test**. See [docs/ollama-setup.md](../docs/ollama-setup.md) for more details.
+Once the terminal finishes downloading and displays the `>>>` prompt, open the extension options page, choose **Ollama (on this computer)**, select `qwen2.5:7b`, and click **Connect and test**. See [docs/ollama-setup.md](../docs/ollama-setup.md) for more details.
 
 Free tiers of some providers may use your prompts to improve their products; check your provider's terms.
 
@@ -148,7 +148,7 @@ The extension downloads prompts, selectors, providers, mascot wording, flags, to
 - **AI output is treated as untrusted.** Tool arguments are validated; AI output is never used as a CSS selector, URL or header, and is shown with `textContent`, never `innerHTML`. Page content and tool results are passed to the AI as data.
 - **Less data to the AI.** Run data and sample payloads are stripped from flow JSON before it is sent to your provider (configurable with `stripRunData`).
 - **No remote code.** No `eval`, no `new Function`, nothing executable is downloaded. The MAIN-world hook only observes, always calls through to the page's original `XMLHttpRequest`/`fetch`, and never throws into the page.
-- **Isolated UI.** The mascot renders in its own shadow root and talks to the page hook through one namespaced, nonce-checked message key that the viaSocket app's own listeners ignore.
+- **Isolated UI.** SOCKET renders in its own shadow root and talks to the page hook through one namespaced, nonce-checked message key that the viaSocket app's own listeners ignore.
 
 See [PRIVACY.md](PRIVACY.md) for what data goes where.
 
