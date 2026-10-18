@@ -48,8 +48,8 @@ English
 
 | Asset | Dimensions | Status | Filename |
 |-------|-----------|--------|----------|
-| Store Icon [REQUIRED] | 128×128 PNG | ✅ Ready | `extension/dist/icons/icon-128.png` |
-| Screenshot 1 [REQUIRED] | 1280×800 | 🟡 Pending upload | Flow canvas with SOCKET mascot |
+| Store Icon [REQUIRED] | 128×128 PNG | ✅ Ready | `store-assets/icon-128.png` (or `extension/public/icons/icon-128.png`) |
+| Screenshot 1 [REQUIRED] | 1280×800 PNG | ✅ Ready | `store-assets/screenshot-1-1280x800.png` (or `docs/screenshots/screenshot-1-1280x800.png`) |
 | Small Promo Tile [RECOMMENDED] | 440×280 | ⬜ Not created | |
 | Marquee Promo Tile | 1400×560 | ⬜ Not created | |
 
