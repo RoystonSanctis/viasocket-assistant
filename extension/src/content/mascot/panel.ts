@@ -78,6 +78,10 @@ export class Panel {
   private mode: MascotMode = 'idle'
   private llmReady = true
   private micHeld = false
+  private micDownTime = 0
+  private isMicToggled = false
+  private stoppedFromToggle = false
+  private inputPrefix = ''
   private transcriptTimer = 0
   private thinking = ''
 
@@ -174,11 +178,19 @@ export class Panel {
     this.input.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
         e.preventDefault()
+        if (this.isMicToggled) {
+          this.isMicToggled = false
+          this.releaseMic()
+        }
         this.submit()
       }
     })
     this.input.addEventListener('input', () => this.autoGrow())
     this.sendBtn.addEventListener('click', () => {
+      if (this.isMicToggled) {
+        this.isMicToggled = false
+        this.releaseMic()
+      }
       if (this.busy) cb.onCancel()
       else this.submit()
     })
@@ -235,6 +247,7 @@ export class Panel {
     if (!this.opened) return
     const hadFocus = this.hasFocus()
     this.opened = false
+    this.isMicToggled = false
     this.toggleMenu(false)
     this.el.classList.remove('open')
     this.el.hidden = true
@@ -359,7 +372,16 @@ export class Panel {
 
   setVoiceState(state: VoiceState, detail?: string, progress?: number): void {
     this.voice.set(state, this.lines, detail, progress)
-    if (state !== 'listening' && state !== 'transcribing') this.releaseMicVisual()
+    if (state === 'listening') {
+      this.isMicToggled = true
+      this.micBtn.setAttribute('aria-pressed', 'true')
+      this.micBtn.classList.add('held')
+    } else if (state !== 'transcribing') {
+      this.isMicToggled = false
+      this.micHeld = false
+      this.micBtn.setAttribute('aria-pressed', 'false')
+      this.micBtn.classList.remove('held')
+    }
     if (state === 'off' || state === 'ready' || state === 'error' || state === 'needs-permission') {
       if (!this.transcriptTimer) this.setTranscriptText('')
     }
@@ -373,11 +395,23 @@ export class Panel {
     clearTimeout(this.transcriptTimer)
     this.transcriptTimer = 0
     this.setTranscriptText(text)
+
+    const clean = text.replace(/\s+/g, ' ').trim()
+    if (clean) {
+      this.input.value = this.inputPrefix ? `${this.inputPrefix}${clean}` : clean
+      this.autoGrow()
+      this.hooks.onActivity()
+    }
+
     if (final) {
       this.transcriptTimer = window.setTimeout(() => {
         this.transcriptTimer = 0
         this.setTranscriptText('')
       }, FINAL_TRANSCRIPT_MS)
+      if (this.isMicToggled) {
+        this.isMicToggled = false
+        this.releaseMicVisual()
+      }
     }
   }
 
@@ -413,10 +447,15 @@ export class Panel {
   // ---------- internals ----------
 
   private submit(): void {
+    if (this.isMicToggled) {
+      this.isMicToggled = false
+      this.releaseMic()
+    }
     const text = this.input.value.trim()
     if (!text) return
     this.hooks.callbacks.onUserText(text.slice(0, MAX_INPUT))
     this.input.value = ''
+    this.inputPrefix = ''
     this.resetPlaceholder()
     this.autoGrow()
     this.hooks.onActivity()
@@ -432,36 +471,70 @@ export class Panel {
   }
 
   private wireMic(): void {
-    const down = (e: PointerEvent): void => {
+    this.micBtn.addEventListener('pointerdown', (e: PointerEvent) => {
       if (e.button !== 0) return
       e.preventDefault()
+      this.micDownTime = Date.now()
+
+      if (this.isMicToggled || this.micHeld) {
+        // Was already recording; clicking again turns it off
+        this.stoppedFromToggle = true
+        this.isMicToggled = false
+        this.releaseMic()
+        return
+      }
+
+      this.stoppedFromToggle = false
       try {
         this.micBtn.setPointerCapture(e.pointerId)
-      } catch {
-        /* pointer already gone */
-      }
+      } catch {}
+
+      this.inputPrefix = this.input.value ? this.input.value.trim() + ' ' : ''
       this.pressMic()
-    }
-    const up = (): void => this.releaseMic()
-    this.micBtn.addEventListener('pointerdown', down)
-    this.micBtn.addEventListener('pointerup', up)
-    this.micBtn.addEventListener('pointercancel', up)
-    this.micBtn.addEventListener('pointerleave', up)
-    this.micBtn.addEventListener('lostpointercapture', up)
-    // Keyboard users: hold Space or Enter on the mic button.
-    this.micBtn.addEventListener('keydown', (e) => {
-      if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
-        e.preventDefault()
-        this.pressMic()
-      }
     })
-    this.micBtn.addEventListener('keyup', (e) => {
-      if (e.key === ' ' || e.key === 'Enter') {
-        e.preventDefault()
+
+    this.micBtn.addEventListener('pointerup', (e: PointerEvent) => {
+      if (e.button !== 0) return
+      e.preventDefault()
+      if (this.stoppedFromToggle) {
+        this.stoppedFromToggle = false
+        return
+      }
+
+      const holdDuration = Date.now() - this.micDownTime
+      this.micHeld = false
+
+      if (holdDuration < 350) {
+        // Quick tap: keep recording in toggle mode without flickering
+        this.isMicToggled = true
+        this.micBtn.setAttribute('aria-pressed', 'true')
+        this.micBtn.classList.add('held')
+      } else {
+        // Long hold (> 350ms): push-to-talk released
+        this.isMicToggled = false
         this.releaseMic()
       }
     })
-    this.micBtn.addEventListener('blur', up)
+
+    this.micBtn.addEventListener('pointercancel', () => {
+      this.micHeld = false
+      if (!this.isMicToggled) this.releaseMic()
+    })
+
+    // Keyboard users: Space or Enter on the mic button toggles dictation
+    this.micBtn.addEventListener('keydown', (e) => {
+      if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
+        e.preventDefault()
+        if (this.micHeld || this.isMicToggled) {
+          this.releaseMic()
+        } else {
+          this.isMicToggled = true
+          this.inputPrefix = this.input.value ? this.input.value.trim() + ' ' : ''
+          this.pressMic()
+        }
+      }
+    })
+
     this.micBtn.addEventListener('contextmenu', (e) => e.preventDefault())
   }
 
@@ -475,14 +548,15 @@ export class Panel {
   }
 
   private releaseMic(): void {
-    if (!this.micHeld) return
+    this.isMicToggled = false
     this.micHeld = false
-    this.releaseMicVisual()
+    this.micBtn.setAttribute('aria-pressed', 'false')
+    this.micBtn.classList.remove('held')
     this.hooks.callbacks.onMicUp()
   }
 
   private releaseMicVisual(): void {
-    if (this.micHeld) return
+    if (this.micHeld || this.isMicToggled) return
     this.micBtn.setAttribute('aria-pressed', 'false')
     this.micBtn.classList.remove('held')
   }

@@ -243,3 +243,14 @@ chrome.runtime.onMessage.addListener((msg: unknown, sender, sendResponse) => {
       break
   }
 })
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.warn('[offscreen] Handled unhandledrejection:', event.reason)
+  event.preventDefault()
+})
+
+window.addEventListener('error', (event) => {
+  console.warn('[offscreen] Handled error event:', event.error || event.message)
+  event.preventDefault()
+})
+

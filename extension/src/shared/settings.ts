@@ -36,7 +36,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   model: '',
   fallbackModels: [],
   proactivity: 'helpful',
-  sttEngine: 'whisper-local',
+  sttEngine: 'browser',
   sttModel: '',
   sttLanguage: '',
   speakReplies: true,

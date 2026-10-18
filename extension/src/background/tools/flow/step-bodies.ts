@@ -12,7 +12,8 @@ import { checkExpression, checkTemplateText } from './js-check'
 import type { AuthData, FlowTarget, PluginData } from './types'
 import { asArray, asRecord, isRecord, MASK, str } from './util'
 
-const MAX_CODE_CHARS = 307_200
+/** Longest step code / serialized step config the save route accepts. */
+export const MAX_CODE_CHARS = 307_200
 
 export interface SaveCommon {
   stepId: string

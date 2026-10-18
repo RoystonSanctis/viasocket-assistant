@@ -518,8 +518,19 @@ export const STYLES = `
 .input::placeholder { color: var(--muted); opacity: 1; }
 .input:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
 .icon-btn.mic, .icon-btn.send { width: 34px; height: 34px; border-radius: 10px; }
-.icon-btn.mic { border: 1px solid var(--border); }
-.icon-btn.mic.held { background: #e5484d; color: #ffffff; border-color: transparent; }
+.icon-btn.mic { border: 1px solid var(--border); transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease; }
+.icon-btn.mic.held {
+  background: #e5484d !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow: 0 0 0 3px rgba(229, 72, 77, 0.25);
+  animation: vsa-mic-pulse 1.8s infinite;
+}
+@keyframes vsa-mic-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.45); }
+  70% { box-shadow: 0 0 0 7px rgba(229, 72, 77, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(229, 72, 77, 0); }
+}
 .icon-btn.send { background: var(--accent); color: var(--accent-fg); }
 .busy .icon-btn.send { background: var(--danger); color: var(--danger-fg); }
 .icon-btn.send:hover { filter: brightness(1.08); }

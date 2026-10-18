@@ -616,6 +616,104 @@ kbd {
   border-color: var(--accent);
 }
 
+/* ---------- Audio & Microphone testing ---------- */
+.mic-meter-box {
+  margin: 16px 0 10px;
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mic-meter-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.mic-meter-val {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.mic-meter-track {
+  width: 100%;
+  height: 12px;
+  background: color-mix(in srgb, var(--border) 60%, transparent);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.mic-meter-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #17703f 0%, #5dcaa5 60%, #f0c060 85%, #ff8a80 100%);
+  border-radius: 999px;
+  transition: width 0.05s linear;
+}
+
+.mic-stt-preview {
+  margin-top: 4px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.mic-stt-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.mic-stt-badge {
+  display: inline-flex;
+  align-items: center;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.mic-stt-label {
+  font-weight: 500;
+}
+
+.mic-stt-text {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text);
+  font-style: italic;
+  min-height: 1.4em;
+  word-break: break-word;
+}
+
+.mic-playback-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 0.9rem;
+}
+
+.mic-playback-row audio {
+  width: 100%;
+  height: 38px;
+  outline: none;
+}
+
 .ack {
   margin-top: 20px;
   padding: 12px;

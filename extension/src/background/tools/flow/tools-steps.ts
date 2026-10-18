@@ -20,8 +20,8 @@ import {
   choiceKeys, clearPending, holdValues, loadFieldOptions, mergePending, stepKey, withDynamicInput, type AppliedDefault, type NeedInput, type SavedState,
 } from './fields'
 import {
-  descendants, editorParam, findParent, getFlow, getFunctionRow, listFunctionRows, normalizeFlow, openPanel, orphanBlocks, pluginDataOf,
-  refreshEditorIfOpen, resolveFlow, slugForStepId, triggerKind,
+  descendants, editorParam, findParent, getFlow, getFunctionRow, listFunctionRows, liveUnlessEditorOpen, normalizeFlow, openPanel, orphanBlocks,
+  panelResult, pluginDataOf, refreshEditorIfOpen, resolveFlow, slugForStepId, triggerKind, type EditorSync,
 } from './flow-api'
 import { knownFlowProject } from './known'
 import { encodeInputData } from './input-data'
@@ -36,7 +36,6 @@ import {
 } from './step-bodies'
 import { SCRIPT_ID_PARAM } from './tools-read'
 import type { AuthData, Block, FlowRow, FlowTarget, JsonScript, PluginData } from './types'
-import { pagePathWithParams } from './urls'
 import { asRecord, AUTH_ID_RE, FLOW_PAGES, isRecord, label, MASK, parseMaybeJson, prefixedStepId, ROW_ID_RE, SLUG_RE, str, truncate } from './util'
 
 /** App-action steps, including the editor's built-in tools that are app actions underneath. */
@@ -308,8 +307,10 @@ function documentedNote(used: string[]): string | undefined {
 }
 
 /** Panel to open for a step: its own, the first branch of a new condition, none for notes and stops. */
-function openStepPanel(ctx: ToolContext, t: FlowTarget, block: Block | undefined, slug: string): boolean {
-  if (!block?.identifier || block.type === 'comment' || block.type === 'break' || block.type === 'ifGroup') return false
+function openStepPanel(ctx: ToolContext, t: FlowTarget, block: Block | undefined, slug: string): Promise<EditorSync> {
+  if (!block?.identifier || block.type === 'comment' || block.type === 'break' || block.type === 'ifGroup') {
+    return Promise.resolve({ delivered: false, skipped: true })
+  }
   return openPanel(ctx, t.scriptId, block.identifier, slug)
 }
 
@@ -927,13 +928,20 @@ const addStep = defineTool<AddStepArgs>({
           saved: false,
           error: messageOf(e),
           hint: `"${slug}" exists as an unsaved draft. Fix the problem and call vs_update_step with slugName "${slug}", or remove it with vs_delete_step.`,
-          panelOpened: openStepPanel(ctx, t, block, slug),
+          ...panelResult(await openStepPanel(ctx, t, block, slug)),
           warnings: warnings.length ? warnings : undefined,
         }
       }
-      // Show the user the step just configured (a new condition shows its first branch).
-      const branch = typeof result.branch === 'string' ? result.branch : undefined
-      result.panelOpened = branch && childId ? openPanel(ctx, t.scriptId, childId, branch) : openStepPanel(ctx, t, block, slug)
+      // Show the user the step just configured (a new condition shows its first branch). Notes and stops have no
+      // panel: their create was live-applied, and the refetch covers a missed live push.
+      if (a.type === 'comment' || a.type === 'break') {
+        const sync = await refreshEditorIfOpen(ctx, t.scriptId)
+        result.panelOpened = false
+        if (sync.reason) result.panelNote = sync.reason
+      } else {
+        const branch = typeof result.branch === 'string' ? result.branch : undefined
+        Object.assign(result, panelResult(branch && childId ? await openPanel(ctx, t.scriptId, childId, branch) : await openStepPanel(ctx, t, block, slug)))
+      }
       if (result.saved === true && NAMED.has(a.type)) {
         result.next =
           kind === 'delay'
@@ -968,6 +976,10 @@ async function saveNewStep(
     hidden: block.hidden,
   }
   const warnings: string[] = []
+  // vs_add_step opens the saved step's panel (or refreshes the editor) with a ?timestamp bump after this returns,
+  // so while this tab shows the flow the saves skip live-apply: the bump's refetch then reloads everything,
+  // including the just-opened panel (see flow-api's editor-sync note). A break keeps live-apply (no panel follows).
+  const live = liveUnlessEditorOpen(ctx, t.scriptId)
   if (PLUGIN_LIKE.has(a.type)) {
     const meta = block.metaData
     if (!meta?.serviceId || !meta.actionVersionId) throw new ToolError('viaSocket did not attach the app definition to the step.')
@@ -1013,7 +1025,7 @@ async function saveNewStep(
     const base: PluginData = { ...meta, inputJson: cfg.inputJson }
     const dynamicInputRequired = withDynamicInput(meta.dynamicInputRequired, cfg.dynamicInput)
     if (dynamicInputRequired) base.dynamicInputRequired = dynamicInputRequired
-    await putStep(ctx, t, slug, pluginBody(c, base, authData, cfg.cleaned))
+    await putStep(ctx, t, slug, pluginBody(c, base, authData, cfg.cleaned), live)
     return {
       result: {
         saved: true,
@@ -1027,21 +1039,21 @@ async function saveNewStep(
   }
   switch (a.type) {
     case 'function':
-      await putStep(ctx, t, slug, functionBody(c, a.code ?? '', { dynamicVariables: mergeDynamicVariables({}, a.dynamicVariables) }))
+      await putStep(ctx, t, slug, functionBody(c, a.code ?? '', { dynamicVariables: mergeDynamicVariables({}, a.dynamicVariables) }), live)
       return { result: { saved: true, status: 'ACTIVE', reference: `context.res.${slug}` }, warnings }
     case 'api': {
       const { code } = buildApiCode(apiSpec(a), {})
-      await putStep(ctx, t, slug, apiBody(c, code, { dynamicVariables: mergeDynamicVariables({}, a.dynamicVariables) }))
+      await putStep(ctx, t, slug, apiBody(c, code, { dynamicVariables: mergeDynamicVariables({}, a.dynamicVariables) }), live)
       return { result: { saved: true, status: 'ACTIVE', reference: `context.res.${slug}` }, warnings }
     }
     case 'variable':
-      await putStep(ctx, t, slug, variableBody(c, a.expression ?? ''))
+      await putStep(ctx, t, slug, variableBody(c, a.expression ?? ''), live)
       return { result: { saved: true, status: 'ACTIVE', reference: `context.vals.${slug}` }, warnings }
     case 'condition': {
       const branch = childId ? slugForStepId(js, childId) : undefined
       if (!childId || !branch) throw new ToolError('The first branch of the condition was not created.')
       const condition = a.condition ?? ''
-      await putStep(ctx, t, branch, ifBlockBody({ stepId: childId, title: branch }, condition, a.statement ?? truncate(condition, 80), {}))
+      await putStep(ctx, t, branch, ifBlockBody({ stepId: childId, title: branch }, condition, a.statement ?? truncate(condition, 80), {}), live)
       return {
         result: {
           saved: true,
@@ -1053,7 +1065,7 @@ async function saveNewStep(
     }
     case 'branch': {
       const condition = a.condition ?? ''
-      await putStep(ctx, t, slug, ifBlockBody(c, condition, a.statement ?? truncate(condition, 80), {}))
+      await putStep(ctx, t, slug, ifBlockBody(c, condition, a.statement ?? truncate(condition, 80), {}), live)
       return { result: { saved: true, hint: `Add steps to this branch with parent "${slug}".` }, warnings }
     }
     case 'break':
@@ -1199,21 +1211,24 @@ const updateStep = defineTool<UpdateStepArgs>({
         ;({ body, defaultsApplied } = await buildUpdateBody(ctx, t, a, slug, block, c, warnings, getCat))
       } catch (e) {
         if (!(e instanceof IncompleteStep)) throw e
-        return { ...e.result, panelOpened: openStepPanel(ctx, t, block, slug), warnings: warnings.length ? warnings : undefined }
+        return { ...e.result, ...panelResult(await openStepPanel(ctx, t, block, slug)), warnings: warnings.length ? warnings : undefined }
       }
       for (const s of await guardMappings(js, getCat, bodyTexts(block.type, body, new Set(a.customInput ?? [])), allowDoc, true)) documentedUsed.add(s)
       const docNote = documentedNote([...documentedUsed])
       if (docNote) warnings.push(docNote)
-      // An open panel keeps its own copy of the step, which live-apply does not touch; saving it later would undo
-      // this change. A plain save plus the refetch (openPanel bumps ?timestamp) makes the editor reload it instead.
-      const panelOpen = editorParam(ctx, 'slugName', t.scriptId) === slug
-      await putStep(ctx, t, slug, body, !panelOpen)
+      // The editor keeps a cached copy of every step a panel has shown, which live-apply never touches, so a
+      // live-applied save can leave an open (or later reopened) panel stale. While this tab shows the flow, save
+      // plainly and let the reopen below bump ?timestamp: the refetch sees the version move and reloads the step.
+      await putStep(ctx, t, slug, body, liveUnlessEditorOpen(ctx, t.scriptId))
       if (block.type === 'plugin' && block.identifier) clearPending(stepKey(ctx, t, block.identifier))
 
-      let panelOpened = false
-      if (block.type === 'response') panelOpened = openPanel(ctx, t.scriptId, 'response', 'response')
-      else if (block.type !== 'comment' && block.type !== 'break') panelOpened = openStepPanel(ctx, t, block, title)
-      else if (panelOpen) refreshEditorIfOpen(ctx, t.scriptId)
+      let panel: { panelOpened: boolean; panelNote?: string }
+      if (block.type === 'comment' || block.type === 'break') {
+        const sync = await refreshEditorIfOpen(ctx, t.scriptId)
+        panel = sync.reason ? { panelOpened: false, panelNote: sync.reason } : { panelOpened: false }
+      } else {
+        panel = panelResult(block.type === 'response' ? await openPanel(ctx, t.scriptId, 'response', 'response') : await openStepPanel(ctx, t, block, title))
+      }
       const reference = block.type === 'variable' ? `context.vals.${title}` : block.type === 'response' ? undefined : `context.res.${title}`
       return {
         saved: true,
@@ -1221,7 +1236,7 @@ const updateStep = defineTool<UpdateStepArgs>({
         renamedFrom: title !== slug ? slug : undefined,
         reference,
         defaultsApplied,
-        panelOpened,
+        ...panel,
         next:
           DATA_STEPS.has(block.type)
             ? `Test it with vs_test_step "${title}" (it really runs), then use vs_get_variables to map its output in later steps.`
@@ -1298,12 +1313,13 @@ const setResponse = defineTool<SetResponseArgs>({
       }
       if (asRecord(js.trigger?.loops).loopsEnabled === true) warnings.push('Run once per item is on, so callers always get "Flow Queued"; this response is not sent until the loop is turned off.')
       const customHeaders = a.responseType === 'custom' ? (headers ? { data: headers, _data: headers } : block.customHeaders) : undefined
-      const panelOpen = editorParam(ctx, 'slugName', t.scriptId) === 'response'
-      await putStep(ctx, t, 'response', responseBody(a.responseType, body, customHeaders), !panelOpen)
+      // Plain save while this tab shows the flow: the reopen below bumps ?timestamp, so an open response panel
+      // reloads the saved state instead of keeping its live-apply-proof cached copy.
+      await putStep(ctx, t, 'response', responseBody(a.responseType, body, customHeaders), liveUnlessEditorOpen(ctx, t.scriptId))
       return {
         saved: true,
         responseType: a.responseType,
-        panelOpened: openPanel(ctx, t.scriptId, 'response', 'response'),
+        ...panelResult(await openPanel(ctx, t.scriptId, 'response', 'response')),
         warnings: warnings.length ? warnings : undefined,
       }
     })
@@ -1457,9 +1473,11 @@ export async function saveStepSample(ctx: ToolContext, t: FlowTarget, stepId: st
       if (!pd || !authData?.id) return false
       const c: SaveCommon = { stepId, title: slug, description: block.description, sampleData: compacted, iconUrl: block.iconUrl, hidden: block.hidden }
       const body = pluginBody(c, pd, authData, asRecord(pd.selectedValues?.inputData))
-      const panelOpen = editorParam(ctx, 'slugName', t.scriptId) === slug
-      await putStep(ctx, t, slug, body, !panelOpen)
-      if (panelOpen) refreshEditorIfOpen(ctx, t.scriptId)
+      // Plain save plus a refetch while this tab shows the flow, so the sample also reaches the editor's cached
+      // copy of the step (live-apply would skip it there); best-effort either way.
+      const live = liveUnlessEditorOpen(ctx, t.scriptId)
+      await putStep(ctx, t, slug, body, live)
+      if (!live) await refreshEditorIfOpen(ctx, t.scriptId)
       return true
     })
   } catch (e) {
@@ -1516,17 +1534,15 @@ const deleteStep = defineTool<{ slugName: string; scriptId?: string }>({
           signal: ctx.signal,
         }),
       )
-      if (editorParam(ctx, 'slugName', t.scriptId) === slug) {
-        try {
-          ctx.ui.navigate(pagePathWithParams(ctx.page.url, { stepId: null, slugName: null }), { replace: true })
-        } catch {
-          // Closing the panel is cosmetic.
-        }
-      }
+      // The delete was live-applied; the bump also closes a panel still showing the deleted step and makes the
+      // editor refetch, which covers a missed live push.
+      const panelOnIt = editorParam(ctx, 'slugName', t.scriptId) === slug
+      const sync = await refreshEditorIfOpen(ctx, t.scriptId, panelOnIt ? { stepId: null, slugName: null } : {})
       return {
         deleted: true,
         slug,
         alsoDeleted: nested.length ? nested : undefined,
+        editorNote: sync.reason,
         note: block.identifier && live.has(block.identifier) ? 'It is removed from the live flow when the flow is published.' : undefined,
       }
     })
@@ -1604,6 +1620,9 @@ const moveStep = defineTool<MoveArgs>({
       const orphans = orphanBlocks(js)
       await reorder(ctx, t, slug, target, newIndex)
       if (orphans.length) notes.push(`viaSocket also removed unreachable leftovers: ${orphans.join(', ')}`)
+      // The reorder was live-applied; the bump refetches the canvas order too, covering a missed live push.
+      const sync = await refreshEditorIfOpen(ctx, t.scriptId)
+      if (sync.reason) notes.push(sync.reason)
       return { moved: true, slug, parent: target, index: newIndex, notes: notes.length ? notes : undefined }
     })
   },

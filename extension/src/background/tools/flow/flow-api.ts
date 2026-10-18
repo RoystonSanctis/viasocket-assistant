@@ -1,7 +1,8 @@
-// Reading flows and resolving which flow a tool may act on.
+// Reading flows and resolving which flow a tool may act on, and keeping the open editor in sync with writes.
 
+import type { PageContext } from '../../../shared/page'
 import { SCRIPT_ID_RE, STEP_ID_RE } from '../ids'
-import type { ToolContext } from '../types'
+import type { ToolContext, UiBridge } from '../types'
 import { VsError } from '../viasocket-client'
 import { call, ToolError } from './errors'
 import { isKnownProject, knownFlowProject, rememberProject } from './known'
@@ -335,33 +336,140 @@ export function summarizeFlow(row: FlowRow, t: FlowTarget, fns: FunctionRow[], v
   }
 }
 
-/** Query param of the open editor page. parsePage reads stepId/slugName only on the /slider route. */
-export function editorParam(ctx: ToolContext, name: 'stepId' | 'slugName', scriptId?: string): string | undefined {
-  if (ctx.page.kind !== 'flow-editor' || (scriptId && ctx.page.scriptId !== scriptId)) return undefined
+// ---- Keeping the open editor in sync with writes --------------------------------------------------------------
+//
+// The editor picks up a mutation in two ways. With live-apply (the request's live flag) the page swaps in the new
+// flow JSON itself, but an open step panel keeps its own cached copy of the step, so panel-visible changes (mapped
+// fields, input values) stay stale there. Bumping ?timestamp makes the editor refetch the flow and, when the
+// fetched draft version differs from the one it holds, drop those cached step copies too, so an open panel reloads
+// its step. The two mechanisms defeat each other: a live-applied save syncs the editor's version first, and a later
+// bump then sees no version difference and keeps the stale panel copy. So while this tab shows the flow, tools save
+// WITHOUT live-apply and bump afterwards; only when the flow is not open here is live-apply the mechanism left.
+//
+// The bump itself travels background -> content script -> page hook -> history, and each hop used to fail silently
+// (page hook not paired after an extension reload, the tab meanwhile elsewhere, the page context momentarily gone).
+// Every sync below therefore waits until the tab reports a URL carrying the new stamp and returns what really
+// happened, so tools can tell the model when the user has to refresh instead of silently claiming success.
+
+export interface EditorProbe {
+  /** The tab's latest page, which can be newer than the run's pinned ctx.page (a panel the user just opened). */
+  livePage(): PageContext | null
+  /** Resolves true once the tab reports a page that passes `test`; false on timeout, abort or a closed tab. */
+  waitForPage(test: (page: PageContext) => boolean, timeoutMs: number, signal?: AbortSignal): Promise<boolean>
+}
+
+const PROBES = new WeakMap<UiBridge, EditorProbe>()
+
+/** Called where the UiBridge is created: gives editor syncs eyes on the tab's live URL. */
+export function registerEditorProbe(ui: UiBridge, probe: EditorProbe): void {
+  PROBES.set(ui, probe)
+}
+
+export interface EditorSync {
+  /** The editor was told to refetch/open the panel and the tab confirmed the new URL. */
+  delivered: boolean
+  /** The flow is not open in this tab (or the step has no panel), so there was nothing to sync. */
+  skipped?: boolean
+  /** Set when the editor could not be updated; tools put it in their result for the model to relay. */
+  reason?: string
+}
+
+const CONFIRM_NAVIGATE_MS = 4000
+const REFRESH_REASON =
+  'The change is saved, but the open editor page did not pick it up (the page and the extension may be out of sync). If the editor does not show the change, tell the user to refresh the page.'
+
+function urlParam(url: string, name: string): string | undefined {
   try {
-    return new URL(ctx.page.url).searchParams.get(name) ?? undefined
+    return new URL(url).searchParams.get(name) ?? undefined
   } catch {
     return undefined
   }
 }
 
 /**
- * Live-apply (sent-by-fbai) swaps only the editor's draft json_script; status, title and an open step panel stay
- * stale. Bumping ?timestamp makes the editor refetch.
+ * The freshest view of the editor page showing this flow: the tab's live page when a probe is registered (the
+ * pinned ctx.page can lag panels opened moments ago), else the pinned page. Null when the tab shows something
+ * else, so a sync never navigates a user who moved away mid-run.
  */
-export function refreshEditorIfOpen(ctx: ToolContext, scriptId: string, extra: Record<string, string | null> = {}): void {
-  if (ctx.page.kind !== 'flow-editor' || ctx.page.scriptId !== scriptId) return
-  try {
-    ctx.ui.navigate(pagePathWithParams(ctx.page.url, { ...extra, timestamp: String(Date.now()) }), { replace: true })
-  } catch {
-    // Refreshing is best-effort; the write itself already succeeded.
+function editorPageOf(ctx: ToolContext, scriptId: string): PageContext | null {
+  const probe = PROBES.get(ctx.ui)
+  if (probe) {
+    const live = probe.livePage()
+    return live && live.kind === 'flow-editor' && live.scriptId === scriptId && live.host === ctx.page.host ? live : null
   }
+  return ctx.page.kind === 'flow-editor' && ctx.page.scriptId === scriptId ? ctx.page : null
+}
+
+/** This tab shows the flow's editor, so a ?timestamp bump (not live-apply) is what keeps it fresh. */
+export function editorOpen(ctx: ToolContext, scriptId: string): boolean {
+  return editorPageOf(ctx, scriptId) !== null
+}
+
+/**
+ * The live flag for a flow mutation that an editor sync (openPanel / refreshEditorIfOpen) follows: live-apply only
+ * when this tab does not show the flow. A live-applied save syncs the editor's draft version first, and the
+ * following ?timestamp refetch then skips exactly the cache purge an open panel needs (see the section note).
+ */
+export function liveUnlessEditorOpen(ctx: ToolContext, scriptId: string): boolean {
+  return !editorOpen(ctx, scriptId)
+}
+
+/** Result fields for a tool that opened or refreshed a panel: panelOpened, plus the note to relay on failure. */
+export function panelResult(sync: EditorSync): { panelOpened: boolean; panelNote?: string } {
+  return sync.reason ? { panelOpened: sync.delivered, panelNote: sync.reason } : { panelOpened: sync.delivered }
+}
+
+let lastStamp = 0
+
+/** Strictly increasing ?timestamp values, so each sync is recognizable in the URL the tab confirms. */
+function nextStamp(): string {
+  lastStamp = Math.max(lastStamp + 1, Date.now())
+  return String(lastStamp)
+}
+
+/** Replace-navigates the open editor with the changes plus a fresh ?timestamp, and waits for the tab to confirm. */
+async function syncEditor(ctx: ToolContext, scriptId: string, changes: Record<string, string | null>): Promise<EditorSync> {
+  const page = editorPageOf(ctx, scriptId)
+  if (!page) return { delivered: false, skipped: true }
+  const stamp = nextStamp()
+  try {
+    ctx.ui.navigate(pagePathWithParams(page.url, { ...changes, timestamp: stamp }), { replace: true })
+  } catch {
+    return { delivered: false, reason: REFRESH_REASON }
+  }
+  const probe = PROBES.get(ctx.ui)
+  // Nothing to confirm with (tests build a bare context): report the attempt, as before.
+  if (!probe) return { delivered: true }
+  const confirmed = await probe.waitForPage(
+    (p) => p.kind === 'flow-editor' && p.scriptId === scriptId && urlParam(p.url, 'timestamp') === stamp,
+    CONFIRM_NAVIGATE_MS,
+    ctx.signal,
+  )
+  return confirmed ? { delivered: true } : { delivered: false, reason: REFRESH_REASON }
+}
+
+/**
+ * Query param of the open editor page, read from the tab's live URL when possible, so a panel opened or closed
+ * after the run pinned its page still counts (the editor opens panels purely through these query params).
+ */
+export function editorParam(ctx: ToolContext, name: 'stepId' | 'slugName', scriptId?: string): string | undefined {
+  if (ctx.page.kind !== 'flow-editor' || (scriptId && ctx.page.scriptId !== scriptId)) return undefined
+  const page = ctx.page.scriptId ? editorPageOf(ctx, ctx.page.scriptId) : ctx.page
+  return page ? urlParam(page.url, name) : undefined
+}
+
+/**
+ * Bumps ?timestamp so the open editor refetches the flow (and, when the draft version moved, reloads an open
+ * panel's cached step too). Only for the flow open in this tab; reports whether the tab confirmed the refresh.
+ */
+export function refreshEditorIfOpen(ctx: ToolContext, scriptId: string, extra: Record<string, string | null> = {}): Promise<EditorSync> {
+  return syncEditor(ctx, scriptId, extra)
 }
 
 /**
  * Opens a step's (or the trigger's) panel in the open editor so the user sees what was just configured. The
  * ?timestamp bump makes the editor refetch first, so the panel shows the saved state rather than a stale copy.
- * Only for the flow open in the editor; returns whether it navigated.
+ * Only for the flow open in this tab; reports whether the tab confirmed it.
  */
 export function openPanel(
   ctx: ToolContext,
@@ -369,39 +477,33 @@ export function openPanel(
   stepId: string,
   slugName: string,
   extra: { stepType?: string; flowCondition?: string } = {},
-): boolean {
-  if (ctx.page.kind !== 'flow-editor' || ctx.page.scriptId !== scriptId) return false
-  try {
-    ctx.ui.navigate(
-      pagePathWithParams(ctx.page.url, {
-        stepId,
-        slugName,
-        position: null,
-        parent: null,
-        stepType: extra.stepType ?? null,
-        flowCondition: extra.flowCondition ?? null,
-        timestamp: String(Date.now()),
-      }),
-      { replace: true },
-    )
-    return true
-  } catch {
-    // Opening the panel is a courtesy; the write itself already succeeded.
-    return false
-  }
+): Promise<EditorSync> {
+  return syncEditor(ctx, scriptId, {
+    stepId,
+    slugName,
+    position: null,
+    parent: null,
+    stepType: extra.stepType ?? null,
+    flowCondition: extra.flowCondition ?? null,
+  })
 }
 
 /** The trigger's loop ('hitFlowIndividually') or run-if ('runIfCondition') panel. */
-export function openTriggerFeaturePanel(ctx: ToolContext, scriptId: string, kind: string | undefined, flowCondition: 'hitFlowIndividually' | 'runIfCondition'): boolean {
+export function openTriggerFeaturePanel(
+  ctx: ToolContext,
+  scriptId: string,
+  kind: string | undefined,
+  flowCondition: 'hitFlowIndividually' | 'runIfCondition',
+): Promise<EditorSync> {
   const type = kind === 'webhook' || kind === 'cron' || kind === 'email' ? kind : 'trigger'
   return openPanel(ctx, scriptId, `${type}-advance-config`, `${type}-advance-config`, { flowCondition })
 }
 
 /** The Get Data panel (the trigger's pre-process), of its kind: plugin, api or function. */
-export function openGetDataPanel(ctx: ToolContext, scriptId: string, stepType: string): boolean {
+export function openGetDataPanel(ctx: ToolContext, scriptId: string, stepType: string): Promise<EditorSync> {
   return openPanel(ctx, scriptId, 'CRON_PRE_PROCESS', 'CRON_PRE_PROCESS', { stepType })
 }
 
-export function openTriggerPanel(ctx: ToolContext, scriptId: string, kind: string | undefined): boolean {
+export function openTriggerPanel(ctx: ToolContext, scriptId: string, kind: string | undefined): Promise<EditorSync> {
   return openPanel(ctx, scriptId, 'SET_TRIGGER', triggerPanelSlug(kind))
 }

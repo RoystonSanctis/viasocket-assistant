@@ -7,8 +7,9 @@
 // stores the raw result as the trigger's sample, so later steps are mapped from real fields. Values given in an
 // incomplete call are held for the next one, because viaSocket cannot store a half-configured trigger.
 //
-// While the trigger panel is open, saves go out without live-apply and the panel is reopened with a refetch: the
-// editor keeps its own copy of an open panel, which live-apply would leave stale (the step tools do the same).
+// While this tab shows the flow, saves go out without live-apply and the trigger panel is (re)opened with a
+// ?timestamp refetch: the editor keeps its own copy of whatever a panel has shown, which live-apply would leave
+// stale — and a live-applied save would stop the refetch from reloading it (see flow-api's editor-sync note).
 
 import { maybeRedactText } from '../redact'
 import type { Tool, ToolContext } from '../types'
@@ -18,7 +19,7 @@ import { resolveConnection } from './connections'
 import { describeRun, nextRuns, parseCron, validTimezone } from './cron'
 import { call, isAbortError, ToolError } from './errors'
 import { choiceKeys, clearPending, holdValues, mergePending, reachableFields, stepKey, withDynamicInput, type SavedState } from './fields'
-import { editorParam, everPublished, getFlow, normalizeFlow, openTriggerPanel, resolveFlow, triggerFeatures, triggerKind } from './flow-api'
+import { everPublished, getFlow, liveUnlessEditorOpen, normalizeFlow, openTriggerPanel, panelResult, resolveFlow, triggerFeatures, triggerKind } from './flow-api'
 import { encodeInputData } from './input-data'
 import { checkTriggerValues, inputDataTexts } from './mapping'
 import { consoleOf, dryRunErrorText, executeDryRun, getRecentRun } from './runs'
@@ -83,11 +84,6 @@ function precheck(a: SetTriggerArgs): void {
     problems.push('actionId, connectionId, inputData, customInput and scheduledTime are only for kind "app".')
   }
   if (problems.length) fail(problems)
-}
-
-/** The trigger panel is open in the editor: saves must skip live-apply and reopen the panel (see the header). */
-function triggerPanelOpen(ctx: ToolContext, t: FlowTarget): boolean {
-  return editorParam(ctx, 'stepId', t.scriptId) === 'SET_TRIGGER'
 }
 
 /** POST /trigger body: the drafted or saved trigger with its values. The server stores it verbatim. */
@@ -198,9 +194,9 @@ function testReport(ctx: ToolContext, test: TriggerTest, trigger: Trigger): Reco
   return { success: true, sampleFound: true, sample: trimData(src.data, strip), variables: variablesOf(src, strip, 60), appHint }
 }
 
-/** POST /trigger, without live-apply while the trigger panel is open. Returns the saved flow when it comes back. */
+/** POST /trigger, without live-apply while this tab shows the flow (see the header). Returns the saved flow. */
 async function postTrigger(ctx: ToolContext, t: FlowTarget, body: Record<string, unknown>, what: string): Promise<FlowRow | null> {
-  const live = !triggerPanelOpen(ctx, t)
+  const live = liveUnlessEditorOpen(ctx, t.scriptId)
   const res = await call(what, () => ctx.vs.request({ method: 'POST', path: `/scripts/${t.projectId}/${t.scriptId}/trigger`, body, live, signal: ctx.signal }))
   return normalizeFlow(asRecord(res).data)
 }
@@ -295,7 +291,7 @@ function incompleteTrigger(
   values: Record<string, unknown>,
   dropped: string[],
   isDraft: boolean,
-  panelOpened: boolean,
+  panel: { panelOpened: boolean; panelNote?: string },
 ): Record<string, unknown> {
   return {
     saved: false,
@@ -314,7 +310,7 @@ function incompleteTrigger(
     defaultsApplied: cfg?.defaultsApplied.length ? cfg.defaultsApplied : undefined,
     heldValues: Object.keys(values).length ? Object.keys(values) : undefined,
     droppedHeld: dropped.length ? { keys: dropped, why: 'changed in the panel since they were given, so the panel values are kept' } : undefined,
-    panelOpened,
+    ...panel,
     warnings: cfg?.warnings.length ? cfg.warnings : undefined,
     next: `${isDraft ? 'The trigger is drafted, not saved.' : 'Nothing was changed: the saved trigger keeps its values.'} Ask the user for each missing item, one short question at a time (offer the real choices from vs_get_field_options, passing connectionId), then call vs_set_trigger again with the same actionId. Values given so far are kept.`,
   }
@@ -365,7 +361,7 @@ async function setAppTrigger(a: SetTriggerArgs, ctx: ToolContext, t: FlowTarget)
           method: 'POST',
           path: `/scripts/${t.projectId}/${t.scriptId}/drafttrigger/${a.actionId}`,
           body: {},
-          live: !triggerPanelOpen(ctx, t),
+          live: liveUnlessEditorOpen(ctx, t.scriptId),
           signal: ctx.signal,
         }),
       )
@@ -427,7 +423,7 @@ async function setAppTrigger(a: SetTriggerArgs, ctx: ToolContext, t: FlowTarget)
 
     if (!cfg.complete) {
       holdValues(holdKey, merged.values, connectionId, saved)
-      return incompleteTrigger(base, action, cfg, !!authData?.id || noConnection, merged.values, merged.dropped, isDraft, openTriggerPanel(ctx, t.scriptId, triggerType))
+      return incompleteTrigger(base, action, cfg, !!authData?.id || noConnection, merged.values, merged.dropped, isDraft, panelResult(await openTriggerPanel(ctx, t.scriptId, triggerType)))
     }
 
     // Save = test + store, like the panel's Save button, with exactly the values that are saved. A failed test does
@@ -459,7 +455,7 @@ async function setAppTrigger(a: SetTriggerArgs, ctx: ToolContext, t: FlowTarget)
     clearPending(holdKey)
     if (test?.found) holdTriggerSample(ctx, t, base, test.message)
     if (cfg.missing.maybe.length) warnings.push(`Check whether these apply: ${cfg.missing.maybe.map((m) => m.label ?? m.key).join(', ')}`)
-    const panelOpened = openTriggerPanel(ctx, t.scriptId, triggerType)
+    const panel = panelResult(await openTriggerPanel(ctx, t.scriptId, triggerType))
     return bounded(
       {
         saved: true,
@@ -471,7 +467,7 @@ async function setAppTrigger(a: SetTriggerArgs, ctx: ToolContext, t: FlowTarget)
         defaultsApplied: cfg.defaultsApplied.length ? cfg.defaultsApplied : undefined,
         droppedHeld: merged.dropped.length ? merged.dropped : undefined,
         test: test ? testReport(ctx, test, base) : { success: false, error: testError },
-        panelOpened,
+        ...panel,
         editorNote: test?.found ? EDITOR_NOTE : undefined,
         warnings: warnings.length ? warnings : undefined,
         next: test?.found
@@ -563,7 +559,7 @@ const setTrigger = defineTool<SetTriggerArgs>({
             changed: !same || restore,
             url: `${vmBase}/func/${t.scriptId}`,
             kept: kept.length ? kept : undefined,
-            panelOpened: openTriggerPanel(ctx, t.scriptId, 'webhook'),
+            ...panelResult(await openTriggerPanel(ctx, t.scriptId, 'webhook')),
             note: restore
               ? 'The webhook was already set; its response block was missing and is restored (default response). Set a custom one with vs_set_response if needed.'
               : same
@@ -578,7 +574,7 @@ const setTrigger = defineTool<SetTriggerArgs>({
             changed: !same,
             address: `${t.scriptId}@sokt.io`,
             kept: kept.length ? kept : undefined,
-            panelOpened: openTriggerPanel(ctx, t.scriptId, 'email'),
+            ...panelResult(await openTriggerPanel(ctx, t.scriptId, 'email')),
             note: same ? 'The flow already starts with this email address; nothing was changed.' : 'Ask the user to send one real email to the address, then run vs_test_trigger to read its fields.',
           }
         case 'cron': {
@@ -605,7 +601,7 @@ const setTrigger = defineTool<SetTriggerArgs>({
             timezoneFrom: a.timezone ? 'given' : same && str(live?.timezone) ? 'kept from the schedule' : orgTz ? 'workspace' : tz ? 'viaSocket default' : 'unknown (shown in UTC)',
             nextRuns: runs,
             kept: kept.length ? kept : undefined,
-            panelOpened: openTriggerPanel(ctx, t.scriptId, 'cron'),
+            ...panelResult(await openTriggerPanel(ctx, t.scriptId, 'cron')),
             next: `Read the next run times to the user (${usedTz}) and confirm they match "${String(body.meaning ?? '')}"; if not, call vs_set_trigger again with a corrected expression or timezone. The schedule starts after publishing. A schedule carries no data of its own: to fetch data on each run, add Get Data (vs_set_get_data).`,
           }
         }
@@ -696,7 +692,7 @@ const testTrigger = defineTool<{ scriptId?: string }>({
             ]
               .filter(Boolean)
               .join(' '),
-            panelOpened: openTriggerPanel(ctx, t.scriptId, kind),
+            ...panelResult(await openTriggerPanel(ctx, t.scriptId, kind)),
           },
           ctx.maxResultChars,
         )
@@ -712,7 +708,7 @@ const testTrigger = defineTool<{ scriptId?: string }>({
             from: `latest run${run.at ? ` (${run.at})` : ''}`,
             sample: trimData(src.data, strip),
             variables: variablesOf(src, strip, 60),
-            panelOpened: openTriggerPanel(ctx, t.scriptId, kind),
+            ...panelResult(await openTriggerPanel(ctx, t.scriptId, kind)),
           },
           ctx.maxResultChars,
         )
@@ -792,7 +788,7 @@ const testTrigger = defineTool<{ scriptId?: string }>({
         event: typeof trigger.actionName === 'string' ? trigger.actionName.replace(/_/g, ' ') : undefined,
         ...testReport(ctx, test, trigger),
         savedWithTrigger: savedWithTrigger || undefined,
-        panelOpened: openTriggerPanel(ctx, t.scriptId, kind),
+        ...panelResult(await openTriggerPanel(ctx, t.scriptId, kind)),
         editorNote: test.found ? EDITOR_NOTE : undefined,
         note: test.found && trigger.isDrafted ? 'The trigger is still a draft: save it with vs_set_trigger.' : undefined,
       },

@@ -22,7 +22,10 @@ import { call, isAbortError, ToolError } from './errors'
 import {
   choiceKeys, cleanInputData, clearPending, holdValues, mergePending, reachableFields, stepKey, withDynamicInput, type SavedState,
 } from './fields'
-import { editorParam, getFlow, normalizeFlow, openGetDataPanel, openTriggerFeaturePanel, resolveFlow, triggerKind } from './flow-api'
+import {
+  editorParam, getFlow, liveUnlessEditorOpen, normalizeFlow, openGetDataPanel, openTriggerFeaturePanel, openTriggerPanel, panelResult,
+  refreshEditorIfOpen, resolveFlow, triggerKind,
+} from './flow-api'
 import { checkExpression, checkFunctionCode, checkTemplateText } from './js-check'
 import { chainsInCode, checkMappings, dynamicVariableTexts, inputDataTexts, type MapText } from './mapping'
 import { consoleOf, contextTooLarge, dryRunErrorText, executeDryRun, getRecentRun, type ParsedRun, type RunContext } from './runs'
@@ -46,22 +49,20 @@ function fail(problems: string[]): never {
   throw new ToolError(`Nothing was changed. Fix these first: ${problems.join(' | ')}`)
 }
 
-/** The trigger panel (or one of its feature panels) is open: writes skip live-apply and the panel is reopened. */
-function featurePanelOpen(ctx: ToolContext, t: FlowTarget): boolean {
-  const s = editorParam(ctx, 'stepId', t.scriptId)
-  return !!s && (s === 'SET_TRIGGER' || s === PRE_ID || s.endsWith('-advance-config'))
-}
+// While this tab shows the flow, pre-process writes skip live-apply and the follow-up panel open (or editor
+// refresh) bumps ?timestamp, so the editor and any open trigger/feature panel reload the saved state instead of
+// keeping a stale cached copy (see flow-api's editor-sync note).
 
 async function postPreprocess(ctx: ToolContext, t: FlowTarget, body: Record<string, unknown>, what: string): Promise<FlowRow | null> {
   const res = await call(what, () =>
-    ctx.vs.request({ method: 'POST', path: `/scripts/${t.projectId}/${t.scriptId}/trigger/preprocess`, body, live: !featurePanelOpen(ctx, t), signal: ctx.signal }),
+    ctx.vs.request({ method: 'POST', path: `/scripts/${t.projectId}/${t.scriptId}/trigger/preprocess`, body, live: liveUnlessEditorOpen(ctx, t.scriptId), signal: ctx.signal }),
   )
   return normalizeFlow(asRecord(res).data)
 }
 
 async function deletePreprocess(ctx: ToolContext, t: FlowTarget, body: Record<string, true>, what: string): Promise<void> {
   await call(what, () =>
-    ctx.vs.request({ method: 'DELETE', path: `/scripts/${t.scriptId}/trigger/preprocess/delete`, body, live: !featurePanelOpen(ctx, t), signal: ctx.signal }),
+    ctx.vs.request({ method: 'DELETE', path: `/scripts/${t.scriptId}/trigger/preprocess/delete`, body, live: liveUnlessEditorOpen(ctx, t.scriptId), signal: ctx.signal }),
   )
 }
 
@@ -686,7 +687,7 @@ const setGetData = defineTool<GetDataArgs>({
         body: final.note,
         variables: final.origin ? variablesOf(final, strip, 60) : undefined,
         lists: found ? loopLists(output) : undefined,
-        panelOpened: openGetDataPanel(ctx, t.scriptId, str(pre.type) ?? 'plugin'),
+        ...panelResult(await openGetDataPanel(ctx, t.scriptId, str(pre.type) ?? 'plugin')),
         warnings: warnings.length ? warnings : undefined,
         next: found
           ? 'Every step now reads this output as context.req.body: map later steps only with these insert texts (or vs_get_variables). If it holds a list and each item should run the flow once, offer vs_set_trigger_loop with the arrayKey of one of "lists" (omit arrayKey when an entry has none: the body itself is the list). Offer vs_set_run_condition if only some runs should continue.'
@@ -726,9 +727,16 @@ async function removeGetData(ctx: ToolContext, t: FlowTarget, trigger: Trigger):
   })
   forgetGetDataSample(ctx, t)
   pendingGetData.delete(pendingKey(ctx, t))
+  // A panel still showing the removed Get Data switches to the trigger panel; otherwise the bump alone makes the
+  // editor refetch (without it, a non-live removal would stay invisible until a manual refresh).
+  const sync =
+    editorParam(ctx, 'stepId', t.scriptId) === PRE_ID
+      ? await openTriggerPanel(ctx, t.scriptId, triggerKind(trigger))
+      : await refreshEditorIfOpen(ctx, t.scriptId)
   return {
     removed: true,
     alsoRemoved: extra.length ? extra : undefined,
+    editorNote: sync.reason,
     note: 'Steps that mapped Get Data fields now read the original body; check them with vs_get_variables.',
   }
 }
@@ -838,7 +846,7 @@ const setTriggerLoop = defineTool<LoopArgs>({
       return {
         changed: true,
         loop: 'off',
-        panelOpened: openTriggerFeaturePanel(ctx, t.scriptId, kind, 'hitFlowIndividually'),
+        ...panelResult(await openTriggerFeaturePanel(ctx, t.scriptId, kind, 'hitFlowIndividually')),
         warnings: warnings.length ? warnings : undefined,
         next: runIf ? 'Tell the user the run condition no longer fits and fix it with vs_set_run_condition before testing.' : undefined,
       }
@@ -916,7 +924,7 @@ const setTriggerLoop = defineTool<LoopArgs>({
         sampleItems: Array.isArray(picked) ? picked.length : undefined,
         body: final.note,
         variables: final.origin ? variablesOf(final, ctx.stripRunData, 60) : undefined,
-        panelOpened: openTriggerFeaturePanel(ctx, t.scriptId, kind, 'hitFlowIndividually'),
+        ...panelResult(await openTriggerFeaturePanel(ctx, t.scriptId, kind, 'hitFlowIndividually')),
         warnings,
         next: 'Map steps with these per-item insert texts (context.req.body.<field>, never [0]).',
       },
@@ -1032,7 +1040,7 @@ const setRunCondition = defineTool<RunIfArgs>({
         // The server replaces preCondition whole, so the condition itself is sent again to keep it.
         else await postPreprocess(ctx, t, { preCondition: { ...existing, conditionEnabled: false } }, 'Turning off the run condition')
       })
-      return { changed: true, runIf: a.remove ? 'removed' : 'off', panelOpened: openTriggerFeaturePanel(ctx, t.scriptId, kind, 'runIfCondition') }
+      return { changed: true, runIf: a.remove ? 'removed' : 'off', ...panelResult(await openTriggerFeaturePanel(ctx, t.scriptId, kind, 'runIfCondition')) }
     }
 
     const condition = (a.condition ?? '').trim()
@@ -1075,7 +1083,7 @@ const setRunCondition = defineTool<RunIfArgs>({
       statement,
       withSample: sampleResult === undefined ? undefined : sampleResult ? 'the latest sample would RUN the flow' : 'the latest sample would SKIP the run',
       note: looped ? 'Checked once per item (the loop is on).' : undefined,
-      panelOpened: openTriggerFeaturePanel(ctx, t.scriptId, kind, 'runIfCondition'),
+      ...panelResult(await openTriggerFeaturePanel(ctx, t.scriptId, kind, 'runIfCondition')),
       next:
         sampleResult === false
           ? 'Tell the user the current sample would be skipped and confirm that is intended.'

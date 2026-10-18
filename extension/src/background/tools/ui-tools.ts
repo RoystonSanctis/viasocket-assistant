@@ -7,7 +7,7 @@ import type { Tool, ToolContext } from './types'
 import { DH_TOOLS } from './dh-tools'
 import { FLOW_TOOLS } from './flow-tools'
 import { ToolError } from './flow/errors'
-import { editorParam, getFlow, requireOrg, resolveFlow, triggerKind, triggerPanelSlug, verifyProject } from './flow/flow-api'
+import { editorParam, getFlow, openPanel, panelResult, requireOrg, resolveFlow, triggerKind, triggerPanelSlug, verifyProject } from './flow/flow-api'
 import { knownFlowProject } from './flow/known'
 import { SUGGESTABLE_TOOLS } from './flow/names'
 import { defineTool, params, S, validateArgs } from './flow/schema'
@@ -61,8 +61,11 @@ const openStep = defineTool<{ slugName: string }>({
       }
       stepId = block.identifier
     }
-    ctx.ui.navigate(pagePathWithParams(ctx.page.url, { stepId, slugName }), { replace: true })
-    return { opened: slugName }
+    // openPanel bumps ?timestamp (so the panel shows fresh server state, never a stale cached step) and waits
+    // for the tab to confirm the navigation instead of silently claiming success.
+    const sync = await openPanel(ctx, t.scriptId, stepId, slugName)
+    if (sync.skipped) return { opened: false, note: 'This tab no longer shows that flow, so no panel was opened.' }
+    return { opened: slugName, ...panelResult(sync) }
   },
 })
 

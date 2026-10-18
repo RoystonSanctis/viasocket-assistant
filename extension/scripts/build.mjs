@@ -89,6 +89,9 @@ async function copyOrt(all) {
   if (!all) {
     const bundle = await readFile(join(dist, 'offscreen.js'), 'utf8')
     const referenced = new Set(bundle.match(/ort-wasm[\w.-]*?\.(?:wasm|mjs)/g) ?? [])
+    for (const f of available) {
+      if (f.includes('jsep')) referenced.add(f)
+    }
     wanted = available.filter((f) => referenced.has(f))
     if (!wanted.length) {
       console.warn('No ONNX Runtime files referenced by offscreen.js; copying all variants.')

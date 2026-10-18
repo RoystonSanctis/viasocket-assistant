@@ -109,8 +109,8 @@ const renameFlow = defineTool<{ title: string; description?: string; scriptId?: 
       await call('Renaming the flow', () =>
         ctx.vs.request({ method: 'PUT', path: `/projects/${t.projectId}/scripts/${t.scriptId}`, body, live: true, signal: ctx.signal }),
       )
-      refreshEditorIfOpen(ctx, t.scriptId)
-      return { renamed: true, title }
+      const sync = await refreshEditorIfOpen(ctx, t.scriptId)
+      return { renamed: true, title, editorNote: sync.reason }
     })
   },
 })
@@ -687,12 +687,13 @@ const publishFlow = defineTool<{ scriptId?: string }>({
       const res = await call('Publishing the flow', () =>
         ctx.vs.request({ method: 'PUT', path: `/projects/${t.projectId}/scripts/${t.scriptId}/publish`, body: {}, live: true, signal: ctx.signal }),
       )
-      refreshEditorIfOpen(ctx, t.scriptId)
+      const sync = await refreshEditorIfOpen(ctx, t.scriptId)
       const data = asRecord(asRecord(res).data)
       return {
         published: true,
         liveVersion: str(asRecord(data.published_json_script).version),
         trigger: summarizeTrigger(now.json_script.trigger, t.scriptId, ctx.vs.env.vmBase) ?? undefined,
+        editorNote: sync.reason,
         warnings: readiness.warnings.length ? readiness.warnings : undefined,
       }
     })
@@ -718,9 +719,10 @@ const discardChanges = defineTool<{ scriptId?: string }>({
       await call('Discarding changes', () =>
         ctx.vs.request({ method: 'PUT', path: `/projects/${t.projectId}/scripts/${t.scriptId}/revert`, body: {}, live: true, signal: ctx.signal }),
       )
-      refreshEditorIfOpen(ctx, t.scriptId, { stepId: null, slugName: null })
+      const sync = await refreshEditorIfOpen(ctx, t.scriptId, { stepId: null, slugName: null })
       return {
         discarded: true,
+        editorNote: sync.reason,
         note: everPublished(row) ? 'The draft now matches the live flow.' : 'The flow was never published, so it is empty again.',
       }
     })

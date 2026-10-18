@@ -73,8 +73,8 @@ function render(): void {
   const local = s.sttEngine === 'whisper-local'
   whisperOptions.hidden = !local
   downloadRow.hidden = !local
-  // Each engine uses a different origin's microphone permission: the extension's (Whisper) or the site's (browser).
-  extensionMic.hidden = !local
+  // Keep microphone and audio testing available for all engines.
+  extensionMic.hidden = false
   siteMic.hidden = local
   renderModels()
   renderLanguage(local)

@@ -204,11 +204,36 @@
         </div>
 
         <div id="mic" class="subsection" tabindex="-1" aria-labelledby="mic-heading">
-          <h3 id="mic-heading">Microphone</h3>
-          <p>Status: <strong id="mic-status">Checking…</strong></p>
+          <h3 id="mic-heading">Microphone &amp; Audio Testing</h3>
+          <p>Microphone permission: <strong id="mic-status">Checking…</strong></p>
           <div class="button-row">
-            <button type="button" id="mic-allow" class="button button-primary">Allow microphone</button>
+            <button type="button" id="mic-allow" class="button button-primary">Start microphone test</button>
+            <button type="button" id="speaker-test" class="button">Test speaker output</button>
           </div>
+
+          <div id="mic-meter-box" class="mic-meter-box" hidden>
+            <div class="mic-meter-label-row">
+              <span id="mic-meter-state">Listening… Speak into your microphone</span>
+              <span id="mic-meter-val" class="mic-meter-val">0%</span>
+            </div>
+            <div class="mic-meter-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <div id="mic-meter-fill" class="mic-meter-fill"></div>
+            </div>
+
+            <div id="mic-stt-preview" class="mic-stt-preview" hidden>
+              <div class="mic-stt-header">
+                <span class="mic-stt-badge">Speech detected</span>
+                <span class="mic-stt-label">Live transcript:</span>
+              </div>
+              <p id="mic-stt-text" class="mic-stt-text">Say something…</p>
+            </div>
+
+            <div id="mic-playback-row" class="mic-playback-row" hidden>
+              <span class="hint">Play back your recorded voice:</span>
+              <audio id="mic-audio-player" controls preload="none"></audio>
+            </div>
+          </div>
+
           <div id="mic-help" class="hint" hidden>
             <p>Chrome has blocked the microphone for this extension. Open the extension's site settings, set Microphone to Allow, then come back and press the button again.</p>
             <div class="button-row">

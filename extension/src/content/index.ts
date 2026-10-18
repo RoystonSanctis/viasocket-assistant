@@ -7,13 +7,16 @@ import type { ClientConfig } from '../shared/config'
 import type { ChatLine } from '../shared/mascot'
 import type { BackgroundToContent, VoiceState } from '../shared/messages'
 import { DEFAULT_SETTINGS, loadSettings, SETTINGS_KEY, type UserSettings } from '../shared/settings'
-import { createBrowserStt } from './browser-stt'
+import { createBrowserStt, browserSttSupported } from './browser-stt'
+import { initFlowMenu } from './flow-menu'
 import { createHotkey } from './hotkey'
 import { createMascot } from './mascot'
 import type { MascotCallbacks, MascotController } from './mascot/api'
 import { createPageBridge } from './page-bridge'
 import { watchPage } from './page-watch'
 import { connectPort } from './port'
+import { initStepMenu } from './step-menu'
+import { destroyToasts } from './toast'
 
 const RUN_MARK = '__vsAssistantContentRunning'
 const DEFAULT_HOLD_MS = 180
@@ -39,6 +42,7 @@ async function main(): Promise<void> {
   let settings: UserSettings = await loadSettings().catch(() => DEFAULT_SETTINGS)
   let config: ClientConfig | null = null
   let talking = false
+  let usingFallbackStt = false
   /** The worker reported 'listening' during the current hold (Whisper engine only) */
   let workerListened = false
   let dead = false
@@ -68,16 +72,22 @@ async function main(): Promise<void> {
     if (talking || dead) return
     talking = true
     workerListened = false
-    if (settings.sttEngine === 'browser') stt.start()
-    // Whisper runs in the offscreen document; the worker drives voice-state/level/transcript from there.
-    else port.send({ type: 'voice', action: 'start' })
+    usingFallbackStt = false
+    if (settings.sttEngine === 'browser') {
+      stt.start()
+    } else {
+      port.send({ type: 'voice', action: 'start' })
+    }
   }
 
   function voiceStop(): void {
     if (!talking) return
     talking = false
-    if (settings.sttEngine === 'browser') stt.stop()
-    else port.send({ type: 'voice', action: 'stop' })
+    if (settings.sttEngine === 'browser' || usingFallbackStt) {
+      stt.stop()
+    } else {
+      port.send({ type: 'voice', action: 'stop' })
+    }
   }
 
   /**
@@ -93,8 +103,11 @@ async function main(): Promise<void> {
   function voiceCancel(): void {
     if (!talking) return
     talking = false
-    if (settings.sttEngine === 'browser') stt.cancel()
-    else port.send({ type: 'voice', action: 'cancel' })
+    if (settings.sttEngine === 'browser' || usingFallbackStt) {
+      stt.cancel()
+    } else {
+      port.send({ type: 'voice', action: 'cancel' })
+    }
   }
 
   /** The browser keyboard command (chrome.commands) arrives via the worker; push-to-talk state lives here. */
@@ -195,7 +208,17 @@ async function main(): Promise<void> {
         voiceCommand(msg.action)
         break
       case 'voice-state':
-        if (settings.sttEngine !== 'browser') syncTalking(msg.state)
+        if (settings.sttEngine !== 'browser') {
+          const wasTalking = talking
+          syncTalking(msg.state)
+          if ((msg.state === 'needs-permission' || msg.state === 'error') && browserSttSupported() && wasTalking) {
+            console.warn('[voice] Whisper unavailable, falling back to browser speech recognition')
+            usingFallbackStt = true
+            talking = true
+            stt.start()
+            return
+          }
+        }
         mascot.setVoiceState(msg.state, msg.detail, msg.progress)
         break
       case 'voice-level':
@@ -264,21 +287,37 @@ async function main(): Promise<void> {
     onDead: shutdown,
   })
 
+  // ---------- injected menus (step copy / paste, flow export / import) ----------
+
+  // The step menu bumps the editor's ?timestamp after a paste, which must ride the MAIN-world history hook
+  // (react-router only sees navigations made there).
+  const stepMenu = initStepMenu({ navigate: (url, replace) => bridge.navigate(url, replace) })
+  const flowMenu = initFlowMenu()
+
   // The extension was reloaded, updated or removed: this copy of the script is orphaned, so tidy up for good.
+  // Each teardown runs even when another throws (an orphan's chrome.* calls throw "Extension context
+  // invalidated") - bridge.destroy() in particular must always run, or the MAIN-world hook stays paired to
+  // this dead script and the new one can never navigate.
   function shutdown(): void {
     if (dead) return
     dead = true
-    try {
-      chrome.storage.onChanged.removeListener(onStorage)
-    } catch {
-      // context already invalidated
+    const safe = (fn: () => void): void => {
+      try {
+        fn()
+      } catch {
+        // context already invalidated
+      }
     }
-    stt.cancel()
-    hotkey.destroy()
-    bridge.destroy()
-    pageWatch.destroy()
-    mascot.setEnabled(false)
-    mascot.destroy()
+    safe(() => chrome.storage.onChanged.removeListener(onStorage))
+    safe(() => stepMenu.destroy())
+    safe(() => flowMenu.destroy())
+    safe(() => destroyToasts())
+    safe(() => stt.cancel())
+    safe(() => hotkey.destroy())
+    safe(() => bridge.destroy())
+    safe(() => pageWatch.destroy())
+    safe(() => mascot.setEnabled(false))
+    safe(() => mascot.destroy())
   }
 }
 

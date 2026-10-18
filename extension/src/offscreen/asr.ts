@@ -4,8 +4,8 @@
 import { env, pipeline } from '@huggingface/transformers'
 import type { DataType, ProgressInfo } from '@huggingface/transformers'
 
-export type AsrDevice = 'webgpu' | 'wasm'
-export type DevicePreference = AsrDevice | 'auto'
+export type AsrDevice = 'webgpu' | 'cpu'
+export type DevicePreference = AsrDevice | 'auto' | 'wasm'
 
 type AsrPipeline = Awaited<ReturnType<typeof pipeline<'automatic-speech-recognition'>>>
 
@@ -31,7 +31,7 @@ if (onnxWasm) {
 const DTYPES: Record<AsrDevice, DataType | Record<string, DataType>> = {
   // Whisper on WebGPU: fp32 encoder for accuracy, 4-bit decoder for speed and memory (fp16 decoders are unreliable).
   webgpu: { encoder_model: 'fp32', decoder_model_merged: 'q4' },
-  wasm: 'q8',
+  cpu: 'q8',
 }
 
 const GPU_PROBE_TIMEOUT_MS = 2000
@@ -78,13 +78,15 @@ export function loadAsr(model: string, preference: DevicePreference = 'auto'): P
 }
 
 async function create(model: string, preference: DevicePreference): Promise<LoadedAsr> {
-  const device: AsrDevice = preference === 'auto' ? ((await hasWebGpu()) ? 'webgpu' : 'wasm') : preference
+  const pref = preference === 'wasm' ? 'cpu' : preference
+  const device: AsrDevice = pref === 'auto' ? ((await hasWebGpu()) ? 'webgpu' : 'cpu') : pref
   try {
     return { pipe: await build(model, device), device }
   } catch (e) {
     if (device !== 'webgpu' || isNetworkError(e)) throw e
     // Some GPUs/drivers expose WebGPU but fail to compile the model; the CPU path is slower but works everywhere.
-    return { pipe: await build(model, 'wasm'), device: 'wasm' }
+    console.warn('[asr] WebGPU pipeline failed, falling back to CPU:', e)
+    return { pipe: await build(model, 'cpu'), device: 'cpu' }
   }
 }
 
@@ -104,7 +106,8 @@ async function build(model: string, device: AsrDevice): Promise<AsrPipeline> {
     sentAt = now
     onProgress(model, best)
   }
-  return pipeline('automatic-speech-recognition', model, { device, dtype: DTYPES[device], progress_callback })
+  const targetDevice = device === 'webgpu' ? 'webgpu' : 'cpu'
+  return pipeline('automatic-speech-recognition', model, { device: targetDevice, dtype: DTYPES[targetDevice], progress_callback })
 }
 
 let gpuProbe: Promise<boolean> | null = null

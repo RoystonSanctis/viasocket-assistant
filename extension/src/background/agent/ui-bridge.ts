@@ -1,6 +1,8 @@
 // UiBridge over the tab's port: how tools and the agent move the mascot, highlight things and ask for consent.
 
 import type { Suggestion } from '../../shared/mascot'
+import type { PageContext } from '../../shared/page'
+import { registerEditorProbe } from '../tools/flow/flow-api'
 import type { UiBridge } from '../tools/types'
 import { speakReply } from '../voice'
 import { loadPlan, postLine, savePlan } from './conversation'
@@ -11,7 +13,7 @@ import type { PendingSuggestion, Session } from './session'
 const CONFIRM_TIMEOUT_MS = 5 * 60_000
 
 export function createUiBridge(session: Session): UiBridge {
-  return {
+  const bridge: UiBridge = {
     mascot(mode, text) {
       session.send({ type: 'mascot', mode, text })
     },
@@ -64,6 +66,27 @@ export function createUiBridge(session: Session): UiBridge {
       session.send({ type: 'plan', plan: change.plan })
       return change
     },
+  }
+  // Editor syncs (tools/flow) watch the tab's live page through this probe: the run's pinned page can lag a panel
+  // the user or an earlier tool call just opened, and a navigate can be dropped on the way to the page, so the
+  // syncs decide against the live URL and wait for the tab to confirm the navigated-to URL.
+  registerEditorProbe(bridge, {
+    livePage: () => session.page,
+    waitForPage: (test, timeoutMs, signal) => waitForLivePage(session, test, timeoutMs, signal),
+  })
+  return bridge
+}
+
+const PAGE_POLL_MS = 150
+
+/** Polls the session's last-reported page (the content script reports every URL change) until `test` passes. */
+async function waitForLivePage(session: Session, test: (page: PageContext) => boolean, timeoutMs: number, signal?: AbortSignal): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs
+  for (;;) {
+    const page = session.page
+    if (page && test(page)) return true
+    if (session.closed || signal?.aborted || Date.now() >= deadline) return false
+    await new Promise((resolve) => setTimeout(resolve, PAGE_POLL_MS))
   }
 }
 

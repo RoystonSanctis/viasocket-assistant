@@ -16,7 +16,7 @@ import { allSessions, closeSession, getSession, openSession, type Session } from
 import { computeStatus } from './agent/status'
 import { migrateLegacyKeys, onKeysChanged } from './keys'
 import { handleOptionsRequest } from './options-handler'
-import { SUPPORTED_APP_HOSTS } from './tools/env'
+import { resolveEnv, SUPPORTED_APP_HOSTS } from './tools/env'
 import {
   closeOffscreenIfIdle, handleIdleAlarm, handleOffscreenMessage, handleVoiceCommand, noSessionsLeft, parseFromOffscreen,
   releaseVoice, stopSpeaking, STT_IDLE_ALARM,
@@ -209,6 +209,21 @@ async function openOptions(section?: string): Promise<void> {
   }
 }
 
+import { handleStepClipboardRequest } from './step-clipboard'
+import type { StepClipboardRequest } from '../shared/step-clipboard'
+import { handleFlowTransferRequest } from './flow-transfer'
+import type { FlowTransferRequest } from '../shared/flow-transfer'
+
+/** The sender tab shows one of the supported viaSocket app hosts. */
+function senderEnvOk(tabUrl: string | undefined): boolean {
+  if (!tabUrl) return false
+  try {
+    return resolveEnv(new URL(tabUrl).host) !== null
+  } catch {
+    return false
+  }
+}
+
 // ---------- options page and offscreen document ----------
 
 chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
@@ -222,6 +237,26 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
     handleOptionsRequest(raw as OptionsRequest).then(sendResponse, (e: unknown) =>
       sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }),
     )
+    return true
+  }
+
+  if (msg.type.startsWith('step:') || msg.type.startsWith('flow:')) {
+    // Clipboard and transfer calls only make sense from a content script on a supported viaSocket host; a
+    // message from any other extension context (options page, future pages) is refused instead of silently
+    // operating against some default environment.
+    if (sender.tab?.id === undefined || !senderEnvOk(sender.tab.url)) {
+      sendResponse({ ok: false, error: 'This action only works from a viaSocket page' })
+      return true
+    }
+    if (msg.type.startsWith('step:')) {
+      handleStepClipboardRequest(raw as StepClipboardRequest, sender).then(sendResponse, (e: unknown) =>
+        sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }),
+      )
+    } else {
+      handleFlowTransferRequest(raw as FlowTransferRequest, sender).then(sendResponse, (e: unknown) =>
+        sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }),
+      )
+    }
     return true
   }
 
