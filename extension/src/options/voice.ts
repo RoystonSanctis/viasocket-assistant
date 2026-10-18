@@ -16,6 +16,7 @@ const wakeWordSilenceDelay = byId('wake-word-silence-delay', HTMLSelectElement)
 const wakeWordDelayRow = byId('wake-word-delay-row', HTMLDivElement)
 const hotkeyEnabled = byId('hotkey-enabled', HTMLInputElement)
 const hotkeyDetailsGroup = byId('hotkey-details-group', HTMLDivElement)
+const spacebarShortcut = byId('spacebar-shortcut-enabled', HTMLInputElement)
 const sttModel = byId('stt-model', HTMLSelectElement)
 const sttModelNote = byId('stt-model-note', HTMLParagraphElement)
 const sttLanguage = byId('stt-language', HTMLSelectElement)
@@ -43,6 +44,7 @@ export function initVoice(): void {
     void save({ wakeWordSilenceDelay: val })
   })
   hotkeyEnabled.addEventListener('change', () => void save({ hotkeyEnabled: hotkeyEnabled.checked }))
+  spacebarShortcut.addEventListener('change', () => void save({ spacebarShortcutEnabled: spacebarShortcut.checked }))
   for (const r of radios('stt-engine')) {
     r.addEventListener('change', () => {
       if (r.checked) void save({ sttEngine: checkedValue('stt-engine') === 'browser' ? 'browser' : 'whisper-local' })
@@ -98,6 +100,7 @@ function render(): void {
   wakeWordDelayRow.hidden = !s.wakeWordEnabled
   hotkeyEnabled.checked = s.hotkeyEnabled
   hotkeyDetailsGroup.hidden = !s.hotkeyEnabled
+  spacebarShortcut.checked = s.spacebarShortcutEnabled !== false
 
   setChecked('stt-engine', s.sttEngine)
   const local = s.sttEngine === 'whisper-local'

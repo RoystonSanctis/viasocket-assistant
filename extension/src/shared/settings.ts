@@ -29,6 +29,7 @@ export interface UserSettings {
   speakReplies: boolean
   audioOutput: AudioOutputMode
   hotkey: HotkeySetting
+  spacebarShortcutEnabled: boolean
   configChannel: 'stable' | 'beta'
   /** Power users can replace the remote system prompt entirely */
   customSystemPrompt: string
@@ -52,6 +53,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   speakReplies: true,
   audioOutput: 'full',
   hotkey: { ctrl: true, alt: true, shift: false, meta: false, code: '' },
+  spacebarShortcutEnabled: true,
   configChannel: 'stable',
   customSystemPrompt: '',
   mascotEnabled: true,

@@ -508,6 +508,68 @@ async function main(): Promise<void> {
     onCancel: voiceCancel,
   })
 
+  // ---------- spacebar toggle shortcut ----------
+
+  const NON_TEXT_INPUTS = new Set([
+    'button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit',
+  ])
+
+  function getDeepActiveElement(): Element | null {
+    let el: Element | null = document.activeElement
+    while (el?.shadowRoot?.activeElement) {
+      el = el.shadowRoot.activeElement
+    }
+    return el
+  }
+
+  function isEditingText(target: EventTarget | null): boolean {
+    const deepActive = getDeepActiveElement()
+    for (const el of [target instanceof Element ? target : null, deepActive]) {
+      if (!el) continue
+      if (el instanceof HTMLTextAreaElement) return true
+      if (el instanceof HTMLInputElement && !NON_TEXT_INPUTS.has(el.type)) return true
+      if (el instanceof HTMLSelectElement) return true
+      if (el instanceof HTMLElement && el.isContentEditable) return true
+      if (
+        el.closest?.(
+          'input:not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="submit"]):not([type="reset"]), textarea, select, [contenteditable="true"], .monaco-editor, .cm-editor, .ace_editor',
+        )
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+
+  function isInteractiveElement(target: EventTarget | null): boolean {
+    const deepActive = getDeepActiveElement()
+    for (const el of [target instanceof Element ? target : null, deepActive]) {
+      if (!el) continue
+      if (el instanceof HTMLButtonElement) return true
+      if (el instanceof HTMLAnchorElement && el.href) return true
+      if (el.closest?.('button, a[href], [role="button"], [role="checkbox"], [role="menuitem"], [role="tab"], [role="switch"]')) {
+        return true
+      }
+    }
+    return false
+  }
+
+  const onWindowKeyDown = (e: KeyboardEvent): void => {
+    if (e.code !== 'Space' && e.key !== ' ') return
+    if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return
+    if (e.repeat) return
+    if (settings.spacebarShortcutEnabled === false) return
+    if (!active()) return
+
+    if (isEditingText(e.target) || isInteractiveElement(e.target)) return
+
+    e.preventDefault()
+    e.stopPropagation()
+    mascot.togglePanel()
+  }
+
+  window.addEventListener('keydown', onWindowKeyDown, true)
+
   // ---------- settings ----------
 
   const onStorage: StorageListener = (changes, area) => {
@@ -577,6 +639,7 @@ async function main(): Promise<void> {
     safe(() => clearSilenceTimers())
     safe(() => wakeWord?.destroy())
     safe(() => stt.cancel())
+    safe(() => window.removeEventListener('keydown', onWindowKeyDown, true))
     safe(() => hotkey.destroy())
     safe(() => bridge.destroy())
     safe(() => pageWatch.destroy())

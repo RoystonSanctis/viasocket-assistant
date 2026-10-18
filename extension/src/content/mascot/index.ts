@@ -408,6 +408,18 @@ class Mascot implements MascotController {
     this.panel.open(takeFocus)
   }
 
+  closePanel(): void {
+    if (this.destroyed) return
+    this.panel.close(false)
+  }
+
+  togglePanel(): void {
+    if (this.destroyed || !this.enabled) return
+    this.activity()
+    if (this.panel.isOpen) this.panel.close(true)
+    else this.panel.open(true)
+  }
+
   isPanelOpen(): boolean {
     return !this.destroyed && this.panel.isOpen
   }
