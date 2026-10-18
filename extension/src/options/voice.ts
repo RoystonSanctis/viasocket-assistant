@@ -11,6 +11,8 @@ const whisperOptions = byId('whisper-options', HTMLDivElement)
 const voiceEnabled = byId('voice-enabled', HTMLInputElement)
 const voiceSettingsBody = byId('voice-settings-body', HTMLDivElement)
 const wakeWordEnabled = byId('wake-word-enabled', HTMLInputElement)
+const wakeWordSilenceDelay = byId('wake-word-silence-delay', HTMLSelectElement)
+const wakeWordDelayRow = byId('wake-word-delay-row', HTMLDivElement)
 const hotkeyEnabled = byId('hotkey-enabled', HTMLInputElement)
 const hotkeyDetailsGroup = byId('hotkey-details-group', HTMLDivElement)
 const sttModel = byId('stt-model', HTMLSelectElement)
@@ -35,6 +37,10 @@ export function initVoice(): void {
   subscribe(render)
   voiceEnabled.addEventListener('change', () => void save({ voiceEnabled: voiceEnabled.checked }))
   wakeWordEnabled.addEventListener('change', () => void save({ wakeWordEnabled: wakeWordEnabled.checked }))
+  wakeWordSilenceDelay.addEventListener('change', () => {
+    const val = Number(wakeWordSilenceDelay.value) || 3
+    void save({ wakeWordSilenceDelay: val })
+  })
   hotkeyEnabled.addEventListener('change', () => void save({ hotkeyEnabled: hotkeyEnabled.checked }))
   for (const r of radios('stt-engine')) {
     r.addEventListener('change', () => {
@@ -80,6 +86,8 @@ function render(): void {
   voiceEnabled.checked = s.voiceEnabled
   voiceSettingsBody.hidden = !s.voiceEnabled
   wakeWordEnabled.checked = s.wakeWordEnabled
+  wakeWordSilenceDelay.value = String(s.wakeWordSilenceDelay || 3)
+  wakeWordDelayRow.hidden = !s.wakeWordEnabled
   hotkeyEnabled.checked = s.hotkeyEnabled
   hotkeyDetailsGroup.hidden = !s.hotkeyEnabled
 

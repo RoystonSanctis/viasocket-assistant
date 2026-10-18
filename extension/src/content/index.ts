@@ -58,25 +58,76 @@ async function main(): Promise<void> {
 
   // ---------- voice ----------
 
+  type VoiceSource = 'wake-word' | 'manual' | 'hotkey'
+  let activeVoiceSource: VoiceSource = 'manual'
+  let initialSilenceTimer: ReturnType<typeof setTimeout> | undefined
+  let speechSilenceTimer: ReturnType<typeof setTimeout> | undefined
+  let heardSpeechInTurn = false
   let wakeWord: WakeWordListener | null = null
+
+  function clearSilenceTimers(): void {
+    if (initialSilenceTimer) {
+      clearTimeout(initialSilenceTimer)
+      initialSilenceTimer = undefined
+    }
+    if (speechSilenceTimer) {
+      clearTimeout(speechSilenceTimer)
+      speechSilenceTimer = undefined
+    }
+    heardSpeechInTurn = false
+  }
+
+  function startInitialSilenceTimer(): void {
+    initialSilenceTimer = setTimeout(() => {
+      if (talking && activeVoiceSource === 'wake-word' && !heardSpeechInTurn) {
+        voiceCancel()
+      }
+    }, 7000)
+  }
+
+  function onSpeechActivity(): void {
+    if (activeVoiceSource !== 'wake-word' || !talking) return
+    heardSpeechInTurn = true
+    if (initialSilenceTimer) {
+      clearTimeout(initialSilenceTimer)
+      initialSilenceTimer = undefined
+    }
+    if (speechSilenceTimer) {
+      clearTimeout(speechSilenceTimer)
+      speechSilenceTimer = undefined
+    }
+    const delaySec = Math.max(1.5, settings.wakeWordSilenceDelay ?? 3)
+    speechSilenceTimer = setTimeout(() => {
+      if (talking && activeVoiceSource === 'wake-word' && heardSpeechInTurn) {
+        voiceStop()
+      }
+    }, delaySec * 1000)
+  }
 
   const stt = createBrowserStt({
     language: () => settings.sttLanguage,
     onState(state, detail) {
       if (state !== 'listening') {
         talking = false
+        clearSilenceTimers()
         wakeWord?.resume()
       }
-      if (!dead) mascot.setVoiceState(state, detail)
+      const note = state === 'listening' && activeVoiceSource === 'wake-word' ? '(auto-sends on pause)' : detail
+      if (!dead) mascot.setVoiceState(state, note)
     },
     onTranscript: (text, final) => {
       if (!dead) mascot.setTranscript(text, final)
+      if (text.trim().length > 0) {
+        onSpeechActivity()
+      }
     },
     onFinal: (text) => port.send({ type: 'user-input', text: text.slice(0, MAX_USER_TEXT), source: 'voice' }),
   })
 
-  function voiceStart(): void {
+  function voiceStart(source: VoiceSource = 'manual'): void {
     if (!settings.voiceEnabled || talking || dead) return
+    activeVoiceSource = source
+    clearSilenceTimers()
     talking = true
     workerListened = false
     usingFallbackStt = false
@@ -86,9 +137,13 @@ async function main(): Promise<void> {
     } else {
       port.send({ type: 'voice', action: 'start' })
     }
+    if (source === 'wake-word') {
+      startInitialSilenceTimer()
+    }
   }
 
   function voiceStop(): void {
+    clearSilenceTimers()
     if (!talking) return
     talking = false
     if (settings.sttEngine === 'browser' || usingFallbackStt) {
@@ -107,11 +162,13 @@ async function main(): Promise<void> {
     const stopped = state === 'transcribing' || state === 'error' || state === 'needs-permission' || state === 'off'
     if (stopped || (state === 'ready' && workerListened)) {
       talking = false
+      clearSilenceTimers()
       wakeWord?.resume()
     }
   }
 
   function voiceCancel(): void {
+    clearSilenceTimers()
     if (!talking) return
     talking = false
     wakeWord?.resume()
@@ -125,7 +182,7 @@ async function main(): Promise<void> {
   /** The browser keyboard command (chrome.commands) arrives via the worker; push-to-talk state lives here. */
   function voiceCommand(action: 'start' | 'stop' | 'toggle'): void {
     if (!active() || !settings.voiceEnabled) return
-    if (action === 'start' || (action === 'toggle' && !talking)) voiceStart()
+    if (action === 'start' || (action === 'toggle' && !talking)) voiceStart('hotkey')
     else voiceStop()
   }
 
@@ -136,7 +193,7 @@ async function main(): Promise<void> {
       const t = text.trim()
       if (t) port.send({ type: 'user-input', text: t.slice(0, MAX_USER_TEXT), source: 'text' })
     },
-    onMicDown: voiceStart,
+    onMicDown: () => voiceStart('manual'),
     onMicUp: voiceStop,
     onConfirm: (id, approved) => port.send({ type: 'confirm-response', id, approved }),
     onSuggestion: (id, action) => port.send({ type: 'suggestion-response', id, action }),
@@ -162,7 +219,7 @@ async function main(): Promise<void> {
           if (!talking && !dead) wakeWord?.resume()
         }, 1200)
       } else {
-        voiceStart()
+        voiceStart('wake-word')
       }
     },
   })
@@ -256,13 +313,20 @@ async function main(): Promise<void> {
             return
           }
         }
-        mascot.setVoiceState(msg.state, msg.detail, msg.progress)
+        const note = msg.state === 'listening' && activeVoiceSource === 'wake-word' ? '(auto-sends on pause)' : msg.detail
+        mascot.setVoiceState(msg.state, note, msg.progress)
         break
       case 'voice-level':
         mascot.setVoiceLevel(msg.level)
+        if (msg.level > 0.08) {
+          onSpeechActivity()
+        }
         break
       case 'transcript':
         mascot.setTranscript(msg.text, msg.final)
+        if (msg.text.trim().length > 0) {
+          onSpeechActivity()
+        }
         break
       case 'busy':
         mascot.setBusy(msg.busy)
@@ -292,7 +356,7 @@ async function main(): Promise<void> {
     setting: () => settings.hotkey,
     holdMs: () => config?.voice.hotkey.holdMs ?? DEFAULT_HOLD_MS,
     enabled: () => active() && settings.voiceEnabled && settings.hotkeyEnabled,
-    onStart: voiceStart,
+    onStart: () => voiceStart('hotkey'),
     onStop: voiceStop,
     onCancel: voiceCancel,
   })
@@ -355,6 +419,7 @@ async function main(): Promise<void> {
     safe(() => stepMenu.destroy())
     safe(() => flowMenu.destroy())
     safe(() => destroyToasts())
+    safe(() => clearSilenceTimers())
     safe(() => wakeWord?.destroy())
     safe(() => stt.cancel())
     safe(() => hotkey.destroy())

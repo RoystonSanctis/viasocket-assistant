@@ -20,6 +20,7 @@ export interface UserSettings {
   proactivity: Proactivity
   voiceEnabled: boolean
   wakeWordEnabled: boolean
+  wakeWordSilenceDelay: number
   hotkeyEnabled: boolean
   sttEngine: 'whisper-local' | 'browser'
   sttModel: string
@@ -41,6 +42,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   proactivity: 'helpful',
   voiceEnabled: true,
   wakeWordEnabled: false,
+  wakeWordSilenceDelay: 3,
   hotkeyEnabled: true,
   sttEngine: 'browser',
   sttModel: '',

@@ -162,6 +162,17 @@
               <label for="wake-word-enabled"><strong>Wake with "Hey SOCKET"</strong></label>
             </div>
             <p id="wake-word-hint" class="hint">Listens continuously in the background for "Hey SOCKET" (or "OK SOCKET", "Hello SOCKET"). Saying it brings up the assistant and starts listening to your command hands-free.</p>
+
+            <div id="wake-word-delay-row" class="field">
+              <label for="wake-word-silence-delay">Silence pause before auto-sending</label>
+              <select id="wake-word-silence-delay" aria-describedby="wake-word-silence-delay-hint">
+                <option value="2">2 seconds (Quick)</option>
+                <option value="3">3 seconds (Relaxed — gives time to think)</option>
+                <option value="4">4 seconds (Patient)</option>
+                <option value="5">5 seconds (Long thinking pause)</option>
+              </select>
+              <p id="wake-word-silence-delay-hint" class="hint">How long you can pause mid-sentence to think before SOCKET submits your request. Any speech resets the timer.</p>
+            </div>
           </div>
 
           <fieldset>
