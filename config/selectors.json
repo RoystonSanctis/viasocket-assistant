@@ -19,10 +19,10 @@
     "navbar": "[data-testid=\"workflow-navbar-container\"]"
   },
   "devHub": {
-    "section": ".dynamic-section",
+    "section": ".dynamic-section, .developer-hub-container, [data-testid=\"devhub-container\"], main",
     "saveButton": "[data-testid=\"dh-save-button\"], [data-testid=\"dh-save-input-fields-button\"], [data-testid=\"plugin-details-save-button\"]",
     "dryRunButton": "[data-testid=\"dry-run-test-button\"], [data-testid=\"dh-dry-run-test-button\"], [data-testid=\"function-slider-test-button\"]",
-    "sidebar": ".MuiDrawer-paper:has([data-testid=\"plugin-nav-item\"])",
+    "sidebar": "[data-testid=\"custom-sidebar\"], [data-testid=\"project-sidebar\"], [data-testid=\"sidebar\"], .MuiDrawer-paper, aside, nav",
     "tabs": "[data-testid=\"gui-dashboard-tabs\"]",
     "shareButton": "[data-testid=\"share-open-button\"]"
   },

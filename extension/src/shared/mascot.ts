@@ -16,6 +16,8 @@ export type MascotMode =
   | 'curious'
 
 export interface HighlightTarget {
+  /** Visible text on a button, link, tab or clickable control (e.g. "Create new plug", "AI Agents") */
+  text?: string
   /** Flow step on the canvas */
   slugName?: string
   /** Field inside the open step / DH panel, matched by its visible label */

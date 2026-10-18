@@ -87,13 +87,15 @@ const closePanel = defineTool<Record<string, never>>({
 })
 
 interface HighlightArgs {
+  text?: string
   slugName?: string
   fieldLabel?: string
   element?: (typeof ELEMENT_KEYS)[number]
   note?: string
 }
 
-function targetOf(a: { slugName?: string; fieldLabel?: string; element?: string }): HighlightTarget | undefined {
+function targetOf(a: { text?: string; slugName?: string; fieldLabel?: string; element?: string }): HighlightTarget | undefined {
+  if (a.text) return { text: cleanText(a.text, 100) }
   if (a.slugName) return a.slugName === 'SET_TRIGGER' ? { selectorKey: 'triggerNode' } : { slugName: a.slugName }
   if (a.fieldLabel) return { fieldLabel: cleanText(a.fieldLabel, 80) }
   if (a.element) return { selectorKey: a.element }
@@ -103,18 +105,22 @@ function targetOf(a: { slugName?: string; fieldLabel?: string; element?: string 
 const highlight = defineTool<HighlightArgs>({
   name: 'ui_highlight',
   description:
-    'Point the mascot at something on the page and spotlight it, with an optional short note. Give exactly one target: slugName (a step on the canvas, "SET_TRIGGER" for the trigger), fieldLabel (a field in the open panel, by its visible label) or element (a named part of the page).',
+    'Point the mascot at something on the page and spotlight it with an animated glowing ring and note. Use this whenever the user asks where something is, how to do something, or asks you to highlight where they need to click. Give exactly one target: text (visible text on a button, link, menu item, card, tab or clickable control, e.g. "Create new plug", "AI Agents", "Build a flow manually", "Support", "Flows"), slugName (a step on the canvas, "SET_TRIGGER" for the trigger), fieldLabel (a field in the open panel, by its visible label) or element (a named part of the page).',
   parameters: params({
+    text: S.str(
+      'Visible label or text on the button, link, tab or clickable control to spotlight, e.g. "Create new plug", "AI Agents", "Build a flow manually", "Support".',
+      { minLength: 1, maxLength: 100 },
+    ),
     slugName: S.str('Step slug from vs_get_flow, or "SET_TRIGGER".', { pattern: SLUG_RE.source }),
     fieldLabel: FIELD_LABEL,
     element: S.enum(ELEMENT_KEYS, 'Named page element.'),
     note: S.str('Short note shown next to the target.', { maxLength: 140 }),
   }),
   danger: 'safe',
-  describe: (a) => `Pointing at ${label(a.slugName ?? a.fieldLabel ?? a.element, 'it')}`,
+  describe: (a) => `Pointing at ${label(a.text ?? a.slugName ?? a.fieldLabel ?? a.element, 'it')}`,
   async run(a, ctx) {
-    const count = [a.slugName, a.fieldLabel, a.element].filter(Boolean).length
-    if (count !== 1) throw new ToolError('Give exactly one of slugName, fieldLabel or element.')
+    const count = [a.text, a.slugName, a.fieldLabel, a.element].filter(Boolean).length
+    if (count !== 1) throw new ToolError('Give exactly one of text, slugName, fieldLabel or element.')
     const target = targetOf(a)
     if (!target) throw new ToolError('Nothing to highlight.')
     ctx.ui.highlight(target, a.note ? cleanText(a.note, 140) : undefined)

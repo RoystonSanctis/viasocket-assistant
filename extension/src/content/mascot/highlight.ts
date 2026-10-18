@@ -41,18 +41,119 @@ const WHEEL_PAN_FACTOR = 1.2
 
 // ---------- resolution ----------
 
+function cleanQuery(query: string): string {
+  return query
+    .trim()
+    .replace(/^['"`]+|['"`]+$/g, '')
+    .replace(/\b(?:the\s+)?(?:button|btn|link|tab|icon|section|menu|option)\b\s*$/i, '')
+    .trim()
+}
+
+function normalizeQueryText(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[+*✨>•#&]/g, ' ')
+    .replace(/[\s\-_]+/g, ' ')
+    .trim()
+}
+
+export function findByText(query: string): Element | null {
+  const raw = cleanQuery(query)
+  if (!raw) return null
+  const norm = normalizeQueryText(raw)
+  if (!norm) return null
+  const normNoArticles = norm.replace(/\b(?:a|an|the)\b\s*/g, '').trim()
+
+  // 1. First priority: Interactive elements (buttons, links, menu items, tabs, chip buttons, list items)
+  const interactiveSel =
+    'button, a, [role="button"], [role="tab"], [role="link"], [role="menuitem"], .MuiButton-root, .MuiButtonBase-root, .MuiListItemButton-root, .MuiChip-root, .MuiTab-root, input[type="button"], input[type="submit"]'
+  const interactives = Array.from(document.querySelectorAll(interactiveSel)).filter((el) => hasArea(rectOf(el)))
+
+  // Pass 1A: Exact normalized text or aria-label/title match on interactive elements
+  for (const el of interactives) {
+    const t = normalizeQueryText(el.textContent ?? '')
+    if (t === norm || (normNoArticles && t.replace(/\b(?:a|an|the)\b\s*/g, '').trim() === normNoArticles)) return el
+    const aria = normalizeQueryText(el.getAttribute('aria-label') ?? '')
+    if (aria === norm || (normNoArticles && aria.replace(/\b(?:a|an|the)\b\s*/g, '').trim() === normNoArticles)) return el
+    const title = normalizeQueryText(el.getAttribute('title') ?? '')
+    if (title === norm) return el
+  }
+
+  // Pass 1B: Interactive text contains target or target contains interactive text
+  for (const el of interactives) {
+    const t = normalizeQueryText(el.textContent ?? '')
+    const tNoArt = t.replace(/\b(?:a|an|the)\b\s*/g, '').trim()
+    if (t && (t.includes(norm) || norm.includes(t) || (normNoArticles && (tNoArt.includes(normNoArticles) || normNoArticles.includes(tNoArt))))) {
+      return el
+    }
+  }
+
+  // Pass 1C: All key words in query present in interactive element
+  const words = (normNoArticles || norm).split(' ').filter((w) => w.length > 2)
+  if (words.length > 0) {
+    for (const el of interactives) {
+      const t = normalizeQueryText(el.textContent ?? '')
+      if (words.every((w) => t.includes(w))) {
+        return el
+      }
+    }
+  }
+
+  // 2. Second priority: Any visible leaf or near-leaf elements (spans, headings, table cells, labels)
+  const leafSel = 'span, p, h1, h2, h3, h4, h5, h6, td, th, label, div, [data-testid]'
+  const leaves = Array.from(document.querySelectorAll(leafSel)).filter(
+    (el) => el.children.length <= 3 && hasArea(rectOf(el)),
+  )
+
+  for (const el of leaves) {
+    const t = normalizeQueryText(el.textContent ?? '')
+    const tNoArt = t.replace(/\b(?:a|an|the)\b\s*/g, '').trim()
+    if (t === norm || (normNoArticles && tNoArt === normNoArticles) || t.includes(norm)) {
+      const clickable = el.closest(
+        'button, a, [role="button"], [role="tab"], [role="menuitem"], .MuiButtonBase-root, .MuiListItemButton-root, .MuiChip-root, .MuiTableRow-root, li',
+      )
+      if (clickable && hasArea(rectOf(clickable))) {
+        return clickable
+      }
+      return el
+    }
+  }
+
+  // Pass 2B: Word matching on leaves
+  if (words.length > 0) {
+    for (const el of leaves) {
+      const t = normalizeQueryText(el.textContent ?? '')
+      if (words.every((w) => t.includes(w))) {
+        const clickable = el.closest(
+          'button, a, [role="button"], [role="tab"], [role="menuitem"], .MuiButtonBase-root, .MuiListItemButton-root, .MuiChip-root, .MuiTableRow-root, li',
+        )
+        if (clickable && hasArea(rectOf(clickable))) {
+          return clickable
+        }
+        return el
+      }
+    }
+  }
+
+  return null
+}
+
 export function resolveTarget(t: HighlightTarget, sel: Selectors): ResolvedTarget | null {
-  // Most specific first: a field inside the open panel beats the step node it belongs to.
+  // Most specific first: visible text on a button or clickable control
+  if (typeof t.text === 'string') {
+    const el = findByText(t.text)
+    if (el) return { el, kind: inCanvas(el, sel) ? 'canvas' : 'other' }
+  }
   if (typeof t.fieldLabel === 'string') {
-    const el = findField(t.fieldLabel, sel)
+    const el = findField(t.fieldLabel, sel) ?? findByText(t.fieldLabel)
     if (el) return { el, kind: 'field' }
   }
   if (typeof t.slugName === 'string') {
-    const el = findStep(t.slugName, sel)
+    const el = findStep(t.slugName, sel) ?? findByText(t.slugName)
     if (el) return { el, kind: 'canvas' }
   }
   if (typeof t.selectorKey === 'string') {
-    const el = firstVisible(sel.named(t.selectorKey))
+    const el = firstVisible(sel.named(t.selectorKey)) ?? findByText(t.selectorKey)
     if (el) return { el, kind: inCanvas(el, sel) ? 'canvas' : 'other' }
   }
   if (typeof t.css === 'string') {
