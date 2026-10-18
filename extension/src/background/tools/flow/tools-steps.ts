@@ -917,12 +917,6 @@ const addStep = defineTool<AddStepArgs>({
         warnings.push("The agent runs in the background: its answer is not available right away, and later steps wait for it (minutes). Prefer the Instant agent when later steps need the answer quickly.")
       }
 
-      // Open the side panel immediately so the user sees the newly added step configuration drawer
-      if (a.type !== 'comment' && a.type !== 'break') {
-        const branch = childId && after ? slugForStepId(after, childId) : undefined
-        await (branch && childId ? openPanel(ctx, t.scriptId, childId, branch) : openStepPanel(ctx, t, block, slug))
-      }
-
       // Check connections for app steps when not explicitly provided
       let availableConns: ConnectionRow[] = []
       if (PLUGIN_LIKE.has(a.type) && action && !hiddenAuth && action.authtype !== 'NoAuth' && !authData) {
@@ -960,7 +954,7 @@ const addStep = defineTool<AddStepArgs>({
       }
 
       try {
-        const saved = await saveNewStep(ctx, t, a, slug, block as Block, after as JsonScript, authData, childId, getCat, kind)
+        const saved = await saveNewStep(ctx, t, a, slug, block as Block, after as JsonScript, authData, childId, getCat, kind, action)
         Object.assign(result, saved.result)
         warnings.push(...saved.warnings)
       } catch (e) {
@@ -1009,6 +1003,7 @@ async function saveNewStep(
   childId: string | undefined,
   getCat: LazyCatalogue,
   kind?: SpecialKind,
+  action?: ActionRow,
 ): Promise<{ result: Record<string, unknown>; warnings: string[] }> {
   const stepId = block.identifier ?? ''
   const c: SaveCommon = {
@@ -1055,30 +1050,37 @@ async function saveNewStep(
       throw e
     }
     warnings.push(...cfg.warnings)
+    const base: PluginData = {
+      ...meta,
+      serviceName: meta.serviceName ?? action?.pluginname,
+      actionName: meta.actionName ?? action?.name,
+      serviceId: meta.serviceId ?? action?.pluginrecordid,
+      selectedCreate: meta.selectedCreate ?? action?.rowid,
+      actionVersionId: meta.actionVersionId ?? action?.actionversionrecordid ?? action?.rowid,
+      authIdLookup: meta.authIdLookup ?? action?.authidlookup,
+      authType: meta.authType ?? action?.authtype,
+      iconUrl: meta.iconUrl ?? action?.iconurl ?? block.iconUrl,
+      inputJson: cfg.inputJson,
+    }
+    const dynamicInputRequired = withDynamicInput(meta.dynamicInputRequired, cfg.dynamicInput)
+    if (dynamicInputRequired) base.dynamicInputRequired = dynamicInputRequired
+
     // Never save an app step with a missing connection or required field: it stays a draft (as in the editor).
     if (!authData || !cfg.complete) {
       holdValues(holdKey, values, a.connectionId, saved)
-      if (authData?.id) {
-        try {
-          const base: PluginData = { ...meta, inputJson: cfg.inputJson }
-          const dynamicInputRequired = withDynamicInput(meta.dynamicInputRequired, cfg.dynamicInput)
-          if (dynamicInputRequired) base.dynamicInputRequired = dynamicInputRequired
-          await putStep(ctx, t, slug, pluginBody(c, base, authData, cfg.cleaned), live)
-        } catch (err) {
-          console.warn('[assistant] failed to save partial draft with authData in saveNewStep:', err)
-        }
+      try {
+        await putStep(ctx, t, slug, pluginBody(c, base, authData ?? {}, cfg.cleaned), live)
+      } catch (err) {
+        console.warn('[assistant] failed to save partial draft in saveNewStep:', err)
       }
-      const result = await incompleteResult(slug, 'DRAFTED', meta, !!authData, { ...cfg, warnings: [] }, values, [], getCat)
-      if ((kind === 'ai_agent' || kind === 'ai_agent_background') && authData) await attachAgentChoices(ctx, t, result, meta, authData, cfg, slug)
+      const result = await incompleteResult(slug, 'DRAFTED', base, !!authData, { ...cfg, warnings: [] }, values, [], getCat)
+      if ((kind === 'ai_agent' || kind === 'ai_agent_background') && authData) await attachAgentChoices(ctx, t, result, base, authData, cfg, slug)
       return { result, warnings }
     }
     if (cfg.missing.maybe.length) warnings.push(`Check whether these apply: ${cfg.missing.maybe.map((m) => m.label ?? m.key).join(', ')}`)
     const loop = await flowTargetProblem(ctx, t, cfg, kind === 'flow_in_flow')
     if (loop) throw new ToolError(loop)
     if (extra.display && Object.hasOwn(cfg.cleaned, extra.display.key)) cfg.cleaned[`_${extra.display.key}`] = extra.display.text
-    const base: PluginData = { ...meta, inputJson: cfg.inputJson }
-    const dynamicInputRequired = withDynamicInput(meta.dynamicInputRequired, cfg.dynamicInput)
-    if (dynamicInputRequired) base.dynamicInputRequired = dynamicInputRequired
     await putStep(ctx, t, slug, pluginBody(c, base, authData, cfg.cleaned), live)
     return {
       result: {
@@ -1460,15 +1462,13 @@ async function buildUpdateBody(
       warnings.push(...cfg.warnings)
       if (!authData?.id || !cfg.complete) {
         holdValues(holdKey, merged.values, connectionId, saved)
-        if (authData?.id) {
-          try {
-            const next: PluginData = { ...pd, inputJson: cfg.inputJson }
-            const dynamicInputRequired = withDynamicInput(pd.dynamicInputRequired, cfg.dynamicInput)
-            if (dynamicInputRequired) next.dynamicInputRequired = dynamicInputRequired
-            await putStep(ctx, t, slug, pluginBody(c, next, authData, cfg.cleaned), liveUnlessEditorOpen(ctx, t.scriptId))
-          } catch (err) {
-            console.warn('[assistant] failed to save partial draft with authData in updateStep:', err)
-          }
+        try {
+          const next: PluginData = { ...pd, inputJson: cfg.inputJson }
+          const dynamicInputRequired = withDynamicInput(pd.dynamicInputRequired, cfg.dynamicInput)
+          if (dynamicInputRequired) next.dynamicInputRequired = dynamicInputRequired
+          await putStep(ctx, t, slug, pluginBody(c, next, authData ?? {}, cfg.cleaned), liveUnlessEditorOpen(ctx, t.scriptId))
+        } catch (err) {
+          console.warn('[assistant] failed to save partial draft in updateStep:', err)
         }
         throw new IncompleteStep(await incompleteResult(slug, str(block.status), pd, !!authData?.id, { ...cfg, warnings: [] }, merged.values, merged.dropped, getCat))
       }
