@@ -38,7 +38,8 @@ export function initVoice(): void {
   voiceEnabled.addEventListener('change', () => void save({ voiceEnabled: voiceEnabled.checked }))
   wakeWordEnabled.addEventListener('change', () => void save({ wakeWordEnabled: wakeWordEnabled.checked }))
   wakeWordSilenceDelay.addEventListener('change', () => {
-    const val = Number(wakeWordSilenceDelay.value) || 3
+    const num = Number(wakeWordSilenceDelay.value)
+    const val = Number.isFinite(num) && num > 0 ? num : 3
     void save({ wakeWordSilenceDelay: val })
   })
   hotkeyEnabled.addEventListener('change', () => void save({ hotkeyEnabled: hotkeyEnabled.checked }))
@@ -93,7 +94,7 @@ function render(): void {
   voiceEnabled.checked = s.voiceEnabled
   voiceSettingsBody.hidden = !s.voiceEnabled
   wakeWordEnabled.checked = s.wakeWordEnabled
-  wakeWordSilenceDelay.value = String(s.wakeWordSilenceDelay || 3)
+  wakeWordSilenceDelay.value = String(s.wakeWordSilenceDelay ?? 3)
   wakeWordDelayRow.hidden = !s.wakeWordEnabled
   hotkeyEnabled.checked = s.hotkeyEnabled
   hotkeyDetailsGroup.hidden = !s.hotkeyEnabled

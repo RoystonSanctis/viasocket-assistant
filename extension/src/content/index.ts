@@ -122,7 +122,7 @@ async function main(): Promise<void> {
       clearTimeout(speechSilenceTimer)
       speechSilenceTimer = undefined
     }
-    const delaySec = Math.max(1.5, settings.wakeWordSilenceDelay ?? 3)
+    const delaySec = Math.max(0.5, settings.wakeWordSilenceDelay ?? 3)
     speechSilenceTimer = setTimeout(() => {
       if (talking && activeVoiceSource === 'wake-word' && heardSpeechInTurn) {
         voiceStop()
