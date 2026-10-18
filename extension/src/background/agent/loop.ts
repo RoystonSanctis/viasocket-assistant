@@ -20,6 +20,32 @@ import { buildSystemPrompt } from './prompt'
 import { PageMovedError, followPage, pinTarget, releaseTarget, type RunTarget } from './run-target'
 import type { Session } from './session'
 import { NO_MODEL_MESSAGE, computeStatus, pickModel } from './status'
+import { normalizeFlow, summarizeFlow } from '../tools/flow/flow-api'
+import type { FlowTarget } from '../tools/flow/types'
+import { asRecord } from '../tools/flow/util'
+
+async function fetchLiveFlowSummary(target: RunTarget, signal?: AbortSignal): Promise<Record<string, unknown> | null> {
+  if (target.page.kind !== 'flow-editor' || !target.page.scriptId || !target.page.projectId || !target.page.orgId) {
+    return null
+  }
+  try {
+    const t: FlowTarget = {
+      orgId: target.page.orgId,
+      projectId: target.page.projectId,
+      scriptId: target.page.scriptId,
+    }
+    const body = await target.vs.request({
+      method: 'GET',
+      path: `/scripts/${t.scriptId}`,
+      signal,
+    })
+    const row = normalizeFlow(asRecord(body).data)
+    if (!row) return null
+    return summarizeFlow(row, t, [], target.vs.env.vmBase)
+  } catch {
+    return null
+  }
+}
 
 const STOP_WORDS = /^(stop|cancel|stop it|never ?mind)[.!]*$/i
 const BUSY_MESSAGE = "Still working on the last request — say 'stop' or press cancel."
@@ -215,7 +241,8 @@ async function agentLoop(run: RunContext): Promise<void> {
     const toolSpecs = tools.length ? tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })) : undefined
     // Re-read every step: ui_plan may have changed it, and trimmed history may no longer hold the call that set it.
     const plan = await loadPlan(thread).catch(() => null)
-    const system = buildSystemPrompt(config, settings, session, target.page, tools.map((t) => t.name), run.explainEvent, plan)
+    const liveFlow = await fetchLiveFlowSummary(target, signal)
+    const system = buildSystemPrompt(config, settings, session, target.page, tools.map((t) => t.name), run.explainEvent, plan, liveFlow)
     const fixedChars = system.length + (toolSpecs ? JSON.stringify(toolSpecs).length : 0)
     const build = (shrink: boolean): ChatRequest => ({
       model: run.model,

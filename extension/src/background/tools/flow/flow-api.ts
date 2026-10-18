@@ -246,10 +246,26 @@ export function triggerFeatures(trigger: Trigger | undefined): Record<string, un
   return Object.keys(out).length ? out : undefined
 }
 
+export function inputValues(inputData: unknown): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(asRecord(inputData))) {
+    if (k.startsWith('_') || k.includes('["_')) continue
+    out[k] = v
+  }
+  return out
+}
+
 export function summarizeTrigger(trigger: Trigger | undefined, scriptId: string, vmBase: string): Record<string, unknown> | null {
   const kind = triggerKind(trigger)
   if (!trigger || !kind) return null
-  const base: Record<string, unknown> = { type: kind, state: trigger.type, ...(triggerFeatures(trigger) ?? {}) }
+  const hasSample = trigger.sampleData !== undefined && trigger.sampleData !== null && trigger.sampleData !== ''
+  const base: Record<string, unknown> = {
+    type: kind,
+    state: trigger.type,
+    tested: hasSample,
+    ...(hasSample ? { hasSampleData: true } : {}),
+    ...(triggerFeatures(trigger) ?? {}),
+  }
   switch (kind) {
     case 'webhook':
       return { ...base, url: `${vmBase}/func/${scriptId}`, note: 'The URL runs the live flow after publishing.' }
@@ -258,6 +274,11 @@ export function summarizeTrigger(trigger: Trigger | undefined, scriptId: string,
     case 'cron':
       return { ...base, cronExpression: trigger.cronExpression, meaning: trigger.meaning, timezone: trigger.timezone }
     default: {
+      const auth = asRecord(trigger.selectedValues?.authData)
+      const authId = str(auth.id)
+      const authLabel = str(auth.connection_label) ?? str(auth.name)
+      const isConnected = !!authId && authId !== 'NoAuth'
+      const values = inputValues(trigger.selectedValues?.inputData)
       const inputData = asRecord(trigger.selectedValues?.inputData)
       return {
         ...base,
@@ -265,7 +286,10 @@ export function summarizeTrigger(trigger: Trigger | undefined, scriptId: string,
         action: trigger.actionName,
         actionId: trigger.selectedCreate,
         drafted: trigger.isDrafted === true || undefined,
-        connected: !!trigger.selectedValues?.authData?.id,
+        connected: isConnected || authId === 'NoAuth',
+        connection: authId ? { id: authId, name: authLabel, type: str(auth.type) } : null,
+        connectionName: authLabel,
+        configuredValues: Object.keys(values).length > 0 ? values : undefined,
         scheduledTimeMinutes: kind === 'polling' ? inputData.scheduledTime : undefined,
       }
     }
@@ -282,6 +306,11 @@ interface StepNode {
   app?: string
   action?: string
   connected?: boolean
+  connection?: { id: string; name?: string; type?: string } | null
+  connectionName?: string
+  configuredValues?: Record<string, unknown>
+  tested?: boolean
+  hasSampleData?: boolean
   expression?: string
   condition?: string
   statement?: string
@@ -299,8 +328,22 @@ function stepNode(slug: string, js: JsonScript, fnById: Map<string, FunctionRow>
     const pd = pluginDataOf(b, b.identifier ? fnById.get(b.identifier) : undefined)
     node.app = pd?.serviceName
     node.action = pd?.actionName
-    node.connected = !!pd?.selectedValues?.authData?.id
+    const auth = asRecord(pd?.selectedValues?.authData)
+    const authId = str(auth.id)
+    const authLabel = str(auth.connection_label) ?? str(auth.name)
+    node.connected = (!!authId && authId !== 'NoAuth') || authId === 'NoAuth'
+    if (authId) {
+      node.connection = { id: authId, name: authLabel, type: str(auth.type) }
+      node.connectionName = authLabel
+    }
+    const vals = inputValues(pd?.selectedValues?.inputData)
+    if (Object.keys(vals).length > 0) {
+      node.configuredValues = vals
+    }
   }
+  const hasSample = b.sampleData !== undefined && b.sampleData !== null && b.sampleData !== ''
+  node.tested = hasSample
+  if (hasSample) node.hasSampleData = true
   if (b.type === 'variable' && b.data) node.expression = truncate(String(b.data), 160)
   if (b.type === 'ifBlock') {
     node.condition = b.isElseBlock ? undefined : truncate(String(b.condition ?? ''), 160)

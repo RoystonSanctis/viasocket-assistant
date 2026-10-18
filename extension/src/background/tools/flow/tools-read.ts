@@ -6,7 +6,7 @@ import { fieldList, listActions, normalizeInputJson, searchApps, summarizeAction
 import { listConnections, summarizeConnection } from './connections'
 import { call, ToolError } from './errors'
 import {
-  everPublished, findParent, flowStatusLabel, getFlow, getFunctionRow, hasDraftChanges, listFunctionRows, listProjectRows,
+  everPublished, findParent, flowStatusLabel, getFlow, getFunctionRow, hasDraftChanges, inputValues, listFunctionRows, listProjectRows,
   normalizeFlow, pluginDataOf, requireOrg, resolveFlow, summarizeFlow, summarizeTrigger, verifyProject,
 } from './flow-api'
 import { rememberFlow } from './known'
@@ -152,15 +152,6 @@ const getFlowTool = defineTool<{ scriptId?: string }>({
   },
 })
 
-/** Values are shown whole (the result is bounded as a whole): they are echoed back on save, so a cut value would be saved cut. */
-function inputValues(inputData: unknown): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
-  for (const [k, v] of Object.entries(asRecord(inputData))) {
-    if (k.startsWith('_') || k.includes('["_')) continue
-    out[k] = v
-  }
-  return out
-}
 
 function pluginDetail(pd: PluginData): Record<string, unknown> {
   const auth = pd.selectedValues?.authData
@@ -281,7 +272,13 @@ const getStep = defineTool<{ slugName: string; scriptId?: string }>({
       const summary = summarizeTrigger(trigger, t.scriptId, ctx.vs.env.vmBase)
       if (!trigger || !summary) return { trigger: null, note: 'The flow has no trigger yet. Set one with vs_set_trigger.' }
       const isApp = !['webhook', 'email', 'cron'].includes(String(trigger.triggerType))
-      return bounded({ trigger: summary, ...(isApp ? pluginDetail(trigger) : {}) }, ctx.maxResultChars)
+      const hasSample = trigger.sampleData !== undefined && trigger.sampleData !== null && trigger.sampleData !== ''
+      return bounded({
+        trigger: summary,
+        ...(isApp ? pluginDetail(trigger) : {}),
+        tested: hasSample,
+        sampleOutput: hasSample ? trimData(trigger.sampleData, ctx.stripRunData) : undefined,
+      }, ctx.maxResultChars)
     }
     const block = js.blocks[a.slugName]
     if (!block) {
