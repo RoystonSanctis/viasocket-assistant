@@ -17,7 +17,7 @@ const common = {
   bundle: true,
   target: 'chrome120',
   platform: 'browser',
-  sourcemap: watch ? 'inline' : false,
+  sourcemap: true,
   minify: !watch,
   legalComments: 'eof',
   logLevel: 'info',
