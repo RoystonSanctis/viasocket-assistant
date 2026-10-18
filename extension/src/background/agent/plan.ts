@@ -5,6 +5,7 @@ import {
   PLAN_ITEM_ID, PLAN_LIMITS, PLAN_STATUSES, isPlanKind, isPlanStatus, normalizePlan, planText,
   type PlanChange, type PlanItem, type PlanItemInput, type PlanStatus, type PlanUpdate, type WorkflowPlan,
 } from '../../shared/mascot'
+import type { ObservedEvent } from '../../shared/observed'
 import { loadPlan, savePlan } from './conversation'
 import type { Session } from './session'
 
@@ -206,4 +207,237 @@ export async function approvePlan(session: Session, thread: string): Promise<boo
   await savePlan(thread, next)
   if (session.threadKey === thread) session.send({ type: 'plan', plan: next })
   return true
+}
+
+interface StepNodeSummary {
+  slug: string
+  id?: string
+  type: string
+  status?: string
+  change?: string
+  description?: string
+  app?: string
+  action?: string
+  connected?: boolean
+  connection?: { id: string; name?: string; type?: string } | null
+  connectionName?: string
+  configuredValues?: Record<string, unknown>
+  tested?: boolean
+  hasSampleData?: boolean
+  steps?: StepNodeSummary[]
+  branches?: StepNodeSummary[]
+}
+
+interface TriggerSummary {
+  type: string
+  state?: string
+  tested?: boolean
+  hasSampleData?: boolean
+  app?: string
+  action?: string
+  connected?: boolean
+  configuredValues?: Record<string, unknown>
+}
+
+interface FlowSummary {
+  scriptId?: string
+  projectId?: string
+  title?: string
+  status?: string
+  everPublished?: boolean
+  hasUnpublishedChanges?: boolean
+  trigger?: TriggerSummary | string
+  steps?: StepNodeSummary[]
+  unsavedDraftSteps?: string[]
+}
+
+function flattenSteps(steps: StepNodeSummary[]): StepNodeSummary[] {
+  const result: StepNodeSummary[] = []
+  for (const step of steps) {
+    if (!step) continue
+    result.push(step)
+    if (Array.isArray(step.steps) && step.steps.length > 0) {
+      result.push(...flattenSteps(step.steps))
+    }
+    if (Array.isArray(step.branches) && step.branches.length > 0) {
+      result.push(...flattenSteps(step.branches))
+    }
+  }
+  return result
+}
+
+function stepMatchesItem(item: PlanItem, step: StepNodeSummary, allSteps: StepNodeSummary[]): boolean {
+  const normId = (item.id || '').toLowerCase()
+  const normTitle = (item.title || '').toLowerCase()
+  const normDetail = (item.detail || '').toLowerCase()
+  const slug = (step.slug || '').toLowerCase()
+  const slugWords = slug.replace(/[_-]+/g, ' ').toLowerCase()
+
+  // 1. Direct match on id or slug
+  if (normId === slug || normId === slugWords) return true
+  if (normTitle.includes(slug) || normTitle.includes(slugWords)) return true
+  if (normDetail.includes(slug) || normDetail.includes(slugWords)) return true
+
+  // 2. Match on App name (e.g. "Notion")
+  const app = (step.app || '').toLowerCase()
+  if (app && (normTitle.includes(app) || normDetail.includes(app) || normId.includes(app))) {
+    const action = (step.action || '').toLowerCase()
+    if (action) {
+      if (normTitle.includes(action) || normDetail.includes(action)) return true
+      const actionWords = action.split(/[^a-z0-9]+/).filter((w) => w.length > 3)
+      if (actionWords.some((w) => normTitle.includes(w) || normDetail.includes(w))) return true
+    }
+    // Only one step with this app in the entire flow
+    if (allSteps.filter((s) => (s.app || '').toLowerCase() === app).length === 1) return true
+  }
+
+  // 3. Match on step action
+  const action = (step.action || '').toLowerCase()
+  if (action && (normTitle.includes(action) || normDetail.includes(action))) return true
+
+  // 4. Single step in flow
+  if (allSteps.length === 1 && (item.kind === 'step' || item.kind === 'test')) {
+    if (!/trigger/i.test(normTitle)) return true
+  }
+
+  return false
+}
+
+export interface ReconcileResult {
+  plan: WorkflowPlan
+  changed: boolean
+  newlyDone: PlanItem[]
+  unblocked: PlanItem[]
+  nextItem?: PlanItem
+}
+
+/**
+ * Reconciles the workflow plan against the live flow state and optional recent observed event.
+ * Advances completed items to 'done', clears blocked notes when resolved, and automatically
+ * advances the checklist to the next 'todo' item.
+ */
+export function reconcilePlanWithFlow(
+  current: WorkflowPlan | null,
+  liveFlow: Record<string, unknown> | null,
+  event?: ObservedEvent,
+): ReconcileResult {
+  if (!current || !Array.isArray(current.items) || !current.items.length) {
+    return { plan: current as WorkflowPlan, changed: false, newlyDone: [], unblocked: [] }
+  }
+
+  const items = current.items.map((i) => ({ ...i }))
+  const flow = liveFlow as FlowSummary | null
+  const allSteps = flattenSteps(flow?.steps ?? [])
+  const trigger = typeof flow?.trigger === 'object' && flow?.trigger !== null ? (flow.trigger as TriggerSummary) : null
+
+  const newlyDone: PlanItem[] = []
+  const unblocked: PlanItem[] = []
+  let changed = false
+
+  for (const item of items) {
+    if (item.status === 'done' || item.status === 'skipped') continue
+    const prevStatus = item.status
+    const prevNote = item.note
+
+    const isTrigger = item.kind === 'trigger' || (!item.kind && /trigger/i.test(item.title))
+    const isPublish = item.kind === 'publish' || (!item.kind && /publish/i.test(item.title))
+    const isTest = item.kind === 'test' || (!item.kind && /test\b/i.test(item.title))
+
+    let markDone = false
+    let blockedNote: string | undefined
+
+    if (isPublish) {
+      if (event?.kind === 'flow-published' && event.ok) {
+        markDone = true
+      } else if (flow?.everPublished && !flow?.hasUnpublishedChanges) {
+        markDone = true
+      }
+    } else if (isTrigger) {
+      if (event?.kind === 'trigger-saved' && event.ok) {
+        markDone = true
+      } else if (isTest && (trigger?.tested || (event?.kind === 'step-tested' && event.ok && /trigger/i.test(event.slugName ?? '')))) {
+        markDone = true
+      } else if (!isTest && trigger && trigger.type && trigger.type !== 'none' && trigger.connected !== false) {
+        markDone = true
+      }
+    } else {
+      // Step or step test item
+      const matchedStep = allSteps.find((s) => stepMatchesItem(item, s, allSteps))
+      const eventMatchesThis = !!event?.slugName && (
+        (matchedStep && matchedStep.slug.toLowerCase() === event.slugName.toLowerCase()) ||
+        item.id.toLowerCase() === event.slugName.toLowerCase() ||
+        item.title.toLowerCase().includes(event.slugName.toLowerCase().replace(/[_-]+/g, ' '))
+      )
+
+      if (isTest) {
+        if (event?.kind === 'step-tested' && eventMatchesThis) {
+          if (event.ok) {
+            markDone = true
+          } else {
+            blockedNote = event.errorText || 'Test failed'
+          }
+        } else if (matchedStep?.tested) {
+          markDone = true
+        }
+      } else {
+        // Step configuration item
+        if ((event?.kind === 'step-tested' && event.ok && eventMatchesThis) || matchedStep?.tested) {
+          // If the step was tested, configuration is complete
+          markDone = true
+        } else if (event?.kind === 'step-saved' && event.ok && eventMatchesThis) {
+          markDone = true
+        } else if (matchedStep) {
+          const isConnected = matchedStep.connected !== false
+          const hasValues = matchedStep.configuredValues && Object.keys(matchedStep.configuredValues).length > 0
+          if (matchedStep.status === 'ACTIVE' && isConnected && (hasValues || matchedStep.tested)) {
+            markDone = true
+          }
+        }
+      }
+    }
+
+    if (markDone) {
+      item.status = 'done'
+      delete item.note
+      newlyDone.push(item)
+      if (prevStatus === 'blocked') unblocked.push(item)
+      changed = true
+    } else if (blockedNote !== undefined) {
+      item.status = 'blocked'
+      item.note = blockedNote
+      if (prevStatus !== 'blocked' || prevNote !== blockedNote) changed = true
+    }
+  }
+
+  // Automatic checklist progression:
+  // If no items are currently doing or blocked, advance the first todo item to doing
+  const hasDoingOrBlocked = items.some((i) => i.status === 'doing' || i.status === 'blocked')
+  let nextItem: PlanItem | undefined
+  if (!hasDoingOrBlocked) {
+    const firstTodo = items.find((i) => i.status === 'todo')
+    if (firstTodo) {
+      firstTodo.status = 'doing'
+      nextItem = firstTodo
+      changed = true
+    }
+  } else {
+    nextItem = items.find((i) => i.status === 'doing' || i.status === 'blocked')
+  }
+
+  const nextPlan: WorkflowPlan = changed
+    ? {
+        ...current,
+        items,
+        rev: (current.rev ?? 0) + 1,
+        updatedAt: Date.now(),
+      }
+    : current
+
+  return {
+    plan: nextPlan,
+    changed,
+    newlyDone,
+    unblocked,
+    nextItem,
+  }
 }

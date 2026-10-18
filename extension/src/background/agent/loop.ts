@@ -13,9 +13,9 @@ import { buildToolset } from '../tools'
 import type { Tool } from '../tools/types'
 import { VsError } from '../tools/viasocket-client'
 import { speakReply, stopSpeaking } from '../voice'
-import { carryOver, fitBudget, loadPlan, loadThread, postLine, saveMessages, showThread, trimMessages, type Thread } from './conversation'
+import { carryOver, fitBudget, loadPlan, loadThread, postLine, saveMessages, savePlan, showThread, trimMessages, type Thread } from './conversation'
 import { errorContent, executeTool, isAbort, prepareArgs } from './execute'
-import { approvePlan, awaitingReply } from './plan'
+import { approvePlan, awaitingReply, reconcilePlanWithFlow } from './plan'
 import { buildSystemPrompt } from './prompt'
 import { PageMovedError, followPage, pinTarget, releaseTarget, type RunTarget } from './run-target'
 import type { Session } from './session'
@@ -23,8 +23,10 @@ import { NO_MODEL_MESSAGE, computeStatus, pickModel } from './status'
 import { normalizeFlow, summarizeFlow } from '../tools/flow/flow-api'
 import type { FlowTarget } from '../tools/flow/types'
 import { asRecord } from '../tools/flow/util'
+import type { PageContext } from '../../shared/page'
+import type { ViaSocketClient } from '../tools/viasocket-client'
 
-async function fetchLiveFlowSummary(target: RunTarget, signal?: AbortSignal): Promise<Record<string, unknown> | null> {
+export async function fetchLiveFlowSummary(target: { page: PageContext; vs: ViaSocketClient }, signal?: AbortSignal): Promise<Record<string, unknown> | null> {
   if (target.page.kind !== 'flow-editor' || !target.page.scriptId || !target.page.projectId || !target.page.orgId) {
     return null
   }
@@ -89,6 +91,8 @@ interface RunContext {
 export interface RunOptions {
   /** "Explain" on a reaction: the event reaches the model as marked data in the system prompt, not as user text */
   explainEvent?: ObservedEvent
+  /** Proactive run triggered by an observed UI event; does not post a synthetic user chat line */
+  proactive?: boolean
 }
 
 export async function runAgent(session: Session, userText: string, _source: 'voice' | 'text', opts: RunOptions = {}): Promise<void> {
@@ -118,7 +122,9 @@ export async function runAgent(session: Session, userText: string, _source: 'voi
   let movedAway = false
   let completed = false
   try {
-    postLine(session, 'user', text)
+    if (!opts.proactive) {
+      postLine(session, 'user', text)
+    }
     const [config, settings] = await Promise.all([getConfig(), loadSettings()])
     if (config.flags.disabled) {
       postLine(session, 'system-note', config.flags.disabledMessage ?? 'The assistant is switched off for now.')
@@ -150,11 +156,12 @@ export async function runAgent(session: Session, userText: string, _source: 'voi
 
     maxMessages = config.flags.conversationMaxMessages
     const history = await loadThread(thread)
-    messages = [...history.messages, { role: 'user', content: text }]
+    const promptContent = opts.proactive ? `[Observed UI Event]: ${text}` : text
+    messages = [...history.messages, { role: 'user', content: promptContent }]
     await saveMessages(thread, messages, maxMessages)
 
     // The plan card's "Looks good, start" button: the plan stops waiting for approval before the model even answers.
-    if (text === PLAN_APPROVE_TEXT) await approvePlan(session, thread).catch(() => false)
+    if (!opts.proactive && text === PLAN_APPROVE_TEXT) await approvePlan(session, thread).catch(() => false)
 
     session.ui.mascot('thinking')
     await agentLoop({
@@ -240,8 +247,16 @@ async function agentLoop(run: RunContext): Promise<void> {
     const tools = buildToolset({ page: target.page, flags, toolsConfig: config.tools })
     const toolSpecs = tools.length ? tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })) : undefined
     // Re-read every step: ui_plan may have changed it, and trimmed history may no longer hold the call that set it.
-    const plan = await loadPlan(thread).catch(() => null)
+    let plan = await loadPlan(thread).catch(() => null)
     const liveFlow = await fetchLiveFlowSummary(target, signal)
+    if (plan && liveFlow) {
+      const reconciled = reconcilePlanWithFlow(plan, liveFlow)
+      if (reconciled.changed) {
+        plan = reconciled.plan
+        await savePlan(thread, plan)
+        session.send({ type: 'plan', plan })
+      }
+    }
     const system = buildSystemPrompt(config, settings, session, target.page, tools.map((t) => t.name), run.explainEvent, plan, liveFlow)
     const fixedChars = system.length + (toolSpecs ? JSON.stringify(toolSpecs).length : 0)
     const build = (shrink: boolean): ChatRequest => ({
