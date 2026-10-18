@@ -1014,6 +1014,16 @@ async function saveNewStep(
     // Never save an app step with a missing connection or required field: it stays a draft (as in the editor).
     if (!authData || !cfg.complete) {
       holdValues(holdKey, values, a.connectionId, saved)
+      if (authData?.id) {
+        try {
+          const base: PluginData = { ...meta, inputJson: cfg.inputJson }
+          const dynamicInputRequired = withDynamicInput(meta.dynamicInputRequired, cfg.dynamicInput)
+          if (dynamicInputRequired) base.dynamicInputRequired = dynamicInputRequired
+          await putStep(ctx, t, slug, pluginBody(c, base, authData, cfg.cleaned), live)
+        } catch (err) {
+          console.warn('[assistant] failed to save partial draft with authData in saveNewStep:', err)
+        }
+      }
       const result = await incompleteResult(slug, 'DRAFTED', meta, !!authData, { ...cfg, warnings: [] }, values, [], getCat)
       if ((kind === 'ai_agent' || kind === 'ai_agent_background') && authData) await attachAgentChoices(ctx, t, result, meta, authData, cfg, slug)
       return { result, warnings }
@@ -1406,6 +1416,16 @@ async function buildUpdateBody(
       warnings.push(...cfg.warnings)
       if (!authData?.id || !cfg.complete) {
         holdValues(holdKey, merged.values, connectionId, saved)
+        if (authData?.id) {
+          try {
+            const next: PluginData = { ...pd, inputJson: cfg.inputJson }
+            const dynamicInputRequired = withDynamicInput(pd.dynamicInputRequired, cfg.dynamicInput)
+            if (dynamicInputRequired) next.dynamicInputRequired = dynamicInputRequired
+            await putStep(ctx, t, slug, pluginBody(c, next, authData, cfg.cleaned), liveUnlessEditorOpen(ctx, t.scriptId))
+          } catch (err) {
+            console.warn('[assistant] failed to save partial draft with authData in updateStep:', err)
+          }
+        }
         throw new IncompleteStep(await incompleteResult(slug, str(block.status), pd, !!authData?.id, { ...cfg, warnings: [] }, merged.values, merged.dropped, getCat))
       }
       if (cfg.missing.maybe.length) warnings.push(`Check whether these apply: ${cfg.missing.maybe.map((m) => m.label ?? m.key).join(', ')}`)

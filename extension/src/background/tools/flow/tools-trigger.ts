@@ -423,6 +423,23 @@ async function setAppTrigger(a: SetTriggerArgs, ctx: ToolContext, t: FlowTarget)
 
     if (!cfg.complete) {
       holdValues(holdKey, merged.values, connectionId, saved)
+      if (authData?.id) {
+        try {
+          const partialToSave: Trigger = { ...base, inputJson: cfg.inputJson }
+          const dynamicInputRequired = withDynamicInput(base.dynamicInputRequired, cfg.dynamicInput)
+          if (dynamicInputRequired) partialToSave.dynamicInputRequired = dynamicInputRequired
+          const body = triggerSaveBody(partialToSave, authData, cfg.cleaned, base.sampleData)
+          await ctx.vs.request({
+            method: 'POST',
+            path: `/scripts/${t.projectId}/${t.scriptId}/trigger`,
+            body,
+            live: liveUnlessEditorOpen(ctx, t.scriptId),
+            signal: ctx.signal,
+          })
+        } catch (err) {
+          console.warn('[assistant] failed to save partial trigger with authData:', err)
+        }
+      }
       return incompleteTrigger(base, action, cfg, !!authData?.id || noConnection, merged.values, merged.dropped, isDraft, panelResult(await openTriggerPanel(ctx, t.scriptId, triggerType)))
     }
 

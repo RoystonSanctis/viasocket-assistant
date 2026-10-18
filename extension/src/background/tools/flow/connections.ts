@@ -3,7 +3,20 @@
 
 import type { ToolContext } from '../types'
 import { call, ToolError } from './errors'
-import { requireOrg } from './flow-api'
+import {
+  editorOpen,
+  editorParam,
+  getFlow,
+  getFunctionRow,
+  openPanel,
+  openTriggerPanel,
+  pluginDataOf,
+  refreshEditorIfOpen,
+  requireOrg,
+  resolveFlow,
+  triggerKind,
+} from './flow-api'
+import { pluginBody, putStep, type SaveCommon } from './step-bodies'
 import type { AuthData, FlowTarget } from './types'
 import { asArray, asRecord, isRecord, parseMaybeJson, randomAlnum, sleep, str, truncate } from './util'
 
@@ -152,7 +165,135 @@ export async function connectApp(ctx: ToolContext, a: ConnectArgs, flow?: FlowTa
         if (tabId !== undefined) {
           chrome.tabs.remove(tabId).catch(() => undefined)
         }
-        return { connected: true, connection: summarizeConnection(fresh) }
+
+        const authData: AuthData = {
+          id: fresh.id,
+          type: fresh.type,
+          connection_label: fresh.connection_label,
+        }
+
+        let targetFlow = flow
+        if (!targetFlow) {
+          try {
+            targetFlow = resolveFlow(ctx)
+          } catch {
+            targetFlow = undefined
+          }
+        }
+
+        let autoUpdatedStep: string | undefined
+        let panelOpened = false
+        let panelNote: string | undefined
+
+        if (targetFlow && editorOpen(ctx, targetFlow.scriptId)) {
+          try {
+            await ctx.vs.mutate(targetFlow.scriptId, async () => {
+              await ctx.vs.alignOrg(ctx.signal)
+              const row = await getFlow(ctx, targetFlow)
+              const js = row.json_script
+              const openStepId = editorParam(ctx, 'stepId', targetFlow.scriptId)
+              const openSlug = editorParam(ctx, 'slugName', targetFlow.scriptId)
+
+              // 1. Check if trigger panel is open and matches this app connection
+              if (openStepId === 'SET_TRIGGER' && js.trigger) {
+                const tr = js.trigger
+                const matchService = tr.serviceId === a.serviceId || tr.authIdLookup === a.authIdLookup
+                const matchAction = a.actionVersionId && tr.selectedCreate === a.actionVersionId
+                const needsAuth = !tr.selectedValues?.authData?.id || tr.selectedValues?.authData?.id === 'NoAuth'
+                if ((matchService || matchAction) && (needsAuth || matchAction)) {
+                  const body: Record<string, unknown> = {
+                    ...tr,
+                    selectedValues: { ...asRecord(tr.selectedValues), authData, inputData: asRecord(tr.selectedValues?.inputData) },
+                    type: asRecord(tr.selectedValues?.inputData).performSubscribe !== undefined || tr.scriptId !== undefined ? 'update' : 'add',
+                    triggerType: String(tr.triggerType || 'hook'),
+                    name: 'trigger',
+                  }
+                  if (tr.sampleData !== undefined) body.sampleData = tr.sampleData
+                  delete body.isDrafted
+                  await ctx.vs.request({
+                    method: 'POST',
+                    path: `/scripts/${targetFlow.projectId}/${targetFlow.scriptId}/trigger`,
+                    body,
+                    live: false,
+                    signal: ctx.signal,
+                  })
+                  const sync = await openTriggerPanel(ctx, targetFlow.scriptId, triggerKind(tr))
+                  autoUpdatedStep = 'trigger'
+                  panelOpened = sync.delivered
+                  if (sync.reason) panelNote = sync.reason
+                  return
+                }
+              }
+
+              // 2. Check if open step panel matches this app connection
+              let targetSlug: string | undefined
+              if (openSlug && js.blocks[openSlug]?.type === 'plugin') {
+                const b = js.blocks[openSlug]
+                const matchService = b.metaData?.serviceId === a.serviceId || b.metaData?.authIdLookup === a.authIdLookup
+                const matchAction = a.actionVersionId && b.metaData?.actionVersionId === a.actionVersionId
+                if (matchService || matchAction) {
+                  targetSlug = openSlug
+                }
+              }
+
+              // 3. If open step didn't match, check if any plugin step in the flow matches and needs connection
+              if (!targetSlug) {
+                for (const [slug, b] of Object.entries(js.blocks)) {
+                  if (b.type === 'plugin') {
+                    const matchService = b.metaData?.serviceId === a.serviceId || b.metaData?.authIdLookup === a.authIdLookup
+                    const matchAction = a.actionVersionId && b.metaData?.actionVersionId === a.actionVersionId
+                    const needsAuth = !b.metaData?.selectedValues?.authData?.id || b.metaData?.selectedValues?.authData?.id === 'NoAuth' || b.status === 'DRAFTED'
+                    if ((matchService || matchAction) && needsAuth) {
+                      targetSlug = slug
+                      break
+                    }
+                  }
+                }
+              }
+
+              // 4. Update the step and refresh slider
+              const block = targetSlug ? js.blocks[targetSlug] : undefined
+              if (targetSlug && block) {
+                const stepId = block.identifier ?? openStepId ?? ''
+                const fn = stepId ? await getFunctionRow(ctx, targetFlow, stepId) : null
+                const pd = pluginDataOf(block, fn) ?? block.metaData
+                if (pd) {
+                  const c: SaveCommon = {
+                    stepId,
+                    title: targetSlug,
+                    description: block.description,
+                    sampleData: block.sampleData,
+                    iconUrl: block.iconUrl,
+                    hidden: block.hidden,
+                  }
+                  const inputData = asRecord(pd.selectedValues?.inputData)
+                  const body = pluginBody(c, pd, authData, inputData)
+                  await putStep(ctx, targetFlow, targetSlug, body, false)
+                  const sync = await openPanel(ctx, targetFlow.scriptId, stepId, targetSlug)
+                  autoUpdatedStep = targetSlug
+                  panelOpened = sync.delivered
+                  if (sync.reason) panelNote = sync.reason
+                  return
+                }
+              }
+
+              // 5. Fallback: refresh editor so any open UI re-queries connections
+              const sync = await refreshEditorIfOpen(ctx, targetFlow.scriptId)
+              panelOpened = sync.delivered
+              if (sync.reason) panelNote = sync.reason
+            })
+          } catch (err) {
+            console.warn('[assistant] failed to auto-update step slider with new connection:', err)
+          }
+        }
+
+        return {
+          connected: true,
+          connection: summarizeConnection(fresh),
+          ...(autoUpdatedStep ? { updatedStep: autoUpdatedStep, panelUpdated: true } : {}),
+          ...(panelOpened ? { panelOpened } : {}),
+          ...(panelNote ? { panelNote } : {}),
+        }
       }
       if (closedAt && Date.now() - closedAt > CLOSED_GRACE_MS) {
         return { connected: false, message: 'The connection tab was closed before a new connection was created.' }
