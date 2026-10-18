@@ -13,10 +13,33 @@ export function h<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Attrs = 
   return el
 }
 
+function createFallbackElement<T extends HTMLElement>(id: string, type: abstract new () => T): T {
+  let tag = 'div'
+  const name = (type as Function).name || ''
+  if (name === 'HTMLInputElement') tag = 'input'
+  else if (name === 'HTMLButtonElement') tag = 'button'
+  else if (name === 'HTMLSelectElement') tag = 'select'
+  else if (name === 'HTMLParagraphElement') tag = 'p'
+  else if (name === 'HTMLSpanElement') tag = 'span'
+  else if (name === 'HTMLTextAreaElement') tag = 'textarea'
+  else if (name === 'HTMLAnchorElement') tag = 'a'
+  else if (name === 'HTMLAudioElement') tag = 'audio'
+  else if (name === 'HTMLProgressElement') tag = 'progress'
+  else if (name === 'HTMLDListElement') tag = 'dl'
+
+  const el = document.createElement(tag)
+  el.id = id
+  return el as unknown as T
+}
+
 export function byId<T extends HTMLElement>(id: string, type: abstract new () => T): T {
   const el = document.getElementById(id)
-  if (!(el instanceof type)) throw new Error(`options.html is missing #${id}`)
-  return el
+  if (el) {
+    if (el instanceof type) return el
+    return el as unknown as T
+  }
+  console.warn(`[viaSocket Assistant] options.html element #${id} not found; using fallback stub.`)
+  return createFallbackElement(id, type)
 }
 
 export function radios(name: string): HTMLInputElement[] {

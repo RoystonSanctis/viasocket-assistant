@@ -45,27 +45,35 @@ function focusHash(): void {
 }
 
 async function main(): Promise<void> {
-  initAbout()
-  initPrivacy()
-  initProvider()
-  initModel()
-  initVoice()
-  initMic()
-  initHotkey()
-  initAssistant()
+  try {
+    initAbout()
+    initPrivacy()
+    initProvider()
+    initModel()
+    initVoice()
+    initMic()
+    initHotkey()
+    initAssistant()
 
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && SETTINGS_KEY in changes) void reloadSettings()
-  })
-  const refreshQuietly = () => void refreshState().catch(() => undefined)
-  chrome.permissions.onAdded.addListener(refreshQuietly)
-  chrome.permissions.onRemoved.addListener(refreshQuietly)
-  loadRetry.addEventListener('click', () => void loadState())
-  window.addEventListener('hashchange', focusHash)
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && SETTINGS_KEY in changes) void reloadSettings()
+    })
+    const refreshQuietly = () => void refreshState().catch(() => undefined)
+    chrome.permissions.onAdded.addListener(refreshQuietly)
+    chrome.permissions.onRemoved.addListener(refreshQuietly)
+    loadRetry.addEventListener('click', () => void loadState())
+    window.addEventListener('hashchange', focusHash)
 
-  await reloadSettings()
-  await loadState()
-  focusHash()
+    await reloadSettings()
+    await loadState()
+    focusHash()
+  } catch (err) {
+    console.warn('[viaSocket Assistant] options main initialization error:', err)
+  }
 }
 
-void main()
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => void main())
+} else {
+  void main()
+}

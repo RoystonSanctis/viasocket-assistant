@@ -24,7 +24,7 @@ function emit(): void {
     try {
       fn()
     } catch (e) {
-      console.error('[viaSocket Assistant] options render failed', e)
+      console.warn('[viaSocket Assistant] options render failed', e)
     }
   }
 }

@@ -123,7 +123,8 @@ function renderModels(): void {
 
 function renderLanguage(local: boolean): void {
   const value = store.settings.sttLanguage
-  if (![...sttLanguage.options].some((o) => o.value === value)) sttLanguage.append(h('option', { value }, value))
+  const optionsList = sttLanguage.options ? Array.from(sttLanguage.options) : []
+  if (!optionsList.some((o) => o.value === value)) sttLanguage.append(h('option', { value }, value))
   sttLanguage.value = value
 
   const { info } = selectedSttModel()

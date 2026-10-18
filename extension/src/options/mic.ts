@@ -79,9 +79,13 @@ function showPermissionState(state: MicState): void {
 
 async function watchPermission(): Promise<void> {
   try {
-    const perm = await navigator.permissions.query({ name: 'microphone' as PermissionName })
-    showPermissionState(perm.state)
-    perm.addEventListener('change', () => showPermissionState(perm.state))
+    const perm = await navigator.permissions?.query?.({ name: 'microphone' as PermissionName })
+    if (perm) {
+      showPermissionState(perm.state)
+      perm.addEventListener?.('change', () => showPermissionState(perm.state))
+    } else {
+      showPermissionState('unknown')
+    }
   } catch {
     showPermissionState('unknown')
   }
