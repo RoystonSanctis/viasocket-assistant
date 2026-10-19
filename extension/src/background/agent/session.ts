@@ -2,7 +2,7 @@
 // anything that must survive a worker restart (the conversation) is kept in chrome.storage.session, except for
 // incognito tabs, whose conversation stays in memory (see conversation.ts).
 
-import type { BackgroundToContent } from '../../shared/messages'
+import type { BackgroundToContent, DomPageStatus } from '../../shared/messages'
 import type { Suggestion } from '../../shared/mascot'
 import type { ObservedEvent } from '../../shared/observed'
 import type { PageContext } from '../../shared/page'
@@ -32,6 +32,7 @@ export interface PendingSuggestion {
 export class Session {
   page: PageContext | null = null
   vs: ViaSocketClient | null = null
+  domStatus: DomPageStatus | null = null
   busy = false
   voiceActive = false
   closed = false
@@ -54,6 +55,7 @@ export class Session {
   readonly pendingSuggestions = new Map<string, PendingSuggestion>()
   readonly recentEvents: ObservedEvent[] = []
   readonly reactionCooldowns = new Map<string, number>()
+  private pendingDomStatus = new Map<string, (status: DomPageStatus) => void>()
 
   private abortCtl: AbortController | null = null
   /** Thread a run started on. A run that navigates (e.g. into a flow it just created) keeps writing here. */
@@ -220,6 +222,35 @@ export class Session {
       this.send({ type: 'confirm-cancel', id })
     }
     this.pendingConfirms.clear()
+  }
+
+  setDomStatus(status: DomPageStatus): void {
+    this.domStatus = status
+  }
+
+  resolveDomStatus(requestId: string, status: DomPageStatus): void {
+    this.domStatus = status
+    const resolver = this.pendingDomStatus.get(requestId)
+    if (resolver) {
+      this.pendingDomStatus.delete(requestId)
+      resolver(status)
+    }
+  }
+
+  async getDomStatus(timeoutMs = 250): Promise<DomPageStatus | null> {
+    if (this.closed) return this.domStatus
+    const requestId = crypto.randomUUID()
+    return new Promise<DomPageStatus | null>((resolve) => {
+      const timer = setTimeout(() => {
+        this.pendingDomStatus.delete(requestId)
+        resolve(this.domStatus)
+      }, timeoutMs)
+      this.pendingDomStatus.set(requestId, (status) => {
+        clearTimeout(timer)
+        resolve(status)
+      })
+      this.send({ type: 'get-dom-status', requestId })
+    })
   }
 
   private clearIdleTimer(): void {

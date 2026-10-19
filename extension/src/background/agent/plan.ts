@@ -6,6 +6,7 @@ import {
   type PlanChange, type PlanItem, type PlanItemInput, type PlanStatus, type PlanUpdate, type WorkflowPlan,
 } from '../../shared/mascot'
 import type { ObservedEvent } from '../../shared/observed'
+import type { DomPageStatus } from '../../shared/messages'
 import { loadPlan, savePlan } from './conversation'
 import type { Session } from './session'
 
@@ -320,6 +321,7 @@ export function reconcilePlanWithFlow(
   current: WorkflowPlan | null,
   liveFlow: Record<string, unknown> | null,
   event?: ObservedEvent,
+  domStatus?: DomPageStatus | null,
 ): ReconcileResult {
   if (!current || !Array.isArray(current.items) || !current.items.length) {
     return { plan: current as WorkflowPlan, changed: false, newlyDone: [], unblocked: [] }
@@ -363,11 +365,24 @@ export function reconcilePlanWithFlow(
     } else {
       // Step or step test item
       const matchedStep = allSteps.find((s) => stepMatchesItem(item, s, allSteps))
-      const eventMatchesThis = !!event?.slugName && (
-        (matchedStep && matchedStep.slug.toLowerCase() === event.slugName.toLowerCase()) ||
-        item.id.toLowerCase() === event.slugName.toLowerCase() ||
-        item.title.toLowerCase().includes(event.slugName.toLowerCase().replace(/[_-]+/g, ' '))
+      const domTitleMatches = Boolean(
+        domStatus?.panelOpen &&
+        domStatus.stepTitle &&
+        ((matchedStep && matchedStep.slug.toLowerCase().replace(/[_-]+/g, ' ').includes(domStatus.stepTitle.toLowerCase().replace(/[_-]+/g, ' '))) ||
+         item.title.toLowerCase().includes(domStatus.stepTitle.toLowerCase().replace(/[_-]+/g, ' ')) ||
+         item.detail?.toLowerCase().includes(domStatus.stepTitle.toLowerCase().replace(/[_-]+/g, ' ')))
       )
+      const eventMatchesThis = Boolean(
+        (event?.slugName && (
+          (matchedStep && matchedStep.slug.toLowerCase() === event.slugName.toLowerCase()) ||
+          item.id.toLowerCase() === event.slugName.toLowerCase() ||
+          item.title.toLowerCase().includes(event.slugName.toLowerCase().replace(/[_-]+/g, ' '))
+        )) ||
+        (item.status === 'doing' && (event?.kind === 'step-tested' || event?.kind === 'step-saved')) ||
+        (domTitleMatches && (event?.kind === 'step-tested' || event?.kind === 'step-saved'))
+      )
+
+      const domTested = domTitleMatches && (domStatus?.testedInUi || domStatus?.hasSampleResponse)
 
       if (isTest) {
         if (event?.kind === 'step-tested' && eventMatchesThis) {
@@ -376,12 +391,12 @@ export function reconcilePlanWithFlow(
           } else {
             blockedNote = event.errorText || 'Test failed'
           }
-        } else if (matchedStep?.tested) {
+        } else if (matchedStep?.tested || domTested) {
           markDone = true
         }
       } else {
         // Step configuration item
-        if ((event?.kind === 'step-tested' && event.ok && eventMatchesThis) || matchedStep?.tested) {
+        if ((event?.kind === 'step-tested' && event.ok && eventMatchesThis) || matchedStep?.tested || domTested) {
           // If the step was tested, configuration is complete
           markDone = true
         } else if (event?.kind === 'step-saved' && event.ok && eventMatchesThis) {

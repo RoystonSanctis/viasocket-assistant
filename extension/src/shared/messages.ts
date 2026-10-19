@@ -26,6 +26,19 @@ export type ContentToBackground =
   | { type: 'voice'; action: 'start' | 'stop' | 'toggle' | 'cancel' }
   | { type: 'clear-thread' }
   | { type: 'open-options'; section?: string }
+  | { type: 'dom-status'; status: DomPageStatus }
+  | { type: 'dom-status-response'; requestId: string; status: DomPageStatus }
+
+export interface DomPageStatus {
+  panelOpen: boolean
+  stepTitle?: string
+  connection?: string
+  selectedFields: Record<string, string>
+  hasUnsavedChanges: boolean
+  testedInUi: boolean
+  hasSampleResponse: boolean
+  canSave: boolean
+}
 
 // ---------- service worker -> content (over the port) ----------
 export type BackgroundToContent =
@@ -33,6 +46,7 @@ export type BackgroundToContent =
   | { type: 'mascot'; mode: MascotMode; text?: string }
   | { type: 'thinking-text'; text: string }
   | { type: 'chat'; line: ChatLine }
+  | { type: 'get-dom-status'; requestId: string }
   | { type: 'history'; lines: ChatLine[] }
   /** The conversation's workflow plan (checklist card); null hides it. Sent after every 'history' and on each change */
   | { type: 'plan'; plan: WorkflowPlan | null }

@@ -52,8 +52,26 @@ function isObj(v: unknown): v is Record<string, unknown> {
 }
 
 function stepSlugInUrl(): string | undefined {
-  const v = new URLSearchParams(location.search).get('slugName')
-  return v && !TRIGGER_SLUGS.has(v) ? v.slice(0, SLUG_MAX) : undefined
+  const params = new URLSearchParams(location.search)
+  const v = params.get('slugName')
+  if (v && !TRIGGER_SLUGS.has(v)) return v.slice(0, SLUG_MAX)
+
+  try {
+    const slider = document.querySelector('[data-testid="step-config-slider"], [data-slider-container="true"], .custom_slider')
+    if (slider) {
+      const header = slider.querySelector('h5, h6, [data-testid="plugin-header"], [data-testid="step-title"], [data-testid="action-title"], .MuiTypography-h6')
+      const text = header?.textContent?.trim()
+      if (text && !/^(change|close)$/i.test(text)) {
+        return text.replace(/\s+/g, '_').slice(0, SLUG_MAX)
+      }
+    }
+  } catch {
+    // ignore DOM errors
+  }
+
+  const stepId = params.get('stepId')
+  if (stepId && !TRIGGER_SLUGS.has(stepId)) return stepId.slice(0, SLUG_MAX)
+  return undefined
 }
 
 function install(): void {

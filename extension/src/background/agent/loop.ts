@@ -248,16 +248,19 @@ async function agentLoop(run: RunContext): Promise<void> {
     const toolSpecs = tools.length ? tools.map((t) => ({ name: t.name, description: t.description, parameters: t.parameters })) : undefined
     // Re-read every step: ui_plan may have changed it, and trimmed history may no longer hold the call that set it.
     let plan = await loadPlan(thread).catch(() => null)
-    const liveFlow = await fetchLiveFlowSummary(target, signal)
-    if (plan && liveFlow) {
-      const reconciled = reconcilePlanWithFlow(plan, liveFlow)
+    const [liveFlow, domStatus] = await Promise.all([
+      fetchLiveFlowSummary(target, signal),
+      session.getDomStatus().catch(() => null),
+    ])
+    if (plan && (liveFlow || domStatus)) {
+      const reconciled = reconcilePlanWithFlow(plan, liveFlow, undefined, domStatus)
       if (reconciled.changed) {
         plan = reconciled.plan
         await savePlan(thread, plan)
         session.send({ type: 'plan', plan })
       }
     }
-    const system = buildSystemPrompt(config, settings, session, target.page, tools.map((t) => t.name), run.explainEvent, plan, liveFlow)
+    const system = buildSystemPrompt(config, settings, session, target.page, tools.map((t) => t.name), run.explainEvent, plan, liveFlow, domStatus)
     const fixedChars = system.length + (toolSpecs ? JSON.stringify(toolSpecs).length : 0)
     const build = (shrink: boolean): ChatRequest => ({
       model: run.model,

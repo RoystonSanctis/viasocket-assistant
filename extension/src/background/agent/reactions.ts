@@ -51,7 +51,7 @@ export async function handleObserved(session: Session, event: ObservedEvent): Pr
     const plan = await loadPlan(thread).catch(() => null)
     if (plan) {
       const liveFlow = await fetchLiveFlowSummary({ page: session.page, vs: session.vs }).catch(() => null)
-      reconcileResult = reconcilePlanWithFlow(plan, liveFlow, event)
+      reconcileResult = reconcilePlanWithFlow(plan, liveFlow, event, session.domStatus)
       if (reconcileResult.changed) {
         await savePlan(thread, reconcileResult.plan)
         session.send({ type: 'plan', plan: reconcileResult.plan })
@@ -273,6 +273,8 @@ async function triggerProactiveAgent(
 
   if (event.kind === 'step-tested' && !event.ok) {
     instruction += ' Briefly acknowledge the test failure (1-2 friendly sentences) and offer concise guidance to fix it.'
+  } else if (event.kind === 'step-tested' && event.ok) {
+    instruction += ' Briefly acknowledge that the test passed with the user\'s selected options (1-2 friendly sentences). Note: In viaSocket, the backend draft execution script only updates when Save is clicked (or vs_update_step is called). If the user selected options in the panel, DO NOT ask them to choose or configure those fields again! Instead, guide them to click Save (or save it) to proceed to the next item in the plan.'
   } else {
     instruction += ' Briefly acknowledge what happened in 1-2 friendly sentences and guide the user on the next step or continue the build.'
   }

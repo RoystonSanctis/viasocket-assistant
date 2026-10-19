@@ -15,6 +15,7 @@ import { createMascot } from './mascot'
 import type { MascotCallbacks, MascotController } from './mascot/api'
 import { createPageBridge } from './page-bridge'
 import { watchPage } from './page-watch'
+import { watchDomStatus } from './dom-status'
 import { connectPort } from './port'
 import { initStepMenu } from './step-menu'
 import { destroyToasts } from './toast'
@@ -350,6 +351,11 @@ async function main(): Promise<void> {
     port.send({ type: 'page-changed', page })
   })
   mascot.setPage(pageWatch.current())
+
+  const domWatcher = watchDomStatus((status) => {
+    port.send({ type: 'dom-status', status })
+  })
+
   function applyEnabled(): void {
     mascot.setSttEngine(settings.sttEngine)
     mascot.setVoiceEnabled(settings.voiceEnabled)
@@ -369,6 +375,9 @@ async function main(): Promise<void> {
 
   function handle(msg: BackgroundToContent): void {
     switch (msg.type) {
+      case 'get-dom-status':
+        port.send({ type: 'dom-status-response', requestId: msg.requestId, status: domWatcher.getStatus() })
+        break
       case 'config':
         config = msg.config
         mascot.setConfig(msg.config)
@@ -657,6 +666,7 @@ async function main(): Promise<void> {
     safe(() => hotkey.destroy())
     safe(() => bridge.destroy())
     safe(() => pageWatch.destroy())
+    safe(() => domWatcher.destroy())
     safe(() => mascot.setEnabled(false))
     safe(() => mascot.destroy())
   }

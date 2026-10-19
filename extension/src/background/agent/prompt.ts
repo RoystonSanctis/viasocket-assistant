@@ -57,6 +57,8 @@ function promptValue(field: (typeof CONTEXT_FIELDS)[number], v: string | undefin
  * `page` is the page the run acts on (pinned at run start), not necessarily the tab's current page.
  * `explainEvent` is set when the user pressed "Explain" on a reaction. `plan` is the conversation's checklist.
  */
+import type { DomPageStatus } from '../../shared/messages'
+
 export function buildSystemPrompt(
   config: FullConfig,
   settings: UserSettings,
@@ -66,6 +68,7 @@ export function buildSystemPrompt(
   explainEvent?: ObservedEvent,
   plan?: WorkflowPlan | null,
   liveFlow?: Record<string, unknown> | null,
+  domStatus?: DomPageStatus | null,
 ): string {
   const kind: PageKind = page?.kind ?? 'other'
   const date = localDate()
@@ -94,7 +97,7 @@ export function buildSystemPrompt(
 
   const names = toolNames ?? (page ? buildToolset({ page, flags: config.flags, toolsConfig: config.tools }).map((t) => t.name) : [])
   const strip = config.flags.stripRunData
-  const blocks = [prompt, contextBlock(session, page, settings, date, names, strip, liveFlow)]
+  const blocks = [prompt, contextBlock(session, page, settings, date, names, strip, liveFlow, domStatus)]
   const planBlock = planPromptBlock(plan ?? null)
   if (planBlock) blocks.push(planBlock)
   if (explainEvent) blocks.push(explainBlock(explainEvent, strip))
@@ -109,6 +112,7 @@ function contextBlock(
   toolNames: string[],
   strip: boolean,
   liveFlow?: Record<string, unknown> | null,
+  domStatus?: DomPageStatus | null,
 ): string {
   const pageFields: Record<string, string> = {}
   if (page) {
@@ -135,6 +139,18 @@ function contextBlock(
     lines.push(`Workspace: The user is in workspace "${page.orgId}". Build and manage flows directly in this current workspace. Do NOT ask them to open or select a workspace.`)
   } else if (page?.kind === 'workspace-select' || !page?.orgId) {
     lines.push('Workspace: No workspace is currently selected (user is on the workspace selection screen or outside a workspace). When the user asks to create or build a flow, ask which workspace they would like to use (they can choose from the screen or specify by name, or use vs_list_workspaces). Once chosen, navigate with ui_navigate to that workspace.')
+  }
+  if (domStatus && domStatus.panelOpen) {
+    lines.push(
+      '## Current page status (open side panel & UI)',
+      'What is currently open and selected in the browser side panel right now:',
+      '```json',
+      JSON.stringify(domStatus, null, 2),
+      '```',
+      'CRITICAL: In viaSocket, the backend draft execution script ONLY updates when the user clicks "Save" or vs_update_step is called (and published json updates when published).',
+      '- The user can manually select options and test in the side panel. If fields are already selected in the UI (e.g. spreadsheet, sheet, columns), DO NOT repeatedly ask them to choose or configure those fields again!',
+      '- If the step was tested in the UI (testedInUi or hasSampleResponse is true): DO NOT complain that fields are not saved in the backend draft! Acknowledge that the test passed with their selected options, and prompt them to click "Save" in the panel (or save it) so the draft execution script saves it and you can proceed.',
+    )
   }
   if (liveFlow) {
     lines.push(
