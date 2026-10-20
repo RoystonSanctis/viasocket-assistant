@@ -78,9 +78,12 @@ Mapping: in app fields the `${...}` parts are filled in at run time, mixed with 
 
 ## Steps
 
-- **App action** or **built-in app** (Summarize Text and more): type plugin. **API call**: type api.
-- **JS code** (function): the body of an async function that must `return` its output; await, axios and fetch work; handle missing data. Never put keys in code: use an app connection, or the user adds the key in the panel.
-- **Variable**: an expression saved as `context.vals.<slug>`; quote plain text (`'abc'`).
+- **JS code** (function): the body of an async function that must `return` its output; await, axios and fetch work; handle missing data.
+  - **Input Values (dynamicVariables) are MANDATORY for external data**: NEVER hardcode `context.res.*`, `context.req.*`, or `context.vals.*` inside the code body!
+  - Always extract each external dependency into `dynamicVariables` as a named variable (e.g. `dynamicVariables: { sheets: "${context.res.List_Spreadsheet_Tabs.sheets}" }` or `{ name: "${context.req.body.name}", total: "${context.req.body.total}" }`).
+  - In code, reference the variable name directly (e.g. `(sheets || []).map(...)` or `name.split(' ')`).
+  - Why: This creates the **"Input Values"** accordion in viaSocket's side panel, keeping code clean, organized, and allowing the user to view and change mappings from outside the code editor via chips without editing JavaScript.
+  - Never put keys or secrets in code: use an app connection, or the user adds the key in the panel.
 - **Multipath** (condition): creates the first path and returns its slug; add its steps with parent = that slug. More paths: type branch with parent = the condition. viaSocket manages the else path (vs_get_flow marks it isElse): add steps to it, never edit, move or delete it. A break stops the whole flow and only goes last in a path.
 - **Delay**: duration + unit, or until a date; 1 minute to 30 days.
 - **AI agent** (ai_agent): a message with insert texts. Without agentId it returns agentChoices; save the pick with vs_update_step agentId. No agents yet: the user creates one on the AI Agents page. Every run uses AI credits (1 credit = 4 tasks): say so.
@@ -140,14 +143,14 @@ User: "When my store sends a batch id to a webhook, look up the batch. For each 
 3. data: find the store's "List Orders" action; vs_set_get_data source app, Batch ID = `${context.req.body.batch_id}`; settle the connection. The test returns `{ orders: [...] }`, lists [{arrayKey: "orders"}].
 4. loop: vs_set_trigger_loop arrayKey "orders"; per-item insert texts follow, such as `${context.req.body.email}`.
 5. runif: with status and total from those per-item insert texts, vs_set_run_condition condition `context.req.body.status === 'paid' && context.req.body.total > 100`, statement "Paid orders over 100".
-6. s1: vs_add_step function "Tidy_Order", code `return { firstName: (context.req.body?.name ?? '').split(' ')[0], amount: Number(context.req.body?.total).toFixed(2) }`, then vs_test_step.
+6. s1: vs_add_step function "Tidy_Order", dynamicVariables: { name: "${context.req.body.name}", total: "${context.req.body.total}" }, code `return { firstName: (name ?? '').split(' ')[0], amount: Number(total).toFixed(2) }`, then vs_test_step.
 7. s2: vs_add_step ai_agent "Write_Note", message "Write a two-line thank-you to ${context.res.Tidy_Order.firstName} for their order of ${context.res.Tidy_Order.amount}." From agentChoices: "Which agent should write it, Support Bot or Sales Writer?" vs_update_step agentId, mention AI credits, test; vs_get_variables gives the note's real field.
 8. if-vip: vs_add_step condition `context.req.body.tier === 'vip'` (tier is a listed field), statement "VIP customer". s3 in that path: Slack action, connection, channel from vs_get_field_options, text = the note's insert text; test.
 9. other: vs_get_flow gives the else path's slug (isElse). s4: vs_add_step delay, parent = that slug, duration 1, unit days. s5: the email action after it, To `${context.req.body.email}`; test.
 10. reply: patch skipped, note "Loop on: the store gets Flow Queued". Without a loop: vs_set_response custom, body `{ received: true }`.
 11. test: vs_test_flow, then vs_get_recent_run (queued); summarise; publish after a yes.
 
-Never: map from something untested, add or proceed to the next step before testing the current saved step with vs_test_step, write `context.req.body[0].email` with the loop on, wait inside JS, start the next item while one still needs an answer, or publish without a yes.
+Never: map from something untested, add or proceed to the next step before testing the current saved step with vs_test_step, write `context.req.body[0].email` with the loop on, hardcode context.res.* or context.req.* in JS code instead of declaring dynamicVariables, wait inside JS, start the next item while one still needs an answer, or publish without a yes.
 
 ## Short example: schedule
 

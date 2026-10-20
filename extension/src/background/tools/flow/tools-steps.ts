@@ -26,6 +26,7 @@ import {
 import { knownFlowProject } from './known'
 import { encodeInputData } from './input-data'
 import { checkCommentText, checkExpression, checkFunctionCode, checkTemplateText } from './js-check'
+import { autoExtractDynamicVariables } from './function-vars'
 import { checkMappings, closestInserts, dynamicVariableTexts, inputDataTexts, mightReference, type MapText } from './mapping'
 import { buildCatalogue, compactSample, deepEqual, usable, type Catalogue, type Position } from './samples'
 import { defineTool, params, S } from './schema'
@@ -101,12 +102,12 @@ const STEP_FIELDS = {
     'App steps: field keys whose value the user typed themselves and wants kept as typed (free text in a dropdown, or text such as {{name}} meant for the receiving app). Never for guesses.',
   ),
   code: S.str(
-    `Function steps: JavaScript body of an async function. Read data with bare paths (no \${}), may use await, axios and fetch, and MUST return the step output. ${REFS}`,
+    `Function steps: JavaScript body of an async function. Read external data via input variables (dynamicVariables) rather than hardcoded context paths directly in code; may use await, axios and fetch, and MUST return the step output. ${REFS}`,
     { maxLength: 100000 },
   ),
   // No value schema, so null can remove a name; values are checked in checkFields.
   dynamicVariables: S.map(
-    `Function/API steps: named constants available inside the code, e.g. {"region":"eu"}; values are strings. Never secrets: keys belong in a connection, or let the user type them in the panel. On update they are merged into the saved ones: null removes a name, and a masked "${MASK}" value keeps the saved one.`,
+    `Function/API steps: Input variables (shown under "Input Values" in the UI). You MUST map every external reference (context.res.<slug>.<field>, context.req.body.<field>, context.vals.<slug>) here as a key-value pair, e.g. {"sheets": "\${context.res.List_Spreadsheet_Tabs.sheets}"}. In code, reference the variable name directly (e.g. sheets.map(...)). This keeps code clean, organized, and lets users change mappings outside the code editor via chips. On update they are merged into the saved ones: null removes a name, and a masked "${MASK}" value keeps the saved one.`,
   ),
   url: S.str('API steps: request URL; may contain ${context...} references.', { maxLength: 2000 }),
   method: S.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], 'API steps: HTTP method.'),
@@ -771,6 +772,11 @@ const addStep = defineTool<AddStepArgs>({
       const js = row.json_script
       const parent = a.parent ?? 'root'
       checkParent(js, a.type, parent)
+      if (a.type === 'function' && a.code) {
+        const extracted = autoExtractDynamicVariables(a.code, a.dynamicVariables)
+        a.code = extracted.code
+        a.dynamicVariables = extracted.dynamicVariables
+      }
       const plan = insertPlan(js, a.type, parent, a.afterSlug, a.atStart)
       const getCat = lazyCatalogue(ctx, t, row, { at: 'insert', parent, afterSlug: a.afterSlug, atStart: a.atStart })
 
@@ -1096,9 +1102,11 @@ async function saveNewStep(
     }
   }
   switch (a.type) {
-    case 'function':
-      await putStep(ctx, t, slug, functionBody(c, a.code ?? '', { dynamicVariables: mergeDynamicVariables({}, a.dynamicVariables) }), live)
+    case 'function': {
+      const extracted = autoExtractDynamicVariables(a.code ?? '', mergeDynamicVariables({}, a.dynamicVariables))
+      await putStep(ctx, t, slug, functionBody(c, extracted.code, { dynamicVariables: extracted.dynamicVariables }), live)
       return { result: { saved: true, status: 'ACTIVE', reference: `context.res.${slug}` }, warnings }
+    }
     case 'api': {
       const { code } = buildApiCode(apiSpec(a), {})
       await putStep(ctx, t, slug, apiBody(c, code, { dynamicVariables: mergeDynamicVariables({}, a.dynamicVariables) }), live)
@@ -1262,6 +1270,18 @@ const updateStep = defineTool<UpdateStepArgs>({
         const pd = pluginDataOf(block, await getFunctionRow(ctx, t, block.identifier))
         literal = pd ? choiceKeys(normalizeInputJson(pd.inputJson)) : undefined
       }
+      if (block.type === 'function') {
+        const fn = await getFunctionRow(ctx, t, c.stepId)
+        const codeToUpdate = a.code ?? fn?.code
+        if (codeToUpdate) {
+          const mergedVars = mergeDynamicVariables(fn?.metadata?.drafted?.dynamicVariables, a.dynamicVariables)
+          const extracted = autoExtractDynamicVariables(codeToUpdate, mergedVars)
+          if (a.code !== undefined || extracted.extractedCount > 0) {
+            a.code = extracted.code
+          }
+          a.dynamicVariables = extracted.dynamicVariables
+        }
+      }
       const documentedUsed = new Set(await guardMappings(js, getCat, mappingTexts(a, block.type, literal), allowDoc))
       let body: Record<string, unknown>
       let defaultsApplied: AppliedDefault[] | undefined
@@ -1397,9 +1417,11 @@ async function buildUpdateBody(
       const fn = await getFunctionRow(ctx, t, c.stepId)
       const code = a.code ?? fn?.code
       if (!code) throw new ToolError('code is required: this function step has never been saved.')
+      const mergedVars = mergeDynamicVariables(fn?.metadata?.drafted?.dynamicVariables, a.dynamicVariables)
+      const extracted = autoExtractDynamicVariables(code, mergedVars)
       return {
-        body: functionBody(c, code, {
-          dynamicVariables: mergeDynamicVariables(fn?.metadata?.drafted?.dynamicVariables, a.dynamicVariables),
+        body: functionBody(c, extracted.code, {
+          dynamicVariables: extracted.dynamicVariables,
           authId: fn?.auth_id,
           subfunctions: block.subfunctions,
         }),

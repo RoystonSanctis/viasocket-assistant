@@ -34,7 +34,7 @@ export interface MapText {
   contextOnly?: boolean
 }
 
-interface Chain {
+export interface Chain {
   /** Segments after the head; null = computed (cannot be checked) */
   segs: Array<Seg | null>
   raw: string
@@ -80,8 +80,8 @@ export function dynamicVariableTexts(vars: Record<string, unknown> | undefined, 
 
 // ---- Reading JavaScript ----------------------------------------------------------------------------------------
 
-/** Comments removed (strings and template literals kept), so commented-out paths are not checked. */
-function stripComments(src: string): string {
+/** Comments replaced with spaces of the exact same length (newlines kept), so character offsets align 1:1 with source. */
+export function stripComments(src: string): string {
   let out = ''
   let q: string | null = null
   for (let i = 0; i < src.length; i++) {
@@ -100,14 +100,21 @@ function stripComments(src: string): string {
       continue
     }
     if (c === '/' && src[i + 1] === '/') {
-      while (i < src.length && src[i] !== '\n') i++
-      out += '\n'
+      while (i < src.length && src[i] !== '\n') {
+        out += ' '
+        i++
+      }
+      if (i < src.length) out += src[i]
       continue
     }
     if (c === '/' && src[i + 1] === '*') {
       const end = src.indexOf('*/', i + 2)
-      i = end < 0 ? src.length : end + 1
-      out += ' '
+      const stop = end < 0 ? src.length : end + 2
+      while (i < stop) {
+        out += src[i] === '\n' ? '\n' : ' '
+        i++
+      }
+      i--
       continue
     }
     out += c
@@ -116,7 +123,7 @@ function stripComments(src: string): string {
 }
 
 /** 1 for every character inside a string literal (template-literal text included, its ${...} parts not). */
-function stringMask(src: string): Uint8Array {
+export function stringMask(src: string): Uint8Array {
   const mask = new Uint8Array(src.length)
   const exprDepths: number[] = []
   let depth = 0
@@ -182,7 +189,7 @@ function stringMask(src: string): Uint8Array {
 }
 
 /** Member chains after each match of `head` (context.res.Step?.["a b"][0].x), outside string literals. */
-function chainsFrom(src: string, head: RegExp, mask: Uint8Array): Chain[] {
+export function chainsFrom(src: string, head: RegExp, mask: Uint8Array): Chain[] {
   const out: Chain[] = []
   for (const m of src.matchAll(head)) {
     const start = m.index ?? 0
