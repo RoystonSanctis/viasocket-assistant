@@ -57,6 +57,8 @@ export type BackgroundToContent =
   | { type: 'clear-highlight' }
   /** replace: update the current history entry (opening/closing panels, refetch stamps) instead of adding one */
   | { type: 'navigate'; url: string; replace?: boolean }
+  /** Invalidate/refresh step configuration in the editor's Redux store so open or subsequent slider views reflect live draft changes */
+  | { type: 'refresh-step'; scriptId?: string; stepId?: string; slugName?: string }
   | { type: 'reload-page'; reason: string }
   | { type: 'confirm-request'; request: ConfirmRequest }
   /** The request timed out or its run ended: remove the card (a late click would be ignored anyway) */
@@ -151,6 +153,8 @@ export type ContentToPageMsg =
   | { type: 'init'; apiHosts: string[] }
   /** Router-friendly navigation (pushState/replaceState + popstate) inside the single-page app */
   | { type: 'navigate'; url: string; replace?: boolean }
+  /** Invalidate step data in Redux so that MasterSliderComponent refetches and renders fresh values */
+  | { type: 'refresh-step'; scriptId?: string; stepId?: string; slugName?: string }
   /** The content script was orphaned (extension updated or reloaded): the hook pairs with the next init instead */
   | { type: 'release' }
 

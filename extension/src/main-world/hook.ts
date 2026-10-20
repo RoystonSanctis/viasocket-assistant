@@ -118,6 +118,127 @@ function install(): void {
     }
   }
 
+  function findReduxStore(): { dispatch: (action: unknown) => unknown; getState: () => Record<string, unknown> } | null {
+    try {
+      const w = window as unknown as Record<string, unknown>
+      const checkCandidate = (s: unknown) => {
+        if (!isObj(s)) return null
+        if (typeof (s as { dispatch?: unknown }).dispatch === 'function' && typeof (s as { getState?: unknown }).getState === 'function') {
+          return s as { dispatch: (action: unknown) => unknown; getState: () => Record<string, unknown> }
+        }
+        return null
+      }
+
+      const direct = checkCandidate(w.store) || checkCandidate(w.__viasocketStore) || checkCandidate(w.__REDUX_STORE__)
+      if (direct) return direct
+
+      // 1. window.__viasocketRoot (set by viaSocket index.tsx)
+      const rootObj = w.__viasocketRoot as { _internalRoot?: { current?: unknown } } | undefined
+      if (isObj(rootObj?._internalRoot?.current)) {
+        const q: Array<{ fiber: unknown; depth: number }> = [{ fiber: rootObj._internalRoot.current, depth: 0 }]
+        while (q.length > 0) {
+          const item = q.shift()!
+          if (!isObj(item.fiber) || item.depth > 25) continue
+          const f = item.fiber as { memoizedProps?: Record<string, unknown>; pendingProps?: Record<string, unknown>; stateNode?: Record<string, unknown>; child?: unknown; sibling?: unknown }
+          const s = checkCandidate(f.memoizedProps?.store) || checkCandidate(f.pendingProps?.store) || checkCandidate(f.stateNode?.store)
+          if (s) return s
+          if (f.child) q.push({ fiber: f.child, depth: item.depth + 1 })
+          if (f.sibling) q.push({ fiber: f.sibling, depth: item.depth })
+        }
+      }
+
+      // 2. DOM #root container fiber
+      const rootEl = document.getElementById('root')
+      if (rootEl) {
+        const containerKey = Object.keys(rootEl).find((k) => k.startsWith('__reactContainer$') || k.startsWith('__reactFiber$'))
+        if (containerKey) {
+          const q: Array<{ fiber: unknown; depth: number }> = [{ fiber: (rootEl as unknown as Record<string, unknown>)[containerKey], depth: 0 }]
+          while (q.length > 0) {
+            const item = q.shift()!
+            if (!isObj(item.fiber) || item.depth > 25) continue
+            const f = item.fiber as { memoizedProps?: Record<string, unknown>; pendingProps?: Record<string, unknown>; stateNode?: Record<string, unknown>; child?: unknown; sibling?: unknown }
+            const s = checkCandidate(f.memoizedProps?.store) || checkCandidate(f.pendingProps?.store) || checkCandidate(f.stateNode?.store)
+            if (s) return s
+            if (f.child) q.push({ fiber: f.child, depth: item.depth + 1 })
+            if (f.sibling) q.push({ fiber: f.sibling, depth: item.depth })
+          }
+        }
+      }
+
+      // 3. Walk up from any DOM element inside #root
+      const sample = document.querySelector('#root div, #root nav, [class*="slider"], [class*="flow"]')
+      if (sample) {
+        const fiberKey = Object.keys(sample).find((k) => k.startsWith('__reactFiber$'))
+        if (fiberKey) {
+          let curr: unknown = (sample as unknown as Record<string, unknown>)[fiberKey]
+          let hops = 0
+          while (isObj(curr) && hops++ < 40) {
+            const f = curr as { memoizedProps?: Record<string, unknown>; stateNode?: Record<string, unknown>; return?: unknown }
+            const s = checkCandidate(f.memoizedProps?.store) || checkCandidate(f.stateNode?.store)
+            if (s) return s
+            curr = f.return
+          }
+        }
+      }
+    } catch {
+      // never disturb the host page
+    }
+    return null
+  }
+
+  function extractScriptId(pathname: string): string | undefined {
+    const m = pathname.match(/\/workflow\/([A-Za-z0-9]+)/)
+    return m ? m[1] : undefined
+  }
+
+  function invalidateStep(scriptId?: string, stepId?: string, slugName?: string): void {
+    try {
+      const store = findReduxStore()
+      if (!store) return
+
+      const state = store.getState()
+      const resolvedScriptId =
+        scriptId ||
+        extractScriptId(location.pathname) ||
+        (isObj(state.appInfo) && typeof state.appInfo.currentScriptId === 'string' ? state.appInfo.currentScriptId : undefined)
+
+      let targetStepId = stepId
+      if (!targetStepId && slugName && resolvedScriptId && isObj(state.flowJsonV2)) {
+        const flowReducer = (state.flowJsonV2 as Record<string, unknown>)[resolvedScriptId]
+        if (isObj(flowReducer) && isObj(flowReducer.flowJson) && isObj((flowReducer.flowJson as Record<string, unknown>).blocks)) {
+          const blocks = (flowReducer.flowJson as { blocks: Record<string, unknown> }).blocks
+          const block = blocks[slugName]
+          if (isObj(block) && typeof block.identifier === 'string') {
+            targetStepId = block.identifier
+          }
+        }
+      }
+
+      const urlParams = new URLSearchParams(location.search)
+      const urlStepId = urlParams.get('stepId')
+      const currentStepId = targetStepId || (urlStepId && !TRIGGER_SLUGS.has(urlStepId) ? urlStepId : undefined)
+
+      if (currentStepId) {
+        store.dispatch({
+          type: 'stepsDataV3/deleteStepFromStepData',
+          payload: { stepId: currentStepId },
+        })
+      }
+      if (urlStepId && urlStepId !== currentStepId && !TRIGGER_SLUGS.has(urlStepId)) {
+        store.dispatch({
+          type: 'stepsDataV3/deleteStepFromStepData',
+          payload: { stepId: urlStepId },
+        })
+      }
+      store.dispatch({
+        type: 'stepsDataV3/deleteScriptFromStepReducer',
+        payload: {},
+      })
+    } catch {
+      // never throw into the page
+    }
+  }
+
   function unwrap(data: unknown): InboundMsg | null {
     if (!isObj(data)) return null
     const inner = data[PAGE_KEY]
@@ -125,6 +246,15 @@ function install(): void {
     if (inner.type === 'init') return { type: 'init', apiHosts: Array.isArray(inner.apiHosts) ? inner.apiHosts : [], nonce: inner.nonce }
     if (inner.type === 'navigate' && typeof inner.url === 'string') {
       return { type: 'navigate', url: inner.url, replace: inner.replace === true, nonce: inner.nonce }
+    }
+    if (inner.type === 'refresh-step') {
+      return {
+        type: 'refresh-step',
+        scriptId: typeof inner.scriptId === 'string' ? inner.scriptId : undefined,
+        stepId: typeof inner.stepId === 'string' ? inner.stepId : undefined,
+        slugName: typeof inner.slugName === 'string' ? inner.slugName : undefined,
+        nonce: inner.nonce,
+      }
     }
     if (inner.type === 'release') return { type: 'release', nonce: inner.nonce }
     return null
@@ -149,6 +279,10 @@ function install(): void {
       if (msg.type === 'release') {
         // This hook outlives an extension update, and the re-injected content script brings a new nonce.
         nonce = null
+        return
+      }
+      if (msg.type === 'refresh-step') {
+        invalidateStep(msg.scriptId, msg.stepId, msg.slugName)
         return
       }
       requestNavigate(msg.url, msg.replace === true)
@@ -428,6 +562,13 @@ function install(): void {
     }
     if (target.origin !== location.origin) return
     const next = target.pathname + target.search + target.hash
+
+    const stepId = target.searchParams.get('stepId')
+    const slugName = target.searchParams.get('slugName')
+    if (target.searchParams.has('timestamp') || (stepId && !TRIGGER_SLUGS.has(stepId))) {
+      const scriptId = extractScriptId(target.pathname)
+      invalidateStep(scriptId, stepId ?? undefined, slugName ?? undefined)
+    }
 
     // Same shape react-router (v5Compat history) writes, so its pop handler computes a sane delta.
     const cur: unknown = history.state

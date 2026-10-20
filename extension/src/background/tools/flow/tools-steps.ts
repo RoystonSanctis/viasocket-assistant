@@ -964,7 +964,7 @@ const addStep = defineTool<AddStepArgs>({
           saved: false,
           error: messageOf(e),
           hint: `"${slug}" exists as an unsaved draft. Fix the problem and call vs_update_step with slugName "${slug}", or remove it with vs_delete_step.`,
-          ...panelResult(await openStepPanel(ctx, t, block, slug)),
+          ...(await new Promise((resolve) => setTimeout(resolve, 200)), panelResult(await openStepPanel(ctx, t, block, slug))),
           warnings: warnings.length ? warnings : undefined,
         }
       }
@@ -975,6 +975,9 @@ const addStep = defineTool<AddStepArgs>({
         result.panelOpened = false
         if (sync.reason) result.panelNote = sync.reason
       } else {
+        // Allow a brief moment for the RTlayer WebSocket event to reach and update the editor tab's Redux state
+        // so that the step block has status 'ACTIVE' before MasterSliderComponent mounts and fetches function data.
+        await new Promise((resolve) => setTimeout(resolve, 200))
         const branch = typeof result.branch === 'string' ? result.branch : undefined
         Object.assign(result, panelResult(branch && childId ? await openPanel(ctx, t.scriptId, childId, branch) : await openStepPanel(ctx, t, block, slug)))
       }
@@ -1015,10 +1018,9 @@ async function saveNewStep(
     hidden: block.hidden,
   }
   const warnings: string[] = []
-  // vs_add_step opens the saved step's panel (or refreshes the editor) with a ?timestamp bump after this returns,
-  // so while this tab shows the flow the saves skip live-apply: the bump's refetch then reloads everything,
-  // including the just-opened panel (see flow-api's editor-sync note). A break keeps live-apply (no panel follows).
-  const live = liveUnlessEditorOpen(ctx, t.scriptId)
+  // Always use live: true so the open editor receives RTlayer WebSocket updates and marks
+  // the step status as 'ACTIVE' in Redux, allowing MasterSliderComponent to load function data.
+  const live = true
   if (PLUGIN_LIKE.has(a.type)) {
     const meta = block.metaData
     if (!meta?.serviceId || !meta.actionVersionId) throw new ToolError('viaSocket did not attach the app definition to the step.')
@@ -1272,10 +1274,7 @@ const updateStep = defineTool<UpdateStepArgs>({
       for (const s of await guardMappings(js, getCat, bodyTexts(block.type, body, new Set(a.customInput ?? [])), allowDoc, true)) documentedUsed.add(s)
       const docNote = documentedNote([...documentedUsed])
       if (docNote) warnings.push(docNote)
-      // The editor keeps a cached copy of every step a panel has shown, which live-apply never touches, so a
-      // live-applied save can leave an open (or later reopened) panel stale. While this tab shows the flow, save
-      // plainly and let the reopen below bump ?timestamp: the refetch sees the version move and reloads the step.
-      await putStep(ctx, t, slug, body, liveUnlessEditorOpen(ctx, t.scriptId))
+      await putStep(ctx, t, slug, body, true)
       if (block.type === 'plugin' && block.identifier) clearPending(stepKey(ctx, t, block.identifier))
 
       let panel: { panelOpened: boolean; panelNote?: string }
@@ -1283,6 +1282,7 @@ const updateStep = defineTool<UpdateStepArgs>({
         const sync = await refreshEditorIfOpen(ctx, t.scriptId)
         panel = sync.reason ? { panelOpened: false, panelNote: sync.reason } : { panelOpened: false }
       } else {
+        await new Promise((resolve) => setTimeout(resolve, 200))
         panel = panelResult(block.type === 'response' ? await openPanel(ctx, t.scriptId, 'response', 'response') : await openStepPanel(ctx, t, block, title))
       }
       const reference = block.type === 'variable' ? `context.vals.${title}` : block.type === 'response' ? undefined : `context.res.${title}`
@@ -1369,9 +1369,8 @@ const setResponse = defineTool<SetResponseArgs>({
       }
       if (asRecord(js.trigger?.loops).loopsEnabled === true) warnings.push('Run once per item is on, so callers always get "Flow Queued"; this response is not sent until the loop is turned off.')
       const customHeaders = a.responseType === 'custom' ? (headers ? { data: headers, _data: headers } : block.customHeaders) : undefined
-      // Plain save while this tab shows the flow: the reopen below bumps ?timestamp, so an open response panel
-      // reloads the saved state instead of keeping its live-apply-proof cached copy.
-      await putStep(ctx, t, 'response', responseBody(a.responseType, body, customHeaders), liveUnlessEditorOpen(ctx, t.scriptId))
+      await putStep(ctx, t, 'response', responseBody(a.responseType, body, customHeaders), true)
+      await new Promise((resolve) => setTimeout(resolve, 200))
       return {
         saved: true,
         responseType: a.responseType,
@@ -1466,7 +1465,7 @@ async function buildUpdateBody(
           const next: PluginData = { ...pd, inputJson: cfg.inputJson }
           const dynamicInputRequired = withDynamicInput(pd.dynamicInputRequired, cfg.dynamicInput)
           if (dynamicInputRequired) next.dynamicInputRequired = dynamicInputRequired
-          await putStep(ctx, t, slug, pluginBody(c, next, authData ?? {}, cfg.cleaned), liveUnlessEditorOpen(ctx, t.scriptId))
+          await putStep(ctx, t, slug, pluginBody(c, next, authData ?? {}, cfg.cleaned), true)
         } catch (err) {
           console.warn('[assistant] failed to save partial draft in updateStep:', err)
         }
@@ -1537,11 +1536,8 @@ export async function saveStepSample(ctx: ToolContext, t: FlowTarget, stepId: st
       if (!pd || !authData?.id) return false
       const c: SaveCommon = { stepId, title: slug, description: block.description, sampleData: compacted, iconUrl: block.iconUrl, hidden: block.hidden }
       const body = pluginBody(c, pd, authData, asRecord(pd.selectedValues?.inputData))
-      // Plain save plus a refetch while this tab shows the flow, so the sample also reaches the editor's cached
-      // copy of the step (live-apply would skip it there); best-effort either way.
-      const live = liveUnlessEditorOpen(ctx, t.scriptId)
+      const live = true
       await putStep(ctx, t, slug, body, live)
-      if (!live) await refreshEditorIfOpen(ctx, t.scriptId)
       return true
     })
   } catch (e) {

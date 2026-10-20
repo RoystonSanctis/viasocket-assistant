@@ -449,12 +449,12 @@ export function editorOpen(ctx: ToolContext, scriptId: string): boolean {
 }
 
 /**
- * The live flag for a flow mutation that an editor sync (openPanel / refreshEditorIfOpen) follows: live-apply only
- * when this tab does not show the flow. A live-applied save syncs the editor's draft version first, and the
- * following ?timestamp refetch then skips exactly the cache purge an open panel needs (see the section note).
+ * All flow mutations must send live-apply (sent-by-fbai: true) so the open editor receives RTlayer
+ * updates over WebSocket. This keeps Redux flowJson and draftFlowJson synchronized with ACTIVE step
+ * statuses and the latest versiondraft, preventing step sliders from rendering empty or black.
  */
-export function liveUnlessEditorOpen(ctx: ToolContext, scriptId: string): boolean {
-  return !editorOpen(ctx, scriptId)
+export function liveUnlessEditorOpen(_ctx: ToolContext, _scriptId: string): boolean {
+  return true
 }
 
 /** Result fields for a tool that opened or refreshed a panel: panelOpened, plus the note to relay on failure. */
@@ -476,6 +476,7 @@ async function syncEditor(ctx: ToolContext, scriptId: string, changes: Record<st
   if (!page) return { delivered: false, skipped: true }
   const stamp = nextStamp()
   try {
+    ctx.ui.refreshStep({ scriptId, stepId: changes.stepId ?? undefined, slugName: changes.slugName ?? undefined })
     ctx.ui.navigate(pagePathWithParams(page.url, { ...changes, timestamp: stamp }), { replace: true })
   } catch {
     return { delivered: false, reason: REFRESH_REASON }

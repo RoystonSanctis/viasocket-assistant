@@ -55,14 +55,14 @@ function fail(problems: string[]): never {
 
 async function postPreprocess(ctx: ToolContext, t: FlowTarget, body: Record<string, unknown>, what: string): Promise<FlowRow | null> {
   const res = await call(what, () =>
-    ctx.vs.request({ method: 'POST', path: `/scripts/${t.projectId}/${t.scriptId}/trigger/preprocess`, body, live: liveUnlessEditorOpen(ctx, t.scriptId), signal: ctx.signal }),
+    ctx.vs.request({ method: 'POST', path: `/scripts/${t.projectId}/${t.scriptId}/trigger/preprocess`, body, live: true, signal: ctx.signal }),
   )
   return normalizeFlow(asRecord(res).data)
 }
 
 async function deletePreprocess(ctx: ToolContext, t: FlowTarget, body: Record<string, true>, what: string): Promise<void> {
   await call(what, () =>
-    ctx.vs.request({ method: 'DELETE', path: `/scripts/${t.scriptId}/trigger/preprocess/delete`, body, live: liveUnlessEditorOpen(ctx, t.scriptId), signal: ctx.signal }),
+    ctx.vs.request({ method: 'DELETE', path: `/scripts/${t.scriptId}/trigger/preprocess/delete`, body, live: true, signal: ctx.signal }),
   )
 }
 

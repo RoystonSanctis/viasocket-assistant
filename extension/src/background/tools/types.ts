@@ -21,6 +21,8 @@ export interface UiBridge {
   clearHighlight(): void
   /** App-internal path or same-host URL. replace: change the current history entry (panels, refetch stamps). */
   navigate(url: string, opts?: { replace?: boolean }): void
+  /** Invalidate step data in the editor's Redux store so that open or subsequent slider views render fresh draft state */
+  refreshStep(step: { scriptId: string; stepId?: string; slugName?: string }): void
   reloadPage(reason: string): void
   /** Resolves true only if the user clicks the confirm button */
   confirm(title: string, detail: string, danger: boolean, confirmLabel?: string): Promise<boolean>

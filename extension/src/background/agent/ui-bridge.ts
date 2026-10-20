@@ -35,6 +35,9 @@ export function createUiBridge(session: Session): UiBridge {
       expectNavigation(session, safe)
       session.send({ type: 'navigate', url: safe, replace: opts?.replace === true })
     },
+    refreshStep(step) {
+      session.send({ type: 'refresh-step', ...step })
+    },
     reloadPage(reason) {
       if (session.busy) session.pendingReload = reason
       else session.send({ type: 'reload-page', reason })

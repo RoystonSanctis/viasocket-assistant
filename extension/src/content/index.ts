@@ -417,6 +417,9 @@ async function main(): Promise<void> {
           mascot.addChat(systemNote(`I couldn't open that page from here.${hint}`))
         }
         break
+      case 'refresh-step':
+        bridge.refreshStep(msg.scriptId, msg.stepId, msg.slugName)
+        break
       case 'reload-page':
         location.reload()
         break

@@ -36,8 +36,8 @@ function common(c: SaveCommon): Record<string, unknown> {
 }
 
 /**
- * live:false skips the editor's live-apply. Use it when the step's panel is open: live-apply leaves the panel's
- * cached copy stale, while a plain save followed by a ?timestamp refetch (refreshEditorIfOpen) reloads it.
+ * live: true (default) sends sent-by-fbai: true so the open editor receives RTlayer
+ * WebSocket updates and keeps Redux flowJson and draftFlowJson synchronized.
  */
 export async function putStep(
   ctx: ToolContext,
@@ -49,6 +49,12 @@ export async function putStep(
   const res = await call(`Saving step "${slug}"`, () =>
     ctx.vs.request({ method: 'PUT', path: `/scripts/${t.scriptId}/stepv2/${encodeURIComponent(slug)}`, body, live, signal: ctx.signal }),
   )
+  const stepId = typeof body.id === 'string' ? body.id : typeof body.stepId === 'string' ? body.stepId : undefined
+  try {
+    ctx.ui.refreshStep({ scriptId: t.scriptId, stepId, slugName: slug })
+  } catch {
+    // non-fatal
+  }
   return isRecord(res) ? res : {}
 }
 
@@ -200,6 +206,7 @@ export function pluginBody(c: SaveCommon, base: PluginData, authData: AuthData, 
   const inputJson = isRecord(base.inputJson) ? base.inputJson : { steps: { root: [] }, blocks: {} }
   const code: PluginData = {
     ...base,
+    title: c.title,
     inputJson,
     actionVersionId,
     selectedValues: { ...(isRecord(base.selectedValues) ? base.selectedValues : {}), authData, inputData },

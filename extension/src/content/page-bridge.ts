@@ -27,6 +27,8 @@ export interface PageBridgeOptions {
 export interface PageBridge {
   /** Router-friendly in-app navigation. Returns false when the URL is not a same-origin app path or the hook is missing. */
   navigate(url: string, replace?: boolean): boolean
+  /** Invalidate step data in Redux so that MasterSliderComponent refetches and renders fresh values */
+  refreshStep(scriptId?: string, stepId?: string, slugName?: string): void
   /** The MAIN-world hook answered (it is missing in tabs that were open before an extension update) */
   readonly ready: boolean
   destroy(): void
@@ -147,6 +149,9 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
       if (path === null || !hookReady) return false
       post({ type: 'navigate', url: path, replace })
       return true
+    },
+    refreshStep(scriptId, stepId, slugName) {
+      post({ type: 'refresh-step', scriptId, stepId, slugName })
     },
     get ready() {
       return hookReady

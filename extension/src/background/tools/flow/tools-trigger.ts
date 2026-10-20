@@ -194,9 +194,9 @@ function testReport(ctx: ToolContext, test: TriggerTest, trigger: Trigger): Reco
   return { success: true, sampleFound: true, sample: trimData(src.data, strip), variables: variablesOf(src, strip, 60), appHint }
 }
 
-/** POST /trigger, without live-apply while this tab shows the flow (see the header). Returns the saved flow. */
+/** POST /trigger with live-apply so open editor receives RTlayer updates. Returns the saved flow. */
 async function postTrigger(ctx: ToolContext, t: FlowTarget, body: Record<string, unknown>, what: string): Promise<FlowRow | null> {
-  const live = liveUnlessEditorOpen(ctx, t.scriptId)
+  const live = true
   const res = await call(what, () => ctx.vs.request({ method: 'POST', path: `/scripts/${t.projectId}/${t.scriptId}/trigger`, body, live, signal: ctx.signal }))
   return normalizeFlow(asRecord(res).data)
 }
@@ -361,7 +361,7 @@ async function setAppTrigger(a: SetTriggerArgs, ctx: ToolContext, t: FlowTarget)
           method: 'POST',
           path: `/scripts/${t.projectId}/${t.scriptId}/drafttrigger/${a.actionId}`,
           body: {},
-          live: liveUnlessEditorOpen(ctx, t.scriptId),
+          live: true,
           signal: ctx.signal,
         }),
       )
@@ -433,7 +433,7 @@ async function setAppTrigger(a: SetTriggerArgs, ctx: ToolContext, t: FlowTarget)
             method: 'POST',
             path: `/scripts/${t.projectId}/${t.scriptId}/trigger`,
             body,
-            live: liveUnlessEditorOpen(ctx, t.scriptId),
+            live: true,
             signal: ctx.signal,
           })
         } catch (err) {

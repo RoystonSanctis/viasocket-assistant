@@ -214,9 +214,10 @@ export async function connectApp(ctx: ToolContext, a: ConnectArgs, flow?: FlowTa
                     method: 'POST',
                     path: `/scripts/${targetFlow.projectId}/${targetFlow.scriptId}/trigger`,
                     body,
-                    live: false,
+                    live: true,
                     signal: ctx.signal,
                   })
+                  await new Promise((resolve) => setTimeout(resolve, 200))
                   const sync = await openTriggerPanel(ctx, targetFlow.scriptId, triggerKind(tr))
                   autoUpdatedStep = 'trigger'
                   panelOpened = sync.delivered
@@ -268,7 +269,8 @@ export async function connectApp(ctx: ToolContext, a: ConnectArgs, flow?: FlowTa
                   }
                   const inputData = asRecord(pd.selectedValues?.inputData)
                   const body = pluginBody(c, pd, authData, inputData)
-                  await putStep(ctx, targetFlow, targetSlug, body, false)
+                  await putStep(ctx, targetFlow, targetSlug, body, true)
+                  await new Promise((resolve) => setTimeout(resolve, 200))
                   const sync = await openPanel(ctx, targetFlow.scriptId, stepId, targetSlug)
                   autoUpdatedStep = targetSlug
                   panelOpened = sync.delivered
