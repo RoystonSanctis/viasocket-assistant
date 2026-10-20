@@ -432,5 +432,91 @@ export async function handleStepClipboardRequest(
         return { ok: false, error: e?.message || 'Failed to paste' }
       }
     }
+
+    case 'step:delete': {
+      try {
+        const client = await getClientForSender(sender, {
+          scriptId: req.scriptId,
+          projectId: req.projectId,
+          orgId: req.orgId,
+          host: req.host,
+        })
+        if (!client) return { ok: false, error: 'Could not connect to viaSocket for this page' }
+
+        const scriptId = req.scriptId || client.page.scriptId
+        const projectId = req.projectId || client.page.projectId
+        if (!scriptId || !projectId) {
+          return { ok: false, error: 'No flow is open in this tab' }
+        }
+        if (!SCRIPT_ID_RE.test(scriptId) || !PROJECT_ID_RE.test(projectId)) {
+          return { ok: false, error: 'This page does not look like a viaSocket flow' }
+        }
+
+        const data = await client.mutate(scriptId, async () => {
+          if (client.orgId) await client.alignOrg(undefined, { force: true })
+
+          const flowRes = await client.request<{ success: boolean; data: any }>({
+            method: 'GET',
+            path: `/projects/${projectId}/scripts/${scriptId}`,
+            query: { type: 'flow' },
+          })
+          const row = flowRes?.data || flowRes
+          const jsonScript = row?.json_script
+          if (!jsonScript || !jsonScript.blocks) {
+            throw new Error('Failed to read flow layout')
+          }
+
+          const block = jsonScript.blocks[req.slugName]
+          if (!block) {
+            throw new Error(`Step "${req.slugName}" was not found in this flow`)
+          }
+          if (req.slugName === 'response') {
+            throw new Error('The webhook response cannot be deleted')
+          }
+          if (block.type === 'ifGroup') {
+            throw new Error('A condition cannot be deleted directly; delete its branches')
+          }
+          if (block.isElseBlock) {
+            throw new Error('The else-branch is managed by viaSocket and cannot be deleted')
+          }
+          if (block.status === 'DELETE') {
+            return { slugName: req.slugName, title: String(block.title || req.slugName), note: 'It was already deleted' }
+          }
+
+          const softDeleteTypes = new Set(['api', 'function', 'plugin', 'variable', 'ifBlock'])
+          const needsTitle = block.status !== 'DRAFTED' && softDeleteTypes.has(String(block.type))
+          let body: { title: string } | undefined = undefined
+          if (needsTitle) {
+            const base = `${req.slugName}_DELETED`
+            let title = base
+            if (jsonScript.blocks[title]) {
+              for (let i = 1; i < 1000; i++) {
+                if (!jsonScript.blocks[`${base}_${i}`]) {
+                  title = `${base}_${i}`
+                  break
+                }
+              }
+            }
+            body = { title }
+          }
+
+          await client.request({
+            method: 'DELETE',
+            path: `/scripts/${scriptId}/stepv2/${encodeURIComponent(req.slugName)}`,
+            body,
+            live: true,
+          })
+
+          return {
+            slugName: req.slugName,
+            title: String(block.title || req.slugName),
+          }
+        })
+
+        return { ok: true, data }
+      } catch (e: any) {
+        return { ok: false, error: e?.message || 'Failed to delete' }
+      }
+    }
   }
 }

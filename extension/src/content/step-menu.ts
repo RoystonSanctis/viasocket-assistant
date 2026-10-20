@@ -1,7 +1,8 @@
-// Injects "Copy" and "Paste" into viaSocket's step three-dot menus: the canvas step-card menu and the step
-// slider header menu, on flow-editor pages only. Menus are recognised by their anchors (the expanded trigger
-// button and the containers it sits in), never by menu-item text, so the flow-level menu, dashboard menus and
-// Developer Hub menus — which share ids and item labels with the step menus — are left untouched.
+// Injects "Copy", "Paste", and "Delete" (in English / AI flows where native Delete is omitted) into viaSocket's
+// step three-dot menus: the canvas step-card menu and the step slider header menu, on flow-editor pages only.
+// Menus are recognised by their anchors (the expanded trigger button and the containers it sits in), never by
+// menu-item text, so the flow-level menu, dashboard menus and Developer Hub menus — which share ids and item
+// labels with the step menus — are left untouched.
 //
 // The copied step lives in chrome.storage.local only. It can contain unmasked header values and code, so it
 // must never be mirrored into page-readable storage (and chrome.storage already crosses tabs and accounts).
@@ -17,6 +18,7 @@ import { showToast } from './toast'
 
 const COPY_SVG = `<svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall css-vh810p" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="margin-right: 8px; width: 18px; height: 18px; flex-shrink: 0;"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2m0 16H8V7h11z"></path></svg>`
 const PASTE_SVG = `<svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall css-vh810p" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="margin-right: 8px; width: 18px; height: 18px; flex-shrink: 0;"><path fill="currentColor" d="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z"></path></svg>`
+const DELETE_SVG = `<svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall css-vh810p" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="margin-right: 8px; width: 18px; height: 18px; flex-shrink: 0;"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6zM19 4h-3.5l-1-1h-5l-1 1H5v2h14z"></path></svg>`
 
 /** Real steps have 12-alphanumeric ids; the editor's pseudo-panels (trigger setup, cron pre-process, add step, ...) do not. */
 const STEP_ID_RE = /^[A-Za-z0-9]{12}$/
@@ -152,7 +154,7 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
    * The open step menu and the slug of the step it belongs to, or null for any other open menu. The menu is
    * portaled to <body>, so step identity comes from its anchor: the trigger button expanded while it is open.
    */
-  function findOpenStepMenu(): { popover: HTMLElement; menu: Element; slug: string } | null {
+  function findOpenStepMenu(): { popover: HTMLElement; menu: Element; slug: string; isSlider: boolean } | null {
     // Closed MUI menus unmount, so this id lookup is the cheap bail-out the mutation observer relies on.
     const popover = document.getElementById('long-menu')
     if (!popover) return null
@@ -169,14 +171,14 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
     const card = trigger.closest(`[id$="${CARD_ID_SUFFIX}"]`)
     if (card) {
       const slug = card.id.slice(0, -CARD_ID_SUFFIX.length)
-      return slug ? { popover, menu, slug } : null
+      return slug ? { popover, menu, slug, isSlider: false } : null
     }
 
     // Step slider header: the open step is named by the same URL params the editor reads. Pseudo-panels
     // (trigger setup, cron pre-process, ...) use non-step ids and are not copyable.
     if (trigger.closest('#step-name-component')) {
       if (page.slugName && page.stepId && STEP_ID_RE.test(page.stepId)) {
-        return { popover, menu, slug: page.slugName }
+        return { popover, menu, slug: page.slugName, isSlider: true }
       }
     }
 
@@ -187,14 +189,22 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
   function scan(): void {
     const found = findOpenStepMenu()
     if (!found) return
-    const { popover, menu, slug } = found
+    const { popover, menu, slug, isSlider } = found
 
     const existingCopy = menu.querySelector('[data-assistant-action="copy"]')
     const existingPaste = menu.querySelector('[data-assistant-action="paste"]')
+    const existingDelete = menu.querySelector('[data-assistant-action="delete"]')
+
+    const hasNativeDelete = Array.from(menu.querySelectorAll('li[role="menuitem"]')).some(
+      (li) => !li.hasAttribute('data-assistant-action') && /delete/i.test(li.textContent || ''),
+    )
+    const wantDelete = !hasNativeDelete && slug !== 'response'
     const wantPaste = lastCopied !== null
-    if (existingCopy && !!existingPaste === wantPaste) return
+
+    if (existingCopy && !!existingPaste === wantPaste && !!existingDelete === wantDelete) return
     existingCopy?.remove()
     existingPaste?.remove()
+    existingDelete?.remove()
 
     const template = menu.querySelector('li[role="menuitem"]')
     if (!template) return
@@ -221,6 +231,20 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
           onActivate: () => {
             closeMenuPopover(popover)
             void pasteStep(slug)
+          },
+        }),
+      )
+    }
+    if (wantDelete) {
+      menu.appendChild(
+        buildMenuItem(template, {
+          action: 'delete',
+          testid: 'assistant-delete',
+          label: 'Delete',
+          iconSvg: DELETE_SVG,
+          onActivate: () => {
+            closeMenuPopover(popover)
+            void deleteStep(slug, isSlider)
           },
         }),
       )
@@ -317,6 +341,75 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
     } catch (e) {
       progress.dismiss()
       showToast({ title: 'Paste error', message: errorText(e), type: 'error' })
+    }
+  }
+
+  function bumpEditorAfterDelete(scriptId: string | undefined, deletedSlug: string, isSlider: boolean): boolean {
+    if (!opts.navigate) return false
+    const now = parsePage(window.location.href)
+    if (now.kind !== 'flow-editor' || !scriptId || now.scriptId !== scriptId) return true
+    try {
+      const u = new URL(window.location.href)
+      if (isSlider || now.slugName === deletedSlug || u.searchParams.get('slugName') === deletedSlug) {
+        u.searchParams.delete('slugName')
+        u.searchParams.delete('stepId')
+      }
+      const prev = Number(u.searchParams.get('timestamp'))
+      const stamp = Number.isFinite(prev) && prev >= Date.now() ? prev + 1 : Date.now()
+      u.searchParams.set('timestamp', String(stamp))
+      const ok = opts.navigate(u.pathname + u.search + u.hash, true)
+      if (isSlider && document.querySelector('#step-name-component')) {
+        const closeBtn = document.querySelector('[data-testid="slider-close-button"]') as HTMLElement | null
+        closeBtn?.click()
+      }
+      return ok
+    } catch {
+      return false
+    }
+  }
+
+  async function deleteStep(slug: string, isSlider: boolean): Promise<void> {
+    const page = parsePage(window.location.href)
+    const progress = showToast({
+      title: 'Deleting…',
+      message: `Deleting "${slug}"`,
+      type: 'info',
+      durationMs: 0,
+    })
+    const msg: StepClipboardRequest = {
+      target: 'background',
+      type: 'step:delete',
+      slugName: slug,
+      scriptId: page.scriptId,
+      projectId: page.projectId,
+      orgId: page.orgId,
+      host: window.location.host,
+    }
+    try {
+      const res = (await chrome.runtime.sendMessage(msg)) as StepClipboardResponse<{
+        slugName?: string
+        title?: string
+      }>
+      progress.dismiss()
+      if (res && res.ok) {
+        const title = res.data?.title || slug
+        bumpEditorAfterDelete(page.scriptId, slug, isSlider)
+        showToast({
+          title: 'Deleted',
+          message: `"${title}" has been deleted`,
+          type: 'success',
+          durationMs: 3500,
+        })
+      } else {
+        showToast({
+          title: 'Delete failed',
+          message: (res && !res.ok && res.error) || 'No response from the extension',
+          type: 'error',
+        })
+      }
+    } catch (e) {
+      progress.dismiss()
+      showToast({ title: 'Delete error', message: errorText(e), type: 'error' })
     }
   }
 

@@ -76,6 +76,15 @@ export type StepClipboardRequest =
       target: 'background'
       type: 'step:get-copied'
     }
+  | {
+      target: 'background'
+      type: 'step:delete'
+      slugName: string
+      scriptId?: string
+      projectId?: string
+      orgId?: string
+      host?: string
+    }
 
 export type StepClipboardResponse<T = unknown> =
   | { ok: true; data: T }
