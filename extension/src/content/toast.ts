@@ -39,7 +39,7 @@ function container(): HTMLElement {
 export function showToast({ title, message, type = 'info', durationMs = 3800 }: ToastOptions): ToastHandle {
   const toast = document.createElement('div')
   toast.style.cssText =
-    'pointer-events: auto; background: #1a1c1e; color: #f0f2f5; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px; padding: 11px 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); display: flex; align-items: flex-start; gap: 12px; font-size: 13px; line-height: 1.4; max-width: 380px; opacity: 0; transform: translateY(10px); transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); cursor: pointer;'
+    'pointer-events: auto; background: var(--vs-bg-secondary, #1a1c1e); color: var(--vs-text-secondary, #f0f2f5); border: 1px solid var(--vs-border, rgba(255,255,255,0.14)); border-radius: 10px; padding: 11px 16px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25); display: flex; align-items: flex-start; gap: 12px; font-size: 13px; line-height: 1.4; max-width: 380px; opacity: 0; transform: translateY(10px); transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); cursor: pointer;'
 
   const icon = document.createElement('span')
   icon.style.cssText = 'display: inline-flex; flex-shrink: 0;'
@@ -48,12 +48,12 @@ export function showToast({ title, message, type = 'info', durationMs = 3800 }: 
   const body = document.createElement('div')
   body.style.flex = '1'
   const titleEl = document.createElement('div')
-  titleEl.style.cssText = `font-weight: 600; color: #ffffff; margin-bottom: ${message ? '2px' : '0'};`
+  titleEl.style.cssText = `font-weight: 600; color: var(--vs-text-primary, #ffffff); margin-bottom: ${message ? '2px' : '0'};`
   titleEl.textContent = title
   body.appendChild(titleEl)
   if (message) {
     const messageEl = document.createElement('div')
-    messageEl.style.cssText = 'font-size: 12px; color: #a9adb3;'
+    messageEl.style.cssText = 'font-size: 12px; color: var(--vs-text-muted, #a9adb3);'
     messageEl.textContent = message
     body.appendChild(messageEl)
   }

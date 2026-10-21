@@ -18,6 +18,8 @@ import { watchPage } from './page-watch'
 import { watchDomStatus } from './dom-status'
 import { connectPort } from './port'
 import { initStepMenu } from './step-menu'
+import { initSubfunctionsUI } from './subfunctions-ui'
+import { initBeautify } from './beautify-ui'
 import { destroyToasts } from './toast'
 import { createWakeWordListener, type WakeWordListener } from './wake-word'
 
@@ -632,6 +634,8 @@ async function main(): Promise<void> {
   // (react-router only sees navigations made there).
   const stepMenu = initStepMenu({ navigate: (url, replace) => bridge.navigate(url, replace) })
   const flowMenu = initFlowMenu()
+  const subfunctionsUI = initSubfunctionsUI(bridge)
+  const beautify = initBeautify(bridge)
 
   // The extension was reloaded, updated or removed: this copy of the script is orphaned, so tidy up for good.
   // Each teardown runs even when another throws (an orphan's chrome.* calls throw "Extension context
@@ -654,6 +658,8 @@ async function main(): Promise<void> {
     })
     safe(() => stepMenu.destroy())
     safe(() => flowMenu.destroy())
+    safe(() => subfunctionsUI.destroy())
+    safe(() => beautify.destroy())
     safe(() => destroyToasts())
     safe(() => {
       continuousVoice = false

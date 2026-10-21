@@ -2,7 +2,7 @@
 
 import type { PageContext } from '../../../shared/page'
 import { SCRIPT_ID_RE, STEP_ID_RE } from '../ids'
-import type { ToolContext, UiBridge } from '../types'
+import type { ToolContext, UiBridge, VsContext } from '../types'
 import { VsError } from '../viasocket-client'
 import { call, ToolError } from './errors'
 import { isKnownProject, knownFlowProject, rememberProject } from './known'
@@ -10,7 +10,7 @@ import type { Block, FlowRow, FlowTarget, FunctionRow, JsonScript, PluginData, T
 import { pagePathWithParams } from './urls'
 import { asArray, asRecord, isRecord, ORG_ID_RE, parseMaybeJson, PROJECT_ID_RE, str, truncate } from './util'
 
-export function requireOrg(ctx: ToolContext): string {
+export function requireOrg(ctx: Pick<VsContext, 'vs'>): string {
   const org = ctx.vs.orgId
   if (!org || !ORG_ID_RE.test(org)) throw new ToolError('Open a viaSocket workspace page first.')
   return org
@@ -87,7 +87,7 @@ export function normalizeFlow(v: unknown): FlowRow | null {
 }
 
 /** GET the flow. Also how existence is verified before routes that would silently create an unknown flow. */
-export async function getFlow(ctx: ToolContext, t: FlowTarget): Promise<FlowRow> {
+export async function getFlow(ctx: VsContext, t: FlowTarget): Promise<FlowRow> {
   let body: unknown
   try {
     body = await call('Reading the flow', () =>
@@ -105,7 +105,7 @@ export async function getFlow(ctx: ToolContext, t: FlowTarget): Promise<FlowRow>
   return row
 }
 
-export async function getFunctionRow(ctx: ToolContext, t: FlowTarget, stepId: string): Promise<FunctionRow | null> {
+export async function getFunctionRow(ctx: VsContext, t: FlowTarget, stepId: string): Promise<FunctionRow | null> {
   if (!STEP_ID_RE.test(stepId)) return null
   try {
     const body = await call('Reading the step code', () =>

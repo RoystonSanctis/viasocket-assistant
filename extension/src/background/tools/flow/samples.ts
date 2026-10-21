@@ -203,6 +203,11 @@ export function meaningful(v: unknown): boolean {
   return typeof c === 'string' ? c.trim().length > 0 : true
 }
 
+/** A webhook request carries its data in the body or, for a GET, only in the query string. */
+export function requestHasData(body: unknown, query: unknown): boolean {
+  return meaningful(body) || meaningful(query)
+}
+
 /** The viasocket_help text of a sample (top level, or of its first item). */
 export function helpText(v: unknown): string | undefined {
   const p = parseMaybeJson(v)
@@ -419,6 +424,12 @@ export function variablesOf(src: SampleSource, strip: boolean, max = 60): VarEnt
     })
 }
 
+/** Insert texts for a webhook sample's query string (context.req.query.*), which variablesOf leaves out. */
+export function queryVariablesOf(src: SampleSource, strip: boolean, max = 30): VarEntry[] {
+  if (!isRecord(src.query) || !meaningful(src.query)) return []
+  return variablesOf({ ...src, base: 'context.req.query', data: cleanSample(src.query) }, strip, max)
+}
+
 // ---- Flow order and positions --------------------------------------------------------------------------------
 
 /** Every block key in run order (pre-order through branches), like the editor's stepOrder. */
@@ -620,13 +631,15 @@ export function triggerStages(ctx: ToolContext, t: FlowTarget, row: FlowRow, run
   let raw: SampleSource = { ...src, note: noTriggerDataNote(kind) }
   if (kind === 'webhook') {
     const h = held.get(`${flowKey(ctx, t)}|trigger`)
-    if (h && h.identity === triggerIdentity(trigger) && meaningful(h.data)) {
-      raw = { ...src, origin: 'tested', data: cleanSample(parseMaybeJson(h.data)), query: h.query, headers: h.headers, note: 'Request received (tested in this session).' }
-    } else if (run && meaningful(run.body) && runMatchesTrigger(row)) {
+    // A request with only query parameters (a GET) is real data too: steps read it as context.req.query.
+    const queryOnly = (body: unknown) => (meaningful(body) ? '' : ' Its body is empty: the data is in the query string (context.req.query).')
+    if (h && h.identity === triggerIdentity(trigger) && requestHasData(h.data, h.query)) {
+      raw = { ...src, origin: 'tested', data: cleanSample(parseMaybeJson(h.data)), query: h.query, headers: h.headers, note: `Request received (tested in this session).${queryOnly(h.data)}` }
+    } else if (run && requestHasData(run.body, run.query) && runMatchesTrigger(row)) {
       raw = runBodyIsRaw(run)
-        ? { ...src, origin: 'run', data: cleanSample(run.body), query: run.query, headers: run.headers, note: `Request of the latest run${run.at ? ` (${run.at})` : ''}.` }
+        ? { ...src, origin: 'run', data: cleanSample(run.body), query: run.query, headers: run.headers, note: `Request of the latest run${run.at ? ` (${run.at})` : ''}.${queryOnly(run.body)}` }
         : { ...src, query: run.query, headers: run.headers, note: 'The latest run already went through Get Data or a loop, so the original request body is unknown. Ask the user to send one real request, then run vs_test_trigger.' }
-    } else if (run && meaningful(run.body)) {
+    } else if (run && requestHasData(run.body, run.query)) {
       raw = { ...raw, note: `${raw.note ?? ''} The latest run came from the live trigger, which is not this draft trigger, so its data is not used.`.trim() }
     }
   }
@@ -663,7 +676,15 @@ export function triggerStages(ctx: ToolContext, t: FlowTarget, row: FlowRow, run
   }
   return {
     ...base,
-    final: { ...src, origin: processed.origin, data: body, compacted: processed.compacted, query: kind === 'webhook' ? raw.query : undefined, headers: kind === 'webhook' ? headers : undefined, note: `context.req.body = ${parts.join(', ')}.` },
+    final: {
+      ...src,
+      origin: processed.origin,
+      data: body,
+      compacted: processed.compacted,
+      query: kind === 'webhook' ? raw.query : undefined,
+      headers: kind === 'webhook' ? headers : undefined,
+      note: `context.req.body = ${parts.join(', ')}.${!meaningful(body) && kind === 'webhook' && meaningful(raw.query) ? ' It is empty: the request sent its data as query parameters (context.req.query).' : ''}`,
+    },
   }
 }
 

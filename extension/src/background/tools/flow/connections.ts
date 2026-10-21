@@ -1,7 +1,7 @@
 // App connections (auth tokens) of the open workspace, and creating one through viaSocket's own auth popup.
 // The user types credentials or finishes OAuth on viaSocket's page; the extension never sees them.
 
-import type { ToolContext } from '../types'
+import type { ToolContext, VsContext } from '../types'
 import { call, ToolError } from './errors'
 import {
   editorOpen,
@@ -40,7 +40,7 @@ export function isExpired(c: ConnectionRow): boolean {
 }
 
 export async function listConnections(
-  ctx: ToolContext,
+  ctx: VsContext,
   serviceId: string,
   authIdLookup: string,
   flow?: FlowTarget,
@@ -79,7 +79,7 @@ export function summarizeConnection(c: ConnectionRow): Record<string, unknown> {
  * token loader from it, and a mismatch only fails at run time.
  */
 export async function resolveConnection(
-  ctx: ToolContext,
+  ctx: VsContext,
   connectionId: string,
   serviceId: string,
   authIdLookup: string,
@@ -97,7 +97,7 @@ export async function resolveConnection(
 }
 
 /** Only the numeric user id is read; the rest of this response is sensitive and is dropped immediately. */
-async function currentUserId(ctx: ToolContext): Promise<string | undefined> {
+async function currentUserId(ctx: VsContext): Promise<string | undefined> {
   try {
     const body = await ctx.vs.request({ method: 'GET', path: '/orgs/user-org/details', signal: ctx.signal })
     const id = str(asRecord(asArray(asRecord(asRecord(body).data).data)[0]).id)
@@ -113,15 +113,10 @@ export interface ConnectArgs {
   actionVersionId?: string
 }
 
-/**
- * Opens viaSocket's auth popup and waits for a new connection to appear. The popup is a separate window without
- * an opener, so its postMessage completion signal cannot reach us; polling the list is the dependable signal.
- */
-export async function connectApp(ctx: ToolContext, a: ConnectArgs, flow?: FlowTarget): Promise<Record<string, unknown>> {
+/** viaSocket's own connect page for one auth version of an app, on the environment's auth host. */
+export async function connectUrl(ctx: VsContext, appHost: string, a: ConnectArgs, flow?: FlowTarget): Promise<URL> {
   const orgId = requireOrg(ctx)
-  const before = new Set((await listConnections(ctx, a.serviceId, a.authIdLookup, flow)).map((c) => c.id))
   const userId = await currentUserId(ctx)
-
   const url = new URL(`${ctx.vs.env.authBase}/auth/service/${a.serviceId}/auth/${a.authIdLookup}`)
   const query: Record<string, string | undefined> = {
     userid: userId,
@@ -130,12 +125,22 @@ export async function connectApp(ctx: ToolContext, a: ConnectArgs, flow?: FlowTa
     projectid: flow?.projectId,
     scriptid: flow?.scriptId,
     uniqueIdentifierForRtlayer: randomAlnum(20),
-    openerURL: `https://${ctx.page.host}`,
+    openerURL: `https://${appHost}`,
     mode: 'flow',
     isUserOnDH: 'false',
     isUpdate: 'false',
   }
   for (const [k, v] of Object.entries(query)) if (v) url.searchParams.set(k, v)
+  return url
+}
+
+/**
+ * Opens viaSocket's auth popup and waits for a new connection to appear. The popup is a separate window without
+ * an opener, so its postMessage completion signal cannot reach us; polling the list is the dependable signal.
+ */
+export async function connectApp(ctx: ToolContext, a: ConnectArgs, flow?: FlowTarget): Promise<Record<string, unknown>> {
+  const before = new Set((await listConnections(ctx, a.serviceId, a.authIdLookup, flow)).map((c) => c.id))
+  const url = await connectUrl(ctx, ctx.page.host, a, flow)
 
   let tabId: number | undefined
   try {

@@ -5,13 +5,24 @@
 //    error message and the step named in the page URL are reported; request and response payloads never leave this file.
 // 2. Performs router-friendly navigation for the content script (pushState + popstate, like react-router), held
 //    back while the page's own writes are in flight.
+// 3. Answers read-only questions from the content script out of the editor's Redux store (the open JS step for the
+//    subfunctions panel). Nothing here calls the network: all viaSocket API calls are made by the service worker.
+// 4. Beautifies a Monaco code editor for the content script's Beautify button (editors.ts); the code never leaves
+//    the page.
 //
 // Rules for code in the page's world: wrap whatever function is current (Sentry wraps XHR/fetch/history too),
 // always call through to it with the original `this`, and never let an exception escape into the page.
 
-import { PAGE_KEY, type ContentToPageMsg, type PageEnvelope, type PageToContentMsg } from '../shared/messages'
+import {
+  PAGE_KEY,
+  type ContentToPageMsg,
+  type PageEnvelope,
+  type PageToContentMsg,
+  type StepContextData,
+} from '../shared/messages'
 import type { ObservedEvent } from '../shared/observed'
 import { SUPPORTED_APP_HOSTS } from '../background/tools/env'
+import { editorAction } from './editors'
 import {
   classify, dryRunFailed, isPageMutation, MAX_PARSE_CHARS, outcomeInBody, parseCapped, shortErrorText, SLUG_MAX,
 } from '../shared/classify'
@@ -239,6 +250,89 @@ function install(): void {
     }
   }
 
+  /**
+   * The open JS step, for the subfunctions panel, read from the editor's Redux store (never fetched). The code is the
+   * step's draft as the editor last committed it (Monaco writes it on blur), so unsaved edits are included. Null on
+   * the published tab and while the step's data is still loading, so the panel can never save an empty draft.
+   */
+  function readStepContext(msg: { scriptId?: string; stepId?: string; slugName?: string }): StepContextData | null {
+    try {
+      const state = findReduxStore()?.getState()
+      if (!state) return null
+      const obj = (v: unknown): Record<string, unknown> => (isObj(v) ? v : {})
+      const route = /\/workflow\/([A-Za-z0-9]+)(?:\/([^/?#]+))?/.exec(location.pathname)
+      const scriptId = msg.scriptId || route?.[1]
+      if (!scriptId || route?.[2] === 'published') return null
+
+      const flowState = obj(obj(state.flowJsonV2)[scriptId])
+      const flowJson = obj(flowState.flowJson)
+      const blocks = obj(flowJson.blocks)
+      const params = new URLSearchParams(location.search)
+      let slugName = msg.slugName || params.get('slugName') || ''
+      let stepId = msg.stepId || params.get('stepId') || ''
+      if (!slugName && stepId) slugName = Object.keys(blocks).find((k) => obj(blocks[k]).identifier === stepId) ?? ''
+      const block = obj(blocks[slugName])
+      if (!stepId && typeof block.identifier === 'string') stepId = block.identifier
+      if (!slugName || !stepId || TRIGGER_SLUGS.has(slugName) || block.type !== 'function') return null
+
+      const draft = obj(obj(obj(obj(state.stepsDataV3)[scriptId])[stepId]).draft)
+      if (typeof draft.code !== 'string') return null
+
+      const otherNames: string[] = []
+      for (const [slug, raw] of Object.entries(blocks)) {
+        const b = obj(raw)
+        if (slug === slugName || b.status === 'DELETE') continue
+        for (const sf of Array.isArray(b.subfunctions) ? b.subfunctions : []) {
+          if (isObj(sf) && typeof sf.name === 'string') otherNames.push(sf.name)
+        }
+      }
+
+      // Mappable data: the trigger's sample, and the output of steps that run before this one (stepOrder is the
+      // editor's run order; without it every other step is offered).
+      const variables: string[] = []
+      const sample = obj(obj(flowJson.trigger).sampleData)
+      for (const k of Object.keys(isObj(sample.body) ? sample.body : sample)) variables.push(`context.req.body.${k}`)
+      const order = Array.isArray(flowState.stepOrder) ? flowState.stepOrder.filter((k): k is string => typeof k === 'string') : []
+      const here = order.indexOf(slugName)
+      const earlier = here >= 0 ? order.slice(0, here) : Object.keys(blocks).filter((k) => k !== slugName)
+      for (const slug of earlier) {
+        const b = obj(blocks[slug])
+        if (b.status === 'DELETE' || b.status === 'DRAFTED') continue
+        if (b.type === 'function' || b.type === 'api' || b.type === 'plugin') variables.push(`context.res.${slug}`)
+        else if (b.type === 'variable') variables.push(`context.vals.${slug}`)
+      }
+
+      const connectedApps: StepContextData['connectedApps'] = []
+      const seen = new Set<string>()
+      for (const a of Array.isArray(obj(state.auth).allAuths) ? (obj(state.auth).allAuths as unknown[]) : []) {
+        const r = obj(a)
+        if (typeof r.service_id !== 'string' || typeof r.service_name !== 'string' || seen.has(r.service_id)) continue
+        seen.add(r.service_id)
+        connectedApps.push({ serviceId: r.service_id, name: r.service_name, iconUrl: typeof r.iconUrl === 'string' ? r.iconUrl : undefined })
+      }
+
+      const subfunctions = Array.isArray(draft.subfunctions) ? draft.subfunctions : Array.isArray(block.subfunctions) ? block.subfunctions : []
+      return {
+        scriptId,
+        stepId,
+        slugName,
+        stepType: 'function',
+        code: draft.code,
+        subfunctions: subfunctions.filter(isObj).map((sf) => ({
+          name: String(sf.name ?? ''),
+          actionId: String(sf.actionId ?? ''),
+          authId: String(sf.authId ?? ''),
+        })),
+        dynamicVariables: isObj(draft.dynamicVariables) ? (draft.dynamicVariables as Record<string, string>) : undefined,
+        otherNames,
+        connectedApps,
+        variables,
+      }
+    } catch {
+      return null
+    }
+  }
+
   function unwrap(data: unknown): InboundMsg | null {
     if (!isObj(data)) return null
     const inner = data[PAGE_KEY]
@@ -255,6 +349,24 @@ function install(): void {
         slugName: typeof inner.slugName === 'string' ? inner.slugName : undefined,
         nonce: inner.nonce,
       }
+    }
+    if (inner.type === 'get-step-context' && typeof inner.requestId === 'string') {
+      return {
+        type: 'get-step-context',
+        requestId: inner.requestId.slice(0, 64),
+        scriptId: typeof inner.scriptId === 'string' ? inner.scriptId : undefined,
+        stepId: typeof inner.stepId === 'string' ? inner.stepId : undefined,
+        slugName: typeof inner.slugName === 'string' ? inner.slugName : undefined,
+        nonce: inner.nonce,
+      }
+    }
+    if (
+      inner.type === 'editor-action' &&
+      typeof inner.requestId === 'string' &&
+      typeof inner.editorId === 'string' &&
+      (inner.action === 'check' || inner.action === 'beautify')
+    ) {
+      return { type: 'editor-action', requestId: inner.requestId.slice(0, 64), editorId: inner.editorId, action: inner.action, nonce: inner.nonce }
     }
     if (inner.type === 'release') return { type: 'release', nonce: inner.nonce }
     return null
@@ -283,6 +395,14 @@ function install(): void {
       }
       if (msg.type === 'refresh-step') {
         invalidateStep(msg.scriptId, msg.stepId, msg.slugName)
+        return
+      }
+      if (msg.type === 'get-step-context') {
+        post({ type: 'step-context-response', requestId: msg.requestId, data: readStepContext(msg) })
+        return
+      }
+      if (msg.type === 'editor-action') {
+        post({ type: 'editor-action-response', requestId: msg.requestId, result: editorAction(msg.editorId, msg.action) })
         return
       }
       requestNavigate(msg.url, msg.replace === true)

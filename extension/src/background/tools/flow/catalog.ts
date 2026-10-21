@@ -1,7 +1,7 @@
 // App catalog lookups through the backend's /dbdash routes. Response nesting differs per route:
 // getpluginbyplugid answers {data:{data:{rows}}}, getPluginByQuery answers {data:[rows]}.
 
-import type { ToolContext } from '../types'
+import type { VsContext } from '../types'
 import { call, ToolError } from './errors'
 import { requireOrg } from './flow-api'
 import type { FieldDef, InputJson } from './types'
@@ -39,7 +39,7 @@ export function isPaidAction(row: ActionRow): boolean {
   return asRecord(parseMaybeJson(row.meta_data)).isPaidAction === true
 }
 
-export async function searchApps(ctx: ToolContext, query: string, limit: number): Promise<Record<string, unknown>[]> {
+export async function searchApps(ctx: VsContext, query: string, limit: number): Promise<Record<string, unknown>[]> {
   // Private apps are matched against the token's org, so make sure it is the open workspace.
   await ctx.vs.alignOrg(ctx.signal, { force: true })
   const body = await call('Searching apps', () =>
@@ -58,7 +58,7 @@ export async function searchApps(ctx: ToolContext, query: string, limit: number)
     }))
 }
 
-export async function listActions(ctx: ToolContext, serviceId: string, kind: 'action' | 'trigger'): Promise<ActionRow[]> {
+export async function listActions(ctx: VsContext, serviceId: string, kind: 'action' | 'trigger'): Promise<ActionRow[]> {
   const orgId = requireOrg(ctx)
   const body = await call('Listing app actions', () =>
     ctx.vs.request({
@@ -73,7 +73,7 @@ export async function listActions(ctx: ToolContext, serviceId: string, kind: 'ac
 }
 
 /** Full action row (all columns: inputjson, sampledata, ...). Fails when the action is unknown or not visible. */
-export async function getActionRow(ctx: ToolContext, actionId: string): Promise<ActionRow> {
+export async function getActionRow(ctx: VsContext, actionId: string): Promise<ActionRow> {
   const orgId = requireOrg(ctx)
   const body = await call('Reading the app action', () =>
     ctx.vs.request({ method: 'GET', path: '/dbdash/getpluginbyplugid/action', query: { rowid: actionId, orgId }, signal: ctx.signal }),
@@ -96,7 +96,7 @@ export interface ActionVersionRow {
  * One version of an action (the row a trigger or step is pinned to through actionVersionId): its own documented
  * sample and metadata such as scheduleTimeOptions. Fails when the version is unknown.
  */
-export async function getActionVersionRow(ctx: ToolContext, actionVersionId: string): Promise<ActionVersionRow> {
+export async function getActionVersionRow(ctx: VsContext, actionVersionId: string): Promise<ActionVersionRow> {
   const body = await call('Reading the app action version', () =>
     ctx.vs.request({
       method: 'GET',

@@ -52,6 +52,12 @@ export interface ToolContext {
   mustConfirm?: boolean
 }
 
+/** The part of ToolContext that plain backend reads need, so page-initiated handlers can reuse them outside a run. */
+export type VsContext = Pick<ToolContext, 'vs' | 'signal'>
+
+/** VsContext for calls that run code (dry runs): redacts backend error text when run data is protected. */
+export type VsRunContext = VsContext & Partial<Pick<ToolContext, 'stripRunData'>>
+
 export interface Tool<A = Record<string, unknown>> {
   name: string
   /** Default description; tools.json in the config repo may override wording */

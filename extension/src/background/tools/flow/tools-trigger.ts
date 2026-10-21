@@ -24,7 +24,8 @@ import { encodeInputData } from './input-data'
 import { checkTriggerValues, inputDataTexts } from './mapping'
 import { consoleOf, dryRunErrorText, executeDryRun, getRecentRun } from './runs'
 import {
-  helpText, holdTriggerSample, loopLists, meaningful, runBodyIsRaw, runMatchesTrigger, triggerBody, triggerIdentity, triggerStages, variablesOf,
+  helpText, holdTriggerSample, loopLists, meaningful, queryVariablesOf, requestHasData, runBodyIsRaw, runMatchesTrigger, triggerBody, triggerIdentity,
+  triggerStages, variablesOf,
   type SampleSource,
 } from './samples'
 import { defineTool, params, S } from './schema'
@@ -668,7 +669,9 @@ const testTrigger = defineTool<{ scriptId?: string }>({
     }
     if (kind === 'webhook' || kind === 'email') {
       const run = await getRecentRun(ctx, t)
-      const fromThisTrigger = run && meaningful(run.body) && runMatchesTrigger(row)
+      // A webhook GET carries its data only in the query string; an email always has a body.
+      const hasData = !!run && (kind === 'webhook' ? requestHasData(run.body, run.query) : meaningful(run.body))
+      const fromThisTrigger = hasData && runMatchesTrigger(row)
       if (run && fromThisTrigger && kind === 'webhook' && !runBodyIsRaw(run)) {
         return {
           tested: true,
@@ -684,6 +687,8 @@ const testTrigger = defineTool<{ scriptId?: string }>({
         const final = stages.final
         const lists = !stages.loops && stages.processed ? loopLists(stages.processed.data) : []
         const bodyIsList = !stages.loops && Array.isArray(stages.processed?.data)
+        const queryVariables = queryVariablesOf(raw, strip, 30)
+        const queryOnly = !meaningful(run.body) && queryVariables.length > 0
         return bounded(
           {
             tested: true,
@@ -693,14 +698,16 @@ const testTrigger = defineTool<{ scriptId?: string }>({
             variables: final.origin ? variablesOf(final, strip, 60) : undefined,
             body: shaped ? final.note : undefined,
             requestVariables: shaped ? variablesOf(raw, strip, 40) : undefined,
-            queryKeys: Object.keys(asRecord(run.query)).slice(0, 30),
+            queryVariables: queryVariables.length ? queryVariables : undefined,
             lists: lists.length ? lists : undefined,
             next: [
               shaped
                 ? final.origin
                   ? 'Steps read context.req.body as described in "body": map them with "variables". "requestVariables" are the raw request fields, for Get Data inputs only.'
                   : `${final.note ?? ''} "requestVariables" are the raw request fields Get Data can use.`.trim()
-                : 'Map later steps only with the insert texts in "variables".',
+                : queryOnly
+                  ? 'The request sent its data as query parameters and no body: map later steps with the insert texts in "queryVariables" (context.req.query.*). Do not ask for another request.'
+                  : `Map later steps only with the insert texts in "variables"${queryVariables.length ? ' (and "queryVariables" for query parameters)' : ''}.`,
               bodyIsList
                 ? 'The body is a list: steps read one item by index (context.req.body[0].<field>), or offer run once per item (vs_set_trigger_loop, omit arrayKey) so each item runs the flow on its own.'
                 : lists.length
@@ -730,8 +737,11 @@ const testTrigger = defineTool<{ scriptId?: string }>({
           ctx.maxResultChars,
         )
       }
-      const where = kind === 'webhook' ? `one request (POST with a JSON body) to ${ctx.vs.env.vmBase}/func/${t.scriptId}` : `one email to ${t.scriptId}@sokt.io`
-      const otherTrigger = run && meaningful(run.body) && !fromThisTrigger
+      const where =
+        kind === 'webhook'
+          ? `one request to ${ctx.vs.env.vmBase}/func/${t.scriptId} (a POST with a JSON body, or a GET with query parameters)`
+          : `one email to ${t.scriptId}@sokt.io`
+      const otherTrigger = hasData && !fromThisTrigger
       return {
         tested: true,
         sampleFound: false,

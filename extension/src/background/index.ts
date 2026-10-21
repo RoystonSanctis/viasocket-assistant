@@ -221,6 +221,8 @@ import { handleStepClipboardRequest } from './step-clipboard'
 import type { StepClipboardRequest } from '../shared/step-clipboard'
 import { handleFlowTransferRequest } from './flow-transfer'
 import type { FlowTransferRequest } from '../shared/flow-transfer'
+import { handleSubfunctionsRequest } from './subfunctions'
+import type { SubfnRequest } from '../shared/subfunctions'
 
 /** The sender tab shows one of the supported viaSocket app hosts. */
 function senderEnvOk(tabUrl: string | undefined): boolean {
@@ -248,8 +250,8 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
     return true
   }
 
-  if (msg.type.startsWith('step:') || msg.type.startsWith('flow:')) {
-    // Clipboard and transfer calls only make sense from a content script on a supported viaSocket host; a
+  if (msg.type.startsWith('step:') || msg.type.startsWith('flow:') || msg.type.startsWith('subfn:')) {
+    // Clipboard, transfer and subfunction-panel calls only make sense from a content script on a supported viaSocket host; a
     // message from any other extension context (options page, future pages) is refused instead of silently
     // operating against some default environment.
     if (sender.tab?.id === undefined || !senderEnvOk(sender.tab.url)) {
@@ -258,6 +260,10 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
     }
     if (msg.type.startsWith('step:')) {
       handleStepClipboardRequest(raw as StepClipboardRequest, sender).then(sendResponse, (e: unknown) =>
+        sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }),
+      )
+    } else if (msg.type.startsWith('subfn:')) {
+      handleSubfunctionsRequest(raw as SubfnRequest, sender).then(sendResponse, (e: unknown) =>
         sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) }),
       )
     } else {

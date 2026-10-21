@@ -1,7 +1,7 @@
 // Flow run data: the latest run (sample data for mapping and tests), the context passed to dry runs, and the
 // execute route every dry run goes through (step tests, trigger tests, dropdown option loaders).
 
-import type { ToolContext } from '../types'
+import type { ToolContext, VsRunContext } from '../types'
 import { call } from './errors'
 import type { FlowTarget } from './types'
 import { asRecord, isRecord, leafPaths, parseMaybeJson, str, trimData, truncate } from './util'
@@ -85,7 +85,7 @@ export interface DryRunResult {
  * POST /:orgId/:scriptId/execute, the route behind every Test button and dropdown loader. A failed run still
  * answers 200 with data.success false and the error as data.message. `redact` masks personal data in error text.
  */
-export async function executeDryRun(ctx: ToolContext, t: FlowTarget, body: Record<string, unknown>, what: string): Promise<DryRunResult> {
+export async function executeDryRun(ctx: VsRunContext, t: FlowTarget, body: Record<string, unknown>, what: string): Promise<DryRunResult> {
   const res = await call(what, () => ctx.vs.request({ method: 'POST', path: `/${t.orgId}/${t.scriptId}/execute`, body, signal: ctx.signal }), {
     redact: ctx.stripRunData,
   })

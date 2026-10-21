@@ -9,6 +9,7 @@ import type { ChatLine, ConfirmRequest, HighlightTarget, MascotMode, Suggestion,
 import type { PageContext } from './page'
 import type { ObservedEvent } from './observed'
 import type { ClientConfig } from './config'
+import type { SubfunctionRef } from './subfunctions'
 
 export const PORT_NAME = 'assistant'
 
@@ -136,6 +137,25 @@ export interface KeyTestResult {
   details?: Record<string, string | number | boolean>
 }
 
+/** The open JS step as the editor shows it, for the subfunctions panel. Read from the page; never fetched there. */
+export interface StepContextData {
+  scriptId: string
+  stepId: string
+  slugName: string
+  stepType?: string
+  /** The code the editor currently shows, unsaved edits included */
+  code: string
+  subfunctions: SubfunctionRef[]
+  /** Input Values as the panel shows them (unsaved edits included); absent when the step data is not loaded */
+  dynamicVariables?: Record<string, string>
+  /** Subfunction names other steps of this flow use (the flow keys connections by subfunction name) */
+  otherNames: string[]
+  /** Apps the workspace has connections for, for the app picker; no connection details */
+  connectedApps: Array<{ serviceId: string; name: string; iconUrl?: string }>
+  /** Mappable references, e.g. context.req.body.email */
+  variables: string[]
+}
+
 // ---------- page (MAIN world) <-> content script ----------
 // viaSocket's own window 'message' listeners react to top-level keys such as type, id, error, message and to
 // string payloads, without checking origin. So every message is wrapped in ONE namespaced key and is never a string.
@@ -147,6 +167,8 @@ export type PageToContentMsg =
   | { type: 'navigated'; url: string }
   /** A navigation went ahead after waiting the maximum time for the page's own save, test or publish to finish */
   | { type: 'navigate-busy' }
+  | { type: 'step-context-response'; requestId: string; data: StepContextData | null }
+  | { type: 'editor-action-response'; requestId: string; result: EditorActionResult }
 
 export type ContentToPageMsg =
   /** First message; the hook adopts this nonce and ignores any other init until that nonce is released */
@@ -155,7 +177,35 @@ export type ContentToPageMsg =
   | { type: 'navigate'; url: string; replace?: boolean }
   /** Invalidate step data in Redux so that MasterSliderComponent refetches and renders fresh values */
   | { type: 'refresh-step'; scriptId?: string; stepId?: string; slugName?: string }
+  /** Read the open JS step for the subfunctions panel; answered with step-context-response */
+  | { type: 'get-step-context'; requestId: string; scriptId?: string; stepId?: string; slugName?: string }
+  /** The Beautify button: check or format the Monaco editor marked with EDITOR_ID_ATTR; answered with editor-action-response */
+  | { type: 'editor-action'; requestId: string; editorId: string; action: EditorAction }
   /** The content script was orphaned (extension updated or reloaded): the hook pairs with the next init instead */
   | { type: 'release' }
 
 export type PageEnvelope<T> = { [PAGE_KEY]: T & { nonce: string } }
+
+/** Set by the content script on each `.monaco-editor` element so the hook can find the editor a button belongs to */
+export const EDITOR_ID_ATTR = 'data-vs-editor-id'
+
+/** 'check' only reports whether the editor can be beautified; 'beautify' formats it (whitespace only, undoable) */
+export type EditorAction = 'check' | 'beautify'
+
+export const EDITOR_ACTION_RESULTS = [
+  /** check: an editable JavaScript or JSON editor */
+  'ready',
+  'formatted',
+  /** Already formatted; nothing changed */
+  'unchanged',
+  /** Formatting would have changed more than whitespace (or broken code), so nothing changed */
+  'unsafe',
+  'too-large',
+  'read-only',
+  /** Not JavaScript or JSON */
+  'unsupported',
+  /** The hook cannot reach that editor */
+  'missing',
+  'failed',
+] as const
+export type EditorActionResult = (typeof EDITOR_ACTION_RESULTS)[number]

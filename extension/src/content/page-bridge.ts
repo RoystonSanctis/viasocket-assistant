@@ -4,15 +4,29 @@
 // top-level keys like type/id/error and to strings. Inbound messages must come from this window, carry the wrapper
 // and our nonce; their contents are still re-validated because any page script can see the nonce once posted.
 
-import { PAGE_KEY, type ContentToPageMsg, type PageEnvelope } from '../shared/messages'
+import {
+  EDITOR_ACTION_RESULTS,
+  PAGE_KEY,
+  type ContentToPageMsg,
+  type EditorAction,
+  type EditorActionResult,
+  type PageEnvelope,
+  type StepContextData,
+} from '../shared/messages'
 import type { ObservedEvent } from '../shared/observed'
 import { ERROR_TEXT_MAX, isObservedKind, PATH_MAX, SLUG_MAX } from '../shared/classify'
+import type { SubfunctionRef } from '../shared/subfunctions'
 
 const INIT_RETRY_MS = 400
 const INIT_MAX_TRIES = 12
 /** Simple flood guard: at most this many observed events per window */
 const RATE_LIMIT = 40
 const RATE_WINDOW_MS = 10_000
+const STEP_CONTEXT_TIMEOUT_MS = 2500
+/** Formatting a large script takes a moment */
+const EDITOR_ACTION_TIMEOUT_MS = 5000
+const CODE_MAX = 307_200
+const VARIABLES_MAX = 300
 
 export interface PageBridgeOptions {
   /** API hosts the hook should watch in addition to its defaults */
@@ -29,6 +43,10 @@ export interface PageBridge {
   navigate(url: string, replace?: boolean): boolean
   /** Invalidate step data in Redux so that MasterSliderComponent refetches and renders fresh values */
   refreshStep(scriptId?: string, stepId?: string, slugName?: string): void
+  /** The open JS step's code (as the editor shows it), subfunctions and mappable variables; null when unavailable */
+  getStepContext(scriptId?: string, stepId?: string, slugName?: string): Promise<StepContextData | null>
+  /** Checks or beautifies the Monaco editor marked with EDITOR_ID_ATTR = editorId; null when the hook does not answer */
+  editorAction(editorId: string, action: EditorAction): Promise<EditorActionResult | null>
   /** The MAIN-world hook answered (it is missing in tabs that were open before an extension update) */
   readonly ready: boolean
   destroy(): void
@@ -55,6 +73,53 @@ export function toAppPath(url: string): string | null {
   }
   if (target.origin !== location.origin) return null
   return target.pathname + target.search + target.hash
+}
+
+function shortStr(v: unknown, max: number): string | undefined {
+  return typeof v === 'string' && v ? v.slice(0, max) : undefined
+}
+
+function sanitizeStepContext(raw: unknown): StepContextData | null {
+  if (!isObj(raw)) return null
+  const scriptId = shortStr(raw.scriptId, 32)
+  const stepId = shortStr(raw.stepId, 32)
+  const slugName = shortStr(raw.slugName, SLUG_MAX)
+  if (!scriptId || !stepId || !slugName || typeof raw.code !== 'string' || raw.code.length > CODE_MAX) return null
+  const subfunctions: SubfunctionRef[] = []
+  for (const item of Array.isArray(raw.subfunctions) ? raw.subfunctions.slice(0, 50) : []) {
+    if (!isObj(item)) continue
+    const name = shortStr(item.name, 64)
+    if (name) subfunctions.push({ name, actionId: shortStr(item.actionId, 40) ?? '', authId: shortStr(item.authId, 40) ?? '' })
+  }
+  const strings = (v: unknown, max: number) =>
+    (Array.isArray(v) ? v : []).filter((x): x is string => typeof x === 'string' && x.length > 0 && x.length <= 200).slice(0, max)
+  let dynamicVariables: Record<string, string> | undefined
+  if (isObj(raw.dynamicVariables)) {
+    dynamicVariables = {}
+    for (const [k, v] of Object.entries(raw.dynamicVariables).slice(0, 100)) {
+      if (typeof v === 'string' && k.length <= 64) dynamicVariables[k] = v.slice(0, 10_000)
+    }
+  }
+  const connectedApps: StepContextData['connectedApps'] = []
+  for (const app of Array.isArray(raw.connectedApps) ? raw.connectedApps.slice(0, 200) : []) {
+    if (!isObj(app)) continue
+    const serviceId = shortStr(app.serviceId, 40)
+    const name = shortStr(app.name, 80)
+    const iconUrl = typeof app.iconUrl === 'string' && /^https:\/\//.test(app.iconUrl) ? app.iconUrl.slice(0, 500) : undefined
+    if (serviceId && name) connectedApps.push({ serviceId, name, iconUrl })
+  }
+  return {
+    scriptId,
+    stepId,
+    slugName,
+    stepType: shortStr(raw.stepType, 32),
+    code: raw.code,
+    subfunctions,
+    dynamicVariables,
+    otherNames: strings(raw.otherNames, 200),
+    connectedApps,
+    variables: strings(raw.variables, VARIABLES_MAX),
+  }
 }
 
 function sanitizeObserved(raw: unknown): ObservedEvent | null {
@@ -108,6 +173,9 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
     return ++windowCount <= RATE_LIMIT
   }
 
+  const pendingContext = new Map<string, (data: StepContextData | null) => void>()
+  const pendingEditor = new Map<string, (result: EditorActionResult | null) => void>()
+
   function onMessage(ev: MessageEvent): void {
     if (ev.source !== window || ev.origin !== location.origin) return
     const data: unknown = ev.data
@@ -131,6 +199,17 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
       case 'navigate-busy':
         opts.onNavigateBusy()
         break
+      case 'step-context-response': {
+        const handler = typeof inner.requestId === 'string' ? pendingContext.get(inner.requestId) : undefined
+        if (handler) handler(sanitizeStepContext(inner.data))
+        break
+      }
+      case 'editor-action-response': {
+        const handler = typeof inner.requestId === 'string' ? pendingEditor.get(inner.requestId) : undefined
+        const known = (EDITOR_ACTION_RESULTS as readonly unknown[]).includes(inner.result)
+        if (handler) handler(known ? (inner.result as EditorActionResult) : null)
+        break
+      }
       default:
         // our own init/navigate echoes, or junk
         break
@@ -153,6 +232,34 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
     refreshStep(scriptId, stepId, slugName) {
       post({ type: 'refresh-step', scriptId, stepId, slugName })
     },
+    getStepContext(scriptId, stepId, slugName) {
+      if (!hookReady) return Promise.resolve(null)
+      const requestId = makeNonce()
+      return new Promise<StepContextData | null>((resolve) => {
+        const finish = (data: StepContextData | null) => {
+          clearTimeout(timer)
+          pendingContext.delete(requestId)
+          resolve(data)
+        }
+        const timer = setTimeout(() => finish(null), STEP_CONTEXT_TIMEOUT_MS)
+        pendingContext.set(requestId, finish)
+        post({ type: 'get-step-context', requestId, scriptId, stepId, slugName })
+      })
+    },
+    editorAction(editorId, action) {
+      if (!hookReady) return Promise.resolve(null)
+      const requestId = makeNonce()
+      return new Promise<EditorActionResult | null>((resolve) => {
+        const finish = (result: EditorActionResult | null) => {
+          clearTimeout(timer)
+          pendingEditor.delete(requestId)
+          resolve(result)
+        }
+        const timer = setTimeout(() => finish(null), EDITOR_ACTION_TIMEOUT_MS)
+        pendingEditor.set(requestId, finish)
+        post({ type: 'editor-action', requestId, editorId, action })
+      })
+    },
     get ready() {
       return hookReady
     },
@@ -160,6 +267,8 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
       clearInterval(retry)
       retry = undefined
       window.removeEventListener('message', onMessage)
+      for (const finish of [...pendingContext.values()]) finish(null)
+      for (const finish of [...pendingEditor.values()]) finish(null)
       // Called when this copy is orphaned. The page hook stays installed and only answers its first partner, so
       // without this the copy injected after an extension update would never get hook-ready.
       if (hookReady) post({ type: 'release' })

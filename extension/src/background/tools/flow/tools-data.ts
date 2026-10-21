@@ -11,7 +11,7 @@ import {
 } from './fields'
 import { findParent, getFlow, getFunctionRow, pluginDataOf, resolveFlow, triggerKind } from './flow-api'
 import { encodeInputData } from './input-data'
-import { buildCatalogue, variablesOf, type Position } from './samples'
+import { buildCatalogue, queryVariablesOf, variablesOf, type Position } from './samples'
 import { defineTool, params, S } from './schema'
 import { SCRIPT_ID_PARAM } from './tools-read'
 import { getDataPluginForOptions } from './trigger-features'
@@ -55,6 +55,12 @@ const getVariables = defineTool<GetVariablesArgs>({
     const sources = cat.sources.map((s) => {
       const variables = s.origin && budget > 0 ? variablesOf(s, strip, Math.min(60, budget)) : []
       budget -= variables.length
+      // Webhook query parameters (a GET sends only these) are trigger data too: context.req.query.*
+      if (s.id === 'trigger' && s.origin && budget > 0) {
+        const query = queryVariablesOf(s, strip, Math.min(30, budget))
+        variables.push(...query)
+        budget -= query.length
+      }
       return {
         source: s.id,
         kind: s.id === 'trigger' ? `trigger (${s.type})` : `${s.type} step`,
