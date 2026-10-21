@@ -148,8 +148,11 @@ export interface StepContextData {
   subfunctions: SubfunctionRef[]
   /** Input Values as the panel shows them (unsaved edits included); absent when the step data is not loaded */
   dynamicVariables?: Record<string, string>
-  /** Subfunction names other steps of this flow use (the flow keys connections by subfunction name) */
-  otherNames: string[]
+  /**
+   * Subfunctions of the flow's other steps. The flow keeps one connection per subfunction name, so a name another step
+   * uses is free here only with that step's connection.
+   */
+  otherSubfunctions: Array<{ name: string; authId: string }>
   /** Apps the workspace has connections for, for the app picker; no connection details */
   connectedApps: Array<{ serviceId: string; name: string; iconUrl?: string }>
   /** Mappable references, e.g. context.req.body.email */
@@ -175,8 +178,19 @@ export type ContentToPageMsg =
   | { type: 'init'; apiHosts: string[] }
   /** Router-friendly navigation (pushState/replaceState + popstate) inside the single-page app */
   | { type: 'navigate'; url: string; replace?: boolean }
-  /** Invalidate step data in Redux so that MasterSliderComponent refetches and renders fresh values */
-  | { type: 'refresh-step'; scriptId?: string; stepId?: string; slugName?: string }
+  /**
+   * Invalidate step data in Redux so that MasterSliderComponent refetches and renders fresh values. `flowJson` is the
+   * flow as a save just returned it: applied first, so a step saved for the first time loads instead of starting empty.
+   */
+  | {
+      type: 'refresh-step'
+      scriptId?: string
+      stepId?: string
+      slugName?: string
+      flowJson?: Record<string, unknown>
+      /** The step's functions row after a save: stored the way the editor stores a fetched step, instead of a refetch */
+      stepRow?: Record<string, unknown>
+    }
   /** Read the open JS step for the subfunctions panel; answered with step-context-response */
   | { type: 'get-step-context'; requestId: string; scriptId?: string; stepId?: string; slugName?: string }
   /** The Beautify button: check or format the Monaco editor marked with EDITOR_ID_ATTR; answered with editor-action-response */

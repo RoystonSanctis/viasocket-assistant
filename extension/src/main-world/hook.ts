@@ -202,7 +202,13 @@ function install(): void {
     return m ? m[1] : undefined
   }
 
-  function invalidateStep(scriptId?: string, stepId?: string, slugName?: string): void {
+  function invalidateStep(
+    scriptId?: string,
+    stepId?: string,
+    slugName?: string,
+    flowJson?: Record<string, unknown>,
+    stepRow?: Record<string, unknown>,
+  ): void {
     try {
       const store = findReduxStore()
       if (!store) return
@@ -212,6 +218,62 @@ function install(): void {
         scriptId ||
         extractScriptId(location.pathname) ||
         (isObj(state.appInfo) && typeof state.appInfo.currentScriptId === 'string' ? state.appInfo.currentScriptId : undefined)
+
+      // Both reducers below take the flow and step ids from the URL, so only the flow (and step) that is open.
+      const openFlow = !!scriptId && scriptId === extractScriptId(location.pathname) && isObj(state.flowJsonV2) && isObj(state.flowJsonV2[scriptId])
+
+      // The flow as the save returned it, applied the way the editor applies an assistant save (workFlowNavbar's
+      // RTLayer handler: setFlowAndDraftFlowJson), so a step saved for the first time is no longer DRAFTED here.
+      if (flowJson && openFlow) store.dispatch({ type: 'flowJsonV2/setFlowAndDraftFlowJson', payload: flowJson })
+
+      // The saved step, stored the way the editor stores a fetched step (resetButtonForSlider: setFunctionJsonThunkV3
+      // then setKeyValueInstance). Dropping the step data instead is not enough for a step that was never loaded
+      // from the server (a new one): MasterSliderComponent refetches only when dataFromBackend changes, which such a
+      // step never had, so the panel stayed empty until it was reopened.
+      if (
+        stepRow &&
+        openFlow &&
+        slugName &&
+        stepId &&
+        stepRow.id === stepId &&
+        stepRow.script_id === scriptId &&
+        new URLSearchParams(location.search).get('stepId') === stepId
+      ) {
+        const flowState = isObj(state.flowJsonV2) ? (store.getState().flowJsonV2 as Record<string, unknown>)[scriptId as string] : undefined
+        const blockOf = (key: 'flowJson' | 'publishedFlowJson'): Record<string, unknown> => {
+          const json = isObj(flowState) ? flowState[key] : undefined
+          const blocks = isObj(json) ? json.blocks : undefined
+          const block = isObj(blocks) ? blocks[slugName] : undefined
+          return isObj(block) ? block : {}
+        }
+        const draftBlock = blockOf('flowJson')
+        // Edits the save did not write stay pending, as they were: a rename (the editor's Save applies it, renaming
+        // the step everywhere), a changed description, a changed step connection. Put back after the row, they keep
+        // the step marked unsaved so Save stays available.
+        const stepsOfFlow = isObj(state.stepsDataV3) ? state.stepsDataV3[scriptId as string] : undefined
+        const stepEntry = isObj(stepsOfFlow) ? stepsOfFlow[stepId] : undefined
+        const prev = isObj(stepEntry) && isObj(stepEntry.draft) ? stepEntry.draft : {}
+        const pending: Record<string, unknown> = {}
+        if (typeof prev.title === 'string' && prev.title && prev.title !== slugName) pending.title = prev.title
+        if (prev.descriptionChanged === true && typeof prev.description === 'string') {
+          pending.description = prev.description
+          pending.descriptionChanged = true
+        }
+        if (typeof prev.authId === 'string' && prev.authId && prev.authId !== stepRow.auth_id) pending.authId = prev.authId
+        store.dispatch({
+          type: 'stepsDataV3/setFunctionJson/fulfilled',
+          payload: {
+            data: stepRow,
+            draftdecription: draftBlock.description,
+            publisheddecription: blockOf('publishedFlowJson').description,
+            aistep: draftBlock.aistep,
+            subfunctions: draftBlock.subfunctions,
+          },
+        })
+        store.dispatch({ type: 'stepsDataV3/setKeyValueInstance', payload: { title: slugName, hasUnsavedCode: false } })
+        if (Object.keys(pending).length) store.dispatch({ type: 'stepsDataV3/setKeyValueInstance', payload: pending })
+        return
+      }
 
       let targetStepId = stepId
       if (!targetStepId && slugName && resolvedScriptId && isObj(state.flowJsonV2)) {
@@ -278,12 +340,12 @@ function install(): void {
       const draft = obj(obj(obj(obj(state.stepsDataV3)[scriptId])[stepId]).draft)
       if (typeof draft.code !== 'string') return null
 
-      const otherNames: string[] = []
+      const otherSubfunctions: StepContextData['otherSubfunctions'] = []
       for (const [slug, raw] of Object.entries(blocks)) {
         const b = obj(raw)
         if (slug === slugName || b.status === 'DELETE') continue
         for (const sf of Array.isArray(b.subfunctions) ? b.subfunctions : []) {
-          if (isObj(sf) && typeof sf.name === 'string') otherNames.push(sf.name)
+          if (isObj(sf) && typeof sf.name === 'string') otherSubfunctions.push({ name: sf.name, authId: typeof sf.authId === 'string' ? sf.authId : '' })
         }
       }
 
@@ -324,7 +386,7 @@ function install(): void {
           authId: String(sf.authId ?? ''),
         })),
         dynamicVariables: isObj(draft.dynamicVariables) ? (draft.dynamicVariables as Record<string, string>) : undefined,
-        otherNames,
+        otherSubfunctions,
         connectedApps,
         variables,
       }
@@ -347,6 +409,8 @@ function install(): void {
         scriptId: typeof inner.scriptId === 'string' ? inner.scriptId : undefined,
         stepId: typeof inner.stepId === 'string' ? inner.stepId : undefined,
         slugName: typeof inner.slugName === 'string' ? inner.slugName : undefined,
+        flowJson: isObj(inner.flowJson) && isObj(inner.flowJson.blocks) && isObj(inner.flowJson.order) ? inner.flowJson : undefined,
+        stepRow: isObj(inner.stepRow) && typeof inner.stepRow.id === 'string' && typeof inner.stepRow.code === 'string' ? inner.stepRow : undefined,
         nonce: inner.nonce,
       }
     }
@@ -394,7 +458,7 @@ function install(): void {
         return
       }
       if (msg.type === 'refresh-step') {
-        invalidateStep(msg.scriptId, msg.stepId, msg.slugName)
+        invalidateStep(msg.scriptId, msg.stepId, msg.slugName, msg.flowJson, msg.stepRow)
         return
       }
       if (msg.type === 'get-step-context') {

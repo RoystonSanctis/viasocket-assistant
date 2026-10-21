@@ -12,6 +12,8 @@ import type { SubfnFieldSpec, SubfnGroupResult, SubfnOptionsResult } from '../sh
 const SEARCH_DEBOUNCE_MS = 500
 /** Choices older than this load again when the dropdown opens */
 const STALE_MS = 30_000
+/** Typing in a field a generated group reads reloads the group after this pause */
+const GROUP_RELOAD_DELAY_MS = 600
 const MANY_OPTIONS = 8
 
 const SVG = {
@@ -238,6 +240,18 @@ export function renderInputs(host: InputsHost): InputsView {
       })
   }
 
+  /**
+   * Generated groups whose parents' values changed since their fields loaded load them again, as the panel does (its
+   * fetch is keyed on those values). A hidden group reloads when it shows again (render calls ensureGroup).
+   */
+  function reloadStaleGroups(): void {
+    for (const [key, load] of groupLoads) {
+      if (load.sig !== depsSig(key) && model.state(key) !== 'hidden') ensureGroup(key)
+    }
+  }
+
+  let groupTimer: ReturnType<typeof setTimeout> | undefined
+
   /** A value the user set: fields reading it lose their pick (their choices change) and the layout is checked. */
   function changed(key: string, value: FieldValue | null): void {
     if (value) model.set(key, value)
@@ -247,6 +261,17 @@ export function renderInputs(host: InputsHost): InputsView {
       const kind = kindOf(model.spec(d) as SubfnFieldSpec)
       if ((kind === 'dropdown' || kind === 'multiselect') && !manual.has(d)) model.values.delete(d)
     }
+    // Typing reloads groups once it pauses; a pick reloads them now.
+    clearTimeout(groupTimer)
+    groupTimer = undefined
+    if (value && value.kind !== 'choice' && value.kind !== 'choices') {
+      groupTimer = setTimeout(() => {
+        groupTimer = undefined
+        if (!host.alive()) return
+        reloadStaleGroups()
+        refresh()
+      }, GROUP_RELOAD_DELAY_MS)
+    } else reloadStaleGroups()
     // A cleared field with a default shows the default again, as the panel does.
     refresh(wasInvalid || (!value && model.spec(key)?.defaultValue !== undefined))
   }

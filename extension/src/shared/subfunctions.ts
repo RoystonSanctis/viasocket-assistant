@@ -1,4 +1,4 @@
-// Message protocol for the JS step "Subfunctions & Actions" panel (content/subfunctions-ui.ts) and its
+// Message protocol for the JS step "Subfunctions" panel (content/subfunctions-ui.ts) and its
 // background handler (background/subfunctions.ts). The panel never talks to the viaSocket API itself: every read
 // and write goes through the worker's ViaSocketClient (env-named cookie, allowlisted host, per-flow write queue).
 
@@ -19,6 +19,8 @@ export interface SubfnApp {
   name: string
   description?: string
   domain?: string
+  /** https logo URL */
+  iconUrl?: string
 }
 
 export interface SubfnAction {
@@ -129,6 +131,14 @@ export type SubfnRequest =
     }
 
 export type SubfnResponse<T = unknown> = { ok: true; data: T } | { ok: false; error: string }
+
+/** subfn:save answer, for the open editor to show the saved step at once (each part absent when not available) */
+export interface SubfnSaveResult {
+  /** The flow's json_script as the save returned it */
+  flowJson?: Record<string, unknown>
+  /** The step's functions row read back after the save (what the editor's own step fetch returns) */
+  stepRow?: Record<string, unknown>
+}
 
 /** Subfunction names become JS function declarations the backend prepends to the step code. */
 export const SUBFUNCTION_NAME_RE = /^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/

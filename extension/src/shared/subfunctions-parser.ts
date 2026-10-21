@@ -340,18 +340,28 @@ export function freeVarName(code: string, base: string): string {
  * Index of the first `return` that is a top-level statement of the step code (not inside a block, and not the body
  * of a brace-less `if (...)`, `else` or `do`), or -1. Code after it never runs.
  */
+/** Statements whose `(...)` may be followed by a brace-less body */
+const CONTROL_WORDS = new Set(['if', 'for', 'while', 'with'])
+
 function firstTopLevelReturn(code: string): number {
   let found = -1
   let prev = ''
   let prevWord = ''
   let word = ''
+  // The word before each open '(' and the one whose ')' closed last: `if (x) return` is the if's body, while
+  // `foo()` + newline + `return` is a statement of its own (no semicolon needed).
+  const parenWords: string[] = []
+  let closedParenWord = ''
   walkCode(code, (i, depth) => {
     if (found !== -1) return
     const ch = code[i] ?? ''
     if (depth === 0 && ch === 'r' && !word && /^return(?![\w$])/.test(code.slice(i, i + 7))) {
       const afterWord = /[\w$]/.test(prev)
-      if (prev !== ')' && prev !== '.' && !(afterWord && (prevWord === 'else' || prevWord === 'do'))) found = i
+      const controlBody = prev === ')' && CONTROL_WORDS.has(closedParenWord)
+      if (!controlBody && prev !== '.' && !(afterWord && (prevWord === 'else' || prevWord === 'do'))) found = i
     }
+    if (ch === '(') parenWords.push(word || (/[\w$]/.test(prev) ? prevWord : ''))
+    else if (ch === ')') closedParenWord = parenWords.pop() ?? ''
     if (/[\w$]/.test(ch)) word += ch
     else {
       if (word) prevWord = word

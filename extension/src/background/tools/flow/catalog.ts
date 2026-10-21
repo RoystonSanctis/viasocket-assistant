@@ -39,7 +39,8 @@ export function isPaidAction(row: ActionRow): boolean {
   return asRecord(parseMaybeJson(row.meta_data)).isPaidAction === true
 }
 
-export async function searchApps(ctx: VsContext, query: string, limit: number): Promise<Record<string, unknown>[]> {
+/** `icons` adds each app's logo URL (for the extension's own UI; the agent's tools leave it out). */
+export async function searchApps(ctx: VsContext, query: string, limit: number, icons = false): Promise<Record<string, unknown>[]> {
   // Private apps are matched against the token's org, so make sure it is the open workspace.
   await ctx.vs.alignOrg(ctx.signal, { force: true })
   const body = await call('Searching apps', () =>
@@ -55,6 +56,7 @@ export async function searchApps(ctx: VsContext, query: string, limit: number): 
       description: r.description ? truncate(String(r.description), 140) : undefined,
       domain: str(r.domain),
       hasTriggers: r.istriggeravailable === true,
+      ...(icons ? { iconUrl: str(r.iconurl) } : {}),
     }))
 }
 

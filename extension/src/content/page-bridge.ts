@@ -41,8 +41,11 @@ export interface PageBridgeOptions {
 export interface PageBridge {
   /** Router-friendly in-app navigation. Returns false when the URL is not a same-origin app path or the hook is missing. */
   navigate(url: string, replace?: boolean): boolean
-  /** Invalidate step data in Redux so that MasterSliderComponent refetches and renders fresh values */
-  refreshStep(scriptId?: string, stepId?: string, slugName?: string): void
+  /**
+   * Invalidate step data in Redux so that MasterSliderComponent refetches and renders fresh values. After a save of
+   * the open step, pass what the save returned (the flow and the step's row): see the refresh-step message.
+   */
+  refreshStep(scriptId?: string, stepId?: string, slugName?: string, saved?: { flowJson?: Record<string, unknown>; stepRow?: Record<string, unknown> }): void
   /** The open JS step's code (as the editor shows it), subfunctions and mappable variables; null when unavailable */
   getStepContext(scriptId?: string, stepId?: string, slugName?: string): Promise<StepContextData | null>
   /** Checks or beautifies the Monaco editor marked with EDITOR_ID_ATTR = editorId; null when the hook does not answer */
@@ -100,6 +103,12 @@ function sanitizeStepContext(raw: unknown): StepContextData | null {
       if (typeof v === 'string' && k.length <= 64) dynamicVariables[k] = v.slice(0, 10_000)
     }
   }
+  const otherSubfunctions: StepContextData['otherSubfunctions'] = []
+  for (const item of Array.isArray(raw.otherSubfunctions) ? raw.otherSubfunctions.slice(0, 200) : []) {
+    if (!isObj(item)) continue
+    const name = shortStr(item.name, 64)
+    if (name) otherSubfunctions.push({ name, authId: shortStr(item.authId, 40) ?? '' })
+  }
   const connectedApps: StepContextData['connectedApps'] = []
   for (const app of Array.isArray(raw.connectedApps) ? raw.connectedApps.slice(0, 200) : []) {
     if (!isObj(app)) continue
@@ -116,7 +125,7 @@ function sanitizeStepContext(raw: unknown): StepContextData | null {
     code: raw.code,
     subfunctions,
     dynamicVariables,
-    otherNames: strings(raw.otherNames, 200),
+    otherSubfunctions,
     connectedApps,
     variables: strings(raw.variables, VARIABLES_MAX),
   }
@@ -229,8 +238,15 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
       post({ type: 'navigate', url: path, replace })
       return true
     },
-    refreshStep(scriptId, stepId, slugName) {
-      post({ type: 'refresh-step', scriptId, stepId, slugName })
+    refreshStep(scriptId, stepId, slugName, saved) {
+      post({
+        type: 'refresh-step',
+        scriptId,
+        stepId,
+        slugName,
+        ...(saved?.flowJson ? { flowJson: saved.flowJson } : {}),
+        ...(saved?.stepRow ? { stepRow: saved.stepRow } : {}),
+      })
     },
     getStepContext(scriptId, stepId, slugName) {
       if (!hookReady) return Promise.resolve(null)

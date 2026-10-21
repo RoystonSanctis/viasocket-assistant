@@ -1,4 +1,4 @@
-// Background handler for the JS step "Subfunctions & Actions" panel (content/subfunctions-ui.ts).
+// Background handler for the JS step "Subfunctions" panel (content/subfunctions-ui.ts).
 //
 // The panel lets the user pick an app action, a connection and input values, and inserts
 // `await <name>({ inputData: {...} })` into the step code while registering <name> in the step's `subfunctions`.
@@ -21,6 +21,7 @@ import {
   type SubfnOptionsResult,
   type SubfnRequest,
   type SubfnResponse,
+  type SubfnSaveResult,
   type SubfunctionRef,
 } from '../shared/subfunctions'
 import { fieldDeps } from '../shared/field-rules'
@@ -37,7 +38,7 @@ import { encodeInputData } from './tools/flow/input-data'
 import { dynamicVariableProblems, isValidSlug } from './tools/flow/slugs'
 import { functionBody } from './tools/flow/step-bodies'
 import type { AuthData, FieldDef, FlowTarget, InputJson } from './tools/flow/types'
-import { asRecord, ORG_ID_RE, PROJECT_ID_RE, str, truncate } from './tools/flow/util'
+import { asRecord, isRecord, ORG_ID_RE, PROJECT_ID_RE, str, truncate } from './tools/flow/util'
 
 const REQUEST_TIMEOUT_MS = 30_000
 const MAX_SUBFUNCTIONS = 50
@@ -46,6 +47,12 @@ const MAX_OPTIONS = 300
 const MAX_FIELD_KEY = 300
 const CACHE_TTL_MS = 10 * 60_000
 const CACHE_MAX = 60
+
+/** A logo URL the panel may load: https only, sane length. */
+function httpsUrl(v: unknown): string | undefined {
+  const s = str(v)?.trim()
+  return s && s.length <= 1000 && /^https:\/\/[^\s"'<>]+$/i.test(s) ? s : undefined
+}
 
 function actionOf(r: ActionRow): SubfnAction {
   return {
@@ -56,7 +63,7 @@ function actionOf(r: ActionRow): SubfnAction {
     subCategory: str(r.sub_category),
     serviceId: str(r.pluginrecordid),
     appName: str(r.pluginname),
-    iconUrl: str(r.iconurl),
+    iconUrl: httpsUrl(r.iconurl),
     authIdLookup: str(r.authidlookup),
     actionVersionId: str(r.actionversionrecordid),
     needsConnection: !!r.authtype && r.authtype !== NO_AUTH_ID,
@@ -205,10 +212,16 @@ export async function handleSubfunctionsRequest(req: SubfnRequest, sender: chrom
       case 'subfn:search-apps': {
         const query = typeof req.query === 'string' ? req.query.trim().slice(0, MAX_QUERY_CHARS) : ''
         if (!query) return { ok: true, data: [] }
-        const rows = await searchApps(ctx, query, 30)
+        const rows = await searchApps(ctx, query, 30, true)
         const apps = rows
           .filter((r) => typeof r.serviceId === 'string' && ROW_ID_RE.test(r.serviceId) && typeof r.name === 'string')
-          .map((r) => ({ serviceId: r.serviceId as string, name: r.name as string, description: str(r.description), domain: str(r.domain) }))
+          .map((r) => ({
+            serviceId: r.serviceId as string,
+            name: r.name as string,
+            description: str(r.description),
+            domain: str(r.domain),
+            iconUrl: httpsUrl(r.iconUrl),
+          }))
         return { ok: true, data: apps }
       }
 
@@ -322,6 +335,8 @@ async function save(ctx: VsContext, req: Extract<SubfnRequest, { type: 'subfn:sa
   if (varProblems.length) return { ok: false, error: varProblems.join('; ') }
 
   const vs = ctx.vs
+  let flowJson: Record<string, unknown> | undefined
+  let stepRow: Record<string, unknown> | undefined
   await vs.mutate(flow.scriptId, async () => {
     await vs.alignOrg(ctx.signal, { force: true })
     const blocks = (await getFlow(ctx, flow)).json_script.blocks
@@ -344,13 +359,54 @@ async function save(ctx: VsContext, req: Extract<SubfnRequest, { type: 'subfn:sa
     const dynamicVariables = shownVars ?? asRecord((await getFunctionRow(ctx, flow, req.stepId))?.metadata?.drafted?.dynamicVariables)
     const body = functionBody({ stepId: req.stepId, title: req.slugName }, req.code, { dynamicVariables })
     body.subfunctions = subfunctions
-    await vs.request({
+    const res = await vs.request({
       method: 'PUT',
       path: `/scripts/${flow.scriptId}/stepv2/${encodeURIComponent(req.slugName)}`,
       body,
       live: true,
       signal: ctx.signal,
     })
+    flowJson = savedFlowJson(res, flow.scriptId, req.slugName)
+    // The editor shows a step from this row (setFunctionJson); read it the way the editor does. The save is done, so
+    // a failed read only means the editor refreshes the slower way.
+    try {
+      stepRow = savedStepRow(await getFunctionRow(ctx, flow, req.stepId), flow.scriptId, req.stepId)
+    } catch {
+      stepRow = undefined
+    }
   })
-  return { ok: true, data: null }
+  const result: SubfnSaveResult = { ...(flowJson ? { flowJson } : {}), ...(stepRow ? { stepRow } : {}) }
+  return { ok: true, data: result }
+}
+
+/** The step's functions row, when it is this flow's JS step and small enough to hand to the page. */
+function savedStepRow(row: unknown, scriptId: string, stepId: string): Record<string, unknown> | undefined {
+  if (!isRecord(row) || row.id !== stepId || row.script_id !== scriptId) return undefined
+  if (typeof row.code !== 'string' || typeof row.type !== 'string' || !row.type.includes('function')) return undefined
+  try {
+    if (JSON.stringify(row).length > MAX_FLOW_JSON_CHARS) return undefined
+  } catch {
+    return undefined
+  }
+  return row
+}
+
+const MAX_FLOW_JSON_CHARS = 4_000_000
+
+/**
+ * The flow's json_script from a step save response ({ script: <flow row> }), for the open editor: a step saved for
+ * the first time is DRAFTED in the editor's copy of the flow, and the editor starts such a step empty instead of
+ * loading it. Undefined when the response is not that flow or does not have the saved step.
+ */
+function savedFlowJson(res: unknown, scriptId: string, slugName: string): Record<string, unknown> | undefined {
+  const script = asRecord(asRecord(res).script)
+  if (script.id !== undefined && script.id !== scriptId) return undefined
+  const js = script.json_script
+  if (!isRecord(js) || !isRecord(js.blocks) || !isRecord(js.order) || !isRecord(js.blocks[slugName])) return undefined
+  try {
+    if (JSON.stringify(js).length > MAX_FLOW_JSON_CHARS) return undefined
+  } catch {
+    return undefined
+  }
+  return js
 }

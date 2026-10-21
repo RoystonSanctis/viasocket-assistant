@@ -1,4 +1,4 @@
-// The "Subfunctions & Actions" panel above the code of a JS step.
+// The "Subfunctions" panel above the code of a JS step.
 //
 // A subfunction lets step code call an app action: the step's `subfunctions` lists {name, actionId, authId}, and the
 // backend declares `async function <name>({ inputData })` for each entry, bound to that connection. This panel adds
@@ -21,6 +21,7 @@ import {
   type SubfnOptionsResult,
   type SubfnRequest,
   type SubfnResponse,
+  type SubfnSaveResult,
   type SubfunctionRef,
 } from '../shared/subfunctions'
 import {
@@ -119,9 +120,12 @@ const PANEL_CSS = `
 .vs-sf-icon-btn { background: transparent; border: none; color: var(--vs-text-faint); padding: 4px; border-radius: 4px; cursor: pointer; display: inline-flex; align-items: center; }
 .vs-sf-icon-btn:hover:not(:disabled) { color: var(--vs-text-primary); background: var(--vs-bg-hover); }
 .vs-sf-danger:hover:not(:disabled) { color: var(--vs-danger); }
-.vs-sf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.vs-sf-chip { display: inline-flex; align-items: center; gap: 7px; background: var(--vs-bg-secondary); border: 1px solid var(--vs-border); border-radius: 6px; padding: 4px 4px 4px 8px; font-size: 12px; max-width: 100%; }
-.vs-sf-chip-text { display: flex; flex-direction: column; min-width: 0; }
+.vs-sf-chips { display: flex; flex-direction: column; gap: 6px; }
+/* One full-width row per subfunction: name and app on the left, badges and buttons at the right edge. */
+.vs-sf-chip { display: flex; align-items: center; gap: 7px; width: 100%; background: var(--vs-bg-secondary); border: 1px solid var(--vs-border); border-radius: 6px; padding: 4px 4px 4px 8px; font-size: 12px; }
+.vs-sf-chip-text { display: flex; flex-direction: column; flex: 1 1 auto; min-width: 0; }
+.vs-sf-chip .vs-sf-badge { max-width: 260px; flex-shrink: 1; min-width: 0; }
+.vs-sf-chip .vs-sf-icon-btn { flex-shrink: 0; }
 .vs-sf-code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 .vs-sf-chip-name { font-weight: 600; }
 .vs-sf-chip-meta { font-size: 11px; color: var(--vs-text-faint); }
@@ -133,6 +137,8 @@ const PANEL_CSS = `
 .vs-sf-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vs-sf-app-icon { width: 22px; height: 22px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0; color: var(--vs-text-secondary); background: var(--vs-bg-tertiary); }
 .vs-sf-app-icon img { width: 100%; height: 100%; object-fit: contain; }
+/* Logos sit on viaSocket's icon plate (IconWrapper): the same near-white in both modes, so dark logos stay visible. */
+.vs-sf-app-icon.vs-sf-logo { box-sizing: border-box; padding: 2px; border: 1px solid var(--vs-border); background: var(--col-icon-bg, #f9fafb); }
 .vs-sf-overlay { position: fixed; inset: 0; z-index: 2147483000; background: var(--vs-modal-overlay); display: flex; align-items: center; justify-content: center; padding: 20px; }
 .vs-sf-modal { background: var(--vs-bg-primary); width: 100%; max-width: 640px; max-height: 88vh; border: 1px solid var(--vs-border); border-radius: 8px; box-shadow: var(--vs-modal-shadow); display: flex; flex-direction: column; overflow: hidden; }
 .vs-sf-head { padding: 12px 16px; border-bottom: 1px solid var(--vs-border); display: flex; align-items: center; gap: 8px; }
@@ -202,8 +208,12 @@ function button(cls: string, content: Child[], onClick: (e: MouseEvent) => void,
 
 function appIcon(url?: string): HTMLElement {
   const box = el('span', 'vs-sf-app-icon')
-  const fallback = () => box.replaceChildren(icon(SVG.bolt))
+  const fallback = () => {
+    box.classList.remove('vs-sf-logo')
+    box.replaceChildren(icon(SVG.bolt))
+  }
   if (url && /^https:\/\//i.test(url)) {
+    box.classList.add('vs-sf-logo')
     const img = el('img')
     img.alt = ''
     img.referrerPolicy = 'no-referrer'
@@ -357,7 +367,7 @@ export function initSubfunctionsUI(bridge: PageBridge): SubfunctionsUIController
     const header = el(
       'div',
       'vs-sf-row vs-sf-spread',
-      el('div', 'vs-sf-title', icon(SVG.bolt, 'vs-sf-bolt'), 'Subfunctions & Actions', el('span', 'vs-sf-count', String(ctx.subfunctions.length))),
+      el('div', 'vs-sf-title', icon(SVG.bolt, 'vs-sf-bolt'), 'Subfunctions', el('span', 'vs-sf-count', String(ctx.subfunctions.length))),
       button('vs-sf-btn', [icon(SVG.plus), 'Add app action'], () => void openAdd(), 'Call an app action from this code'),
     )
     const chips = el('div', 'vs-sf-chips')
@@ -387,7 +397,7 @@ export function initSubfunctionsUI(bridge: PageBridge): SubfunctionsUIController
       'div',
       'vs-sf-chip',
       iconBox,
-      el('span', 'vs-sf-chip-text', el('span', 'vs-sf-chip-name vs-sf-code', sub.name), meta),
+      el('span', 'vs-sf-chip-text', el('span', 'vs-sf-chip-name vs-sf-code vs-sf-ellipsis', sub.name), meta),
       status,
       usage,
       button('vs-sf-icon-btn', [icon(SVG.edit)], () => void openEdit(sub), `Edit ${sub.name}`),
@@ -555,7 +565,7 @@ export function initSubfunctionsUI(bridge: PageBridge): SubfunctionsUIController
       if (others.length) {
         parts.push(el('div', 'vs-sf-section', connected.length ? 'Other apps' : 'Apps'))
         const grid = el('div', 'vs-sf-grid')
-        for (const a of others) grid.append(card({ serviceId: a.serviceId, name: a.name, sub: a.domain ?? a.description }))
+        for (const a of others) grid.append(card({ serviceId: a.serviceId, name: a.name, iconUrl: a.iconUrl, sub: a.domain ?? a.description }))
         parts.push(grid)
       } else if (!connected.length) parts.push(el('div', 'vs-sf-center', `No app matches "${q}".`))
       results.replaceChildren(...parts)
@@ -763,20 +773,33 @@ export function initSubfunctionsUI(bridge: PageBridge): SubfunctionsUIController
     if (call?.fields) model.load(call.fields)
     model.reconcile()
 
-    // Function name: unique in the flow (connections are keyed by it) and not a name the code declares itself.
-    const taken = [...d.ctx.subfunctions.map((s) => s.name).filter((n) => n !== originalName), ...d.ctx.otherNames]
-    let suggested = subfunctionNameFor(detail.name, taken)
-    while (shadowed(d.ctx, suggested)) {
-      taken.push(suggested)
-      suggested = subfunctionNameFor(detail.name, taken)
+    // Function name: unique in this step and not a name the code declares itself. Each step's subfunctions are its
+    // own functions, so numbering starts over in every step; the flow keeps one connection per name, though, so a
+    // name another step uses is taken unless it is used there with the same connection.
+    const suggestName = (auth: string): string => {
+      const taken = [
+        ...d.ctx.subfunctions.map((s) => s.name).filter((n) => n !== originalName),
+        ...d.ctx.otherSubfunctions.filter((o) => !auth || o.authId !== auth).map((o) => o.name),
+      ]
+      let name = subfunctionNameFor(detail.name, taken)
+      while (shadowed(d.ctx, name)) {
+        taken.push(name)
+        name = subfunctionNameFor(detail.name, taken)
+      }
+      return name
     }
     const nameInput = el('input', 'vs-sf-input vs-sf-code')
-    nameInput.value = originalName ?? suggested
+    nameInput.value = originalName ?? suggestName(detail.needsConnection ? (d.authId ?? '') : NO_AUTH_ID)
     nameInput.spellcheck = false
     nameInput.setAttribute('aria-label', 'Function name')
     const callPreview = el('span', 'vs-sf-code')
     const syncPreview = () => (callPreview.textContent = `await ${nameInput.value.trim() || '…'}({ inputData })`)
-    nameInput.addEventListener('input', syncPreview)
+    // A name the user typed (or the one being edited) stays; a suggested one follows the chosen connection.
+    let nameTouched = !!originalName
+    nameInput.addEventListener('input', () => {
+      nameTouched = true
+      syncPreview()
+    })
     syncPreview()
     const setup = el(
       'div',
@@ -787,6 +810,12 @@ export function initSubfunctionsUI(bridge: PageBridge): SubfunctionsUIController
     // Connection: the inputs show once it is chosen, like the step panel.
     let connSelect: HTMLSelectElement | null = null
     let view: InputsView | null = null
+    const connectionChanged = () => {
+      view?.refresh(true)
+      if (nameTouched || !connSelect) return
+      nameInput.value = suggestName(connSelect.value)
+      syncPreview()
+    }
     if (detail.needsConnection) {
       const select = el('select', 'vs-sf-select')
       select.setAttribute('aria-label', 'Connection')
@@ -817,10 +846,10 @@ export function initSubfunctionsUI(bridge: PageBridge): SubfunctionsUIController
           showToast({ title: 'Could not load connections', message: errorText(e), type: 'error' })
         } finally {
           select.disabled = false
-          view?.refresh(true)
+          connectionChanged()
         }
       }
-      select.addEventListener('change', () => view?.refresh(true))
+      select.addEventListener('change', connectionChanged)
       const connectBtn = button('vs-sf-icon-btn', [icon(SVG.plus)], async () => {
         connectBtn.disabled = true
         try {
@@ -910,7 +939,7 @@ export function initSubfunctionsUI(bridge: PageBridge): SubfunctionsUIController
 
         const ref: SubfunctionRef = { name, actionId: detail.actionId, authId: auth }
         const subfunctions = originalName ? fresh.subfunctions.map((s) => (s.name === originalName ? ref : s)) : [...fresh.subfunctions, ref]
-        await ask<null>({
+        const saved = await ask<SubfnSaveResult>({
           type: 'subfn:save',
           scriptId: fresh.scriptId,
           stepId: fresh.stepId,
@@ -919,7 +948,7 @@ export function initSubfunctionsUI(bridge: PageBridge): SubfunctionsUIController
           subfunctions,
           dynamicVariables: fresh.dynamicVariables,
         })
-        bridge.refreshStep(fresh.scriptId, fresh.stepId, fresh.slugName)
+        bridge.refreshStep(fresh.scriptId, fresh.stepId, fresh.slugName, saved ?? undefined)
         m.close()
         shownSig = ''
         showToast({
@@ -963,7 +992,7 @@ export function initSubfunctionsUI(bridge: PageBridge): SubfunctionsUIController
     const what = removed ? ` and its ${removed} call${removed > 1 ? 's' : ''} in the code` : ''
     if (!window.confirm(`Remove the subfunction ${sub.name}${what}?`)) return
     try {
-      await ask<null>({
+      const saved = await ask<SubfnSaveResult>({
         type: 'subfn:save',
         scriptId: fresh.scriptId,
         stepId: fresh.stepId,
@@ -972,7 +1001,7 @@ export function initSubfunctionsUI(bridge: PageBridge): SubfunctionsUIController
         subfunctions: fresh.subfunctions.filter((s) => s.name !== sub.name),
         dynamicVariables: fresh.dynamicVariables,
       })
-      bridge.refreshStep(fresh.scriptId, fresh.stepId, fresh.slugName)
+      bridge.refreshStep(fresh.scriptId, fresh.stepId, fresh.slugName, saved ?? undefined)
       shownSig = ''
       showToast({ title: `Removed ${sub.name}`, message: "Saved to the step's draft.", type: 'success' })
       void tick()
