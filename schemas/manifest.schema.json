@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/RoystonSanctis/viasocket-assistant/config-stable/schemas/manifest.schema.json",
+  "title": "viaSocket Assistant config manifest",
+  "description": "Entry point the extension fetches first. Lists every other config file by path relative to the branch root.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "configVersion", "minExtensionVersion", "files"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "configVersion": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Bump on every change (convention: YYYY.MM.DD-N)."
+    },
+    "minExtensionVersion": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Oldest extension version this config is written for."
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["providers", "selectors", "mascot", "flags", "tools", "voice", "prompts"],
+      "properties": {
+        "providers": { "$ref": "#/$defs/path" },
+        "selectors": { "$ref": "#/$defs/path" },
+        "mascot": { "$ref": "#/$defs/path" },
+        "flags": { "$ref": "#/$defs/path" },
+        "tools": { "$ref": "#/$defs/path" },
+        "voice": { "$ref": "#/$defs/path" },
+        "prompts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["system", "flowBuilder", "devHub", "reactions"],
+          "properties": {
+            "system": { "$ref": "#/$defs/path" },
+            "flowBuilder": { "$ref": "#/$defs/path" },
+            "devHub": { "$ref": "#/$defs/path" },
+            "reactions": { "$ref": "#/$defs/path" }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "path": {
+      "type": "string",
+      "description": "Relative path inside this repo: no leading slash, no '..', no URL scheme.",
+      "pattern": "^(?!/)(?!.*\\.\\.)[A-Za-z0-9_-][A-Za-z0-9._/-]*$"
+    }
+  }
+}

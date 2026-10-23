@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "appHosts": ["flow.viasocket.com", "beta-flow.viasocket.com", "dev-flow.viasocket.com"],
+  "flow": {
+    "canvasViewport": "[data-testid=\"flow-canvas\"]",
+    "zoomContainer": "[data-testid=\"flow-zoom-container\"]",
+    "stepNode": "[data-testid=\"step-node-{slugName}\"]",
+    "triggerNode": "[data-testid^=\"inflow-node-\"]",
+    "stepPanel": "[data-testid=\"step-config-slider\"]",
+    "stepSave": "[data-testid=\"step-config-slider\"] [data-testid=\"save-button\"], [data-testid=\"step-config-slider\"] [data-testid=\"trigger-save-button\"]",
+    "stepTest": "[data-testid=\"step-config-slider\"] [data-testid=\"dry-run-test-button\"], [data-testid=\"step-config-slider\"] [data-testid=\"trigger-dry-run-test-button\"], [data-testid=\"step-config-slider\"] [data-testid=\"dry-run-step-test-button\"]",
+    "stepClose": "[data-testid=\"step-config-slider\"] [data-testid=\"slider-close-button\"]",
+    "addStepButton": "[data-testid=\"flow-zoom-container\"] [data-testid=\"add-step-button\"]:not([data-testid=\"select-trigger-prompt\"] *)",
+    "publishButton": "[data-testid=\"publish-go-live-button\"]",
+    "discardButton": "[data-testid=\"publish-discard-changes-button\"]",
+    "controls": "[data-testid=\"flow-controls-container\"]",
+    "askAiButton": "[data-testid=\"ask-ai-button\"]",
+    "zoomFitButton": "[data-testid=\"zoom-fit-button\"]",
+    "navbar": "[data-testid=\"workflow-navbar-container\"]"
+  },
+  "devHub": {
+    "section": ".dynamic-section, .developer-hub-container, [data-testid=\"devhub-container\"], main",
+    "saveButton": "[data-testid=\"dh-save-button\"], [data-testid=\"dh-save-input-fields-button\"], [data-testid=\"plugin-details-save-button\"]",
+    "dryRunButton": "[data-testid=\"dry-run-test-button\"], [data-testid=\"dh-dry-run-test-button\"], [data-testid=\"function-slider-test-button\"]",
+    "sidebar": "[data-testid=\"custom-sidebar\"], [data-testid=\"project-sidebar\"], [data-testid=\"sidebar\"], .MuiDrawer-paper, aside, nav",
+    "tabs": "[data-testid=\"gui-dashboard-tabs\"]",
+    "shareButton": "[data-testid=\"share-open-button\"]"
+  },
+  "fieldLabel": {
+    "containers": ["[data-testid=\"step-config-slider\"]", ".dynamic-section"],
+    "labels": ["[data-testid^=\"plugin-field-label-\"]", "label", ".MuiFormLabel-root"]
+  },
+  "avoid": [
+    "#parentChatbot",
+    "#parentConnectionChatbot",
+    "#fbaiparentChatbot",
+    "#gtwy-embed-container",
+    "#gtwy-iframe-parent-container",
+    "iframe[src*=\"gtwy.ai\"]",
+    "iframe[src*=\"walkover.in\"]",
+    "[data-testid=\"support-menu\"]",
+    "[data-testid=\"support-chatbot-panel\"]",
+    "#helloChatbotContainer",
+    "[data-testid=\"action-chat-button\"]",
+    "[data-testid=\"flow-page-open-chat-button\"]",
+    ".search-panel-container",
+    "[data-testid=\"toast-alert\"]",
+    "[data-testid^=\"delay-step-node-\"]",
+    "[data-testid^=\"if-component-\"]",
+    "[data-testid^=\"break-component-\"]",
+    "[data-testid=\"add-step-button\"]",
+    "[data-testid=\"vertical-stick-add-step\"]",
+    "[data-testid=\"build-with-ai-card\"]",
+    "[data-testid=\"select-trigger-prompt\"]",
+    "[data-testid=\"ai-first-empty-state\"]",
+    ".MuiDialog-container [role=\"dialog\"]",
+    ".MuiPopover-paper",
+    "[data-testid=\"publish-success-snackbar\"]"
+  ]
+}

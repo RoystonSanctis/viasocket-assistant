@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/RoystonSanctis/viasocket-assistant/config-stable/schemas/voice.schema.json",
+  "title": "Voice settings",
+  "description": "Speech-to-text models, spoken replies and the push-to-talk timing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "stt", "tts", "hotkey"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "stt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["defaultEngine", "defaultModel", "models"],
+      "properties": {
+        "defaultEngine": { "enum": ["whisper-local", "browser"] },
+        "defaultModel": { "type": "string", "minLength": 1, "description": "Must be the id of one of the models below." },
+        "models": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "label", "approxSizeMb", "multilingual"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "Hugging Face model id (owner/name) of an ONNX speech model that Transformers.js can load.",
+                "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+              },
+              "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+              "approxSizeMb": { "type": "number", "exclusiveMinimum": 0 },
+              "multilingual": { "type": "boolean" },
+              "note": { "type": "string", "maxLength": 200 }
+            }
+          }
+        },
+        "vocabulary": {
+          "type": "array",
+          "description": "Words the transcript is fuzzy-corrected towards (app names small models often mishear).",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 40 },
+          "default": []
+        }
+      }
+    },
+    "tts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "rate": { "type": "number", "minimum": 0.5, "maximum": 2, "default": 1.05 },
+        "pitch": { "type": "number", "minimum": 0, "maximum": 2, "default": 1.1 },
+        "maxChars": { "type": "number", "minimum": 20, "maximum": 1000, "default": 160 }
+      }
+    },
+    "hotkey": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "holdMs": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2000,
+          "default": 180,
+          "description": "How long the push-to-talk keys must be held before listening starts."
+        }
+      }
+    }
+  }
+}
