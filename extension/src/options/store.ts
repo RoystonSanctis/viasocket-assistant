@@ -53,8 +53,3 @@ export function providerById(id: string): ProviderView | undefined {
 export function activeProvider(): ProviderView | undefined {
   return providerById(store.settings.providerId)
 }
-
-/** True while focus is inside the element, so a background refresh never overwrites what the user is editing. */
-export function isEditing(el: HTMLElement): boolean {
-  return el === document.activeElement || el.contains(document.activeElement)
-}

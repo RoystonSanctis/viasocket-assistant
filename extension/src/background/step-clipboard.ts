@@ -61,6 +61,15 @@ export async function getClientForSender(
   return new ViaSocketClient(env, page, { storeId, incognito: tab?.incognito })
 }
 
+/** "Add JS step" goes through the paste path as a blank function step (English flows have no add button). */
+const NEW_JS_STEP: CopiedStepData = {
+  version: 1,
+  copiedAt: 0,
+  source: { host: '', scriptId: '', slugName: 'JS_Code', stepTitle: 'JS Code', type: 'function' },
+  block: { type: 'function' },
+  functionData: { code: 'return {}' },
+}
+
 export async function handleStepClipboardRequest(
   req: StepClipboardRequest,
   sender: chrome.runtime.MessageSender,
@@ -171,8 +180,10 @@ export async function handleStepClipboardRequest(
 
     case 'step:paste': {
       try {
-        const store = await chrome.storage.local.get(COPIED_STEP_STORAGE_KEY)
-        const copied = store[COPIED_STEP_STORAGE_KEY] as CopiedStepData | undefined
+        const copied =
+          req.template === 'function'
+            ? NEW_JS_STEP
+            : ((await chrome.storage.local.get(COPIED_STEP_STORAGE_KEY))[COPIED_STEP_STORAGE_KEY] as CopiedStepData | undefined)
         if (!copied || !copied.block) {
           return { ok: false, error: 'No active copy. Please copy first.' }
         }
@@ -423,7 +434,7 @@ export async function handleStepClipboardRequest(
             title: actualSlug,
             stepId: newStepId,
             status: putSuccess ? 'active' : 'draft',
-            note: putNote || (putSuccess ? 'Step pasted and activated!' : 'Step pasted as draft!'),
+            note: putNote || (req.template ? 'JS step added.' : putSuccess ? 'Step pasted and activated!' : 'Step pasted as draft!'),
           }
         })
 

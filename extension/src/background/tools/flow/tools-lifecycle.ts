@@ -22,7 +22,7 @@ import { optionalFlow, SCRIPT_ID_PARAM } from './tools-read'
 import { publishReadiness } from './publish-check'
 import type { Block, FunctionRow, PluginData, Trigger } from './types'
 import { appPath } from './urls'
-import { asRecord, bounded, FLOW_PAGES, isRecord, label, parseMaybeJson, PROJECT_ID_RE, ROW_ID_RE, SLUG_RE, str, trimData, truncate } from './util'
+import { asRecord, bounded, FLOW_PAGES, hostsIn, isRecord, label, parseMaybeJson, PROJECT_ID_RE, ROW_ID_RE, SLUG_RE, str, trimData, truncate } from './util'
 
 const pages = [...FLOW_PAGES]
 const DATA_TYPES = new Set(['plugin', 'function', 'api', 'variable'])
@@ -142,19 +142,6 @@ const connectAppTool = defineTool<ConnectAppArgs>({
     return connectApp(ctx, a, optionalFlow(ctx, a.scriptId))
   },
 })
-
-function hostsIn(text: string): string[] {
-  const hosts = new Set<string>()
-  for (const m of text.matchAll(/\bhttps?:\/\/[^\s'"`<>()[\]{}]+/gi)) {
-    try {
-      hosts.add(new URL(m[0]).host)
-    } catch {
-      // Not a parseable URL (e.g. a ${...} template); skip it.
-    }
-    if (hosts.size >= 8) break
-  }
-  return [...hosts]
-}
 
 /** What the confirmation card says will run, built from the saved step (never from model-written text alone). */
 function testPreview(slug: string, block: Block, fn: FunctionRow | null, pd: PluginData | null): string {

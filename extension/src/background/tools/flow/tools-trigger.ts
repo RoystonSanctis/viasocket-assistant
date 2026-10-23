@@ -7,9 +7,8 @@
 // stores the raw result as the trigger's sample, so later steps are mapped from real fields. Values given in an
 // incomplete call are held for the next one, because viaSocket cannot store a half-configured trigger.
 //
-// While this tab shows the flow, saves go out without live-apply and the trigger panel is (re)opened with a
-// ?timestamp refetch: the editor keeps its own copy of whatever a panel has shown, which live-apply would leave
-// stale — and a live-applied save would stop the refetch from reloading it (see flow-api's editor-sync note).
+// Saves are live-applied and the trigger panel is then (re)opened with a ?timestamp refetch, because the editor
+// keeps its own copy of whatever a panel has shown (see flow-api's editor-sync note).
 
 import { maybeRedactText } from '../redact'
 import type { Tool, ToolContext } from '../types'
@@ -17,9 +16,9 @@ import { getActionRow, getActionVersionRow, normalizeInputJson, scheduleTimeOpti
 import { configure, type Configured } from './configure'
 import { resolveConnection } from './connections'
 import { describeRun, nextRuns, parseCron, validTimezone } from './cron'
-import { call, isAbortError, ToolError } from './errors'
+import { call, fail, isAbortError, ToolError } from './errors'
 import { choiceKeys, clearPending, holdValues, mergePending, reachableFields, stepKey, withDynamicInput, type SavedState } from './fields'
-import { everPublished, getFlow, liveUnlessEditorOpen, normalizeFlow, openTriggerPanel, panelResult, resolveFlow, triggerFeatures, triggerKind } from './flow-api'
+import { everPublished, getFlow, normalizeFlow, openTriggerPanel, panelResult, resolveFlow, triggerFeatures, triggerKind } from './flow-api'
 import { encodeInputData } from './input-data'
 import { checkTriggerValues, inputDataTexts } from './mapping'
 import { consoleOf, dryRunErrorText, executeDryRun, getRecentRun } from './runs'
@@ -62,10 +61,6 @@ function describeTrigger(t: Trigger | undefined): string {
   if (kind === 'email') return 'incoming email'
   if (kind === 'cron') return `a schedule${t.meaning ? ` (${t.meaning})` : ''}`
   return `the ${t.serviceName ?? 'app'} trigger${t.actionName ? ` "${t.actionName}"` : ''}`
-}
-
-function fail(problems: string[]): never {
-  throw new ToolError(`Nothing was changed. Fix these first: ${problems.join(' | ')}`)
 }
 
 function precheck(a: SetTriggerArgs): void {

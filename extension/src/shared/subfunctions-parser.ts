@@ -2,8 +2,10 @@
 //
 // Edits are surgical: only the inputData object literal (and, on a rename, the function name) is rewritten, so
 // whatever surrounds a call (const/let, await, .then, comments, other keys next to inputData) stays as written.
-// Strings, template literals and comments are skipped while scanning; regex literals are not recognised.
+// Strings, template literals, comments and regex literals (told from division by the token before them, as
+// js-check does) are skipped while scanning.
 
+import { regexAllowed, scanRegex } from '../background/tools/flow/js-check'
 import { isReservedName } from '../background/tools/flow/slugs'
 import { SUBFUNCTION_NAME_RE } from './subfunctions'
 
@@ -11,7 +13,8 @@ import { SUBFUNCTION_NAME_RE } from './subfunctions'
 const SANDBOX_GLOBALS = new Set([
   '_', 'moment', 'axios', 'fetch', 'FormData', 'https', 'crypto', 'Buffer', 'jwt', 'cheerio', 'URLSearchParams',
   'atob', 'XMLParser', 'XMLBuilder', 'XMLValidator', 'setTimeout', 'usaProxy', 'createCustomConsole',
-  '__createCustomAxios', '__stepId', '__interventionConfig',
+  '__createCustomAxios', '__createCustomFetch', '__stepId', '__interventionConfig', 'actualAxios', '_flowHitId', '_scriptId',
+  'sendToParent', 'getBasicAuthData', '_getAccessToken',
 ])
 
 export function isSubfunctionName(name: string): boolean {
@@ -62,7 +65,27 @@ function skipNonCode(code: string, i: number): number {
     const n = code.indexOf('*/', i + 2)
     return n === -1 ? code.length : n + 2
   }
+  if (c === '/') {
+    let p = i - 1
+    while (p >= 0 && /\s/.test(code[p] ?? '')) p--
+    if (regexAllowed(p < 0 ? '' : code[p] ?? '', code, i)) {
+      const end = scanRegex(code, i)
+      if (end !== -1) return end
+    }
+  }
   return i
+}
+
+function isComment(code: string, i: number): boolean {
+  return code[i] === '/' && (code[i + 1] === '/' || code[i + 1] === '*')
+}
+
+/** Calls of `name(` in real code, without declarations and method definitions (`name(...) {`). */
+function callHits(code: string, name: string): number[] {
+  return identifierAt(code, name, '\\s*\\(').filter((at) => {
+    const close = matchBracket(code, code.indexOf('(', at))
+    return close === -1 || !/^\s*\{/.test(code.slice(close))
+  })
 }
 
 /** `open` is the index of '{', '[' or '('; returns the index just past its matching bracket, or -1. */
@@ -135,7 +158,7 @@ function objectFields(code: string, start: number, end: number): Record<string, 
   const skipSpace = () => {
     for (;;) {
       while (i < stop && /\s/.test(code[i] ?? '')) i++
-      const skip = i < stop && code[i] === '/' ? skipNonCode(code, i) : i
+      const skip = i < stop && isComment(code, i) ? skipNonCode(code, i) : i
       if (skip === i) return
       i = skip
     }
@@ -170,9 +193,12 @@ function objectFields(code: string, start: number, end: number): Record<string, 
     i++
     skipSpace()
     const valueStart = i
+    // The value ends at its last real code character: a trailing `// comment` must not swallow the next comma.
+    let valueEnd = i
     while (i < stop) {
       const skip = skipNonCode(code, i)
       if (skip !== i) {
+        if (!isComment(code, i)) valueEnd = skip
         i = skip
         continue
       }
@@ -181,14 +207,17 @@ function objectFields(code: string, start: number, end: number): Record<string, 
         const close = matchBracket(code, i)
         if (close === -1) return null
         i = close
+        valueEnd = close
         continue
       }
       if (ch === ',') break
+      if (!/\s/.test(ch ?? '')) valueEnd = i + 1
       i++
     }
-    // A value spanning lines is kept relative to its key's indentation, so writing it back is stable.
-    let value = code.slice(valueStart, i).trim()
-    if (value.includes('\n')) {
+    // A value spanning lines is kept relative to its key's indentation, so writing it back is stable. Template
+    // literals stay verbatim: their line indentation is part of the string.
+    let value = code.slice(valueStart, valueEnd).trim()
+    if (value.includes('\n') && !value.includes('`')) {
       const indent = lineIndent(code, keyStart)
       if (indent) value = value.split('\n').map((line, n) => (n > 0 && line.startsWith(indent) ? line.slice(indent.length) : line)).join('\n')
     }
@@ -267,7 +296,7 @@ export function declaresName(code: string, name: string): boolean {
 
 /** How many times the code calls `name(` at all, with or without an inputData literal. */
 export function countCalls(code: string, name: string): number {
-  return identifierAt(code, name, '\\s*\\(').length
+  return callHits(code, name).length
 }
 
 // ---------- writing calls ----------
@@ -283,7 +312,7 @@ export function formatInputData(fields: Record<string, string>, indent: string):
   if (entries.length === 0) return '{}'
   const lines = entries.map(([k, v]) => {
     const key = /^[A-Za-z_$][\w$]*$/.test(k) ? k : JSON.stringify(k)
-    return `${indent}  ${key}: ${v.replace(/\n/g, `\n${indent}  `)}`
+    return `${indent}  ${key}: ${v.includes('`') ? v : v.replace(/\n/g, `\n${indent}  `)}`
   })
   return `{\n${lines.join(',\n')}\n${indent}}`
 }
@@ -297,7 +326,7 @@ export function replaceCallInput(code: string, call: SubfunctionCall, fields: Re
 /** Renames every call of a subfunction (`old(` to `next(`) in real code. */
 export function renameSubfunction(code: string, oldName: string, next: string): string {
   let out = code
-  for (const i of identifierAt(code, oldName, '\\s*\\(').reverse()) {
+  for (const i of callHits(code, oldName).reverse()) {
     out = out.slice(0, i) + next + out.slice(i + oldName.length)
   }
   return out
@@ -311,7 +340,7 @@ export function renameSubfunction(code: string, oldName: string, next: string): 
 export function removeCallStatements(code: string, name: string): { code: string; removed: number; remaining: number } {
   let out = code
   let removed = 0
-  for (const at of identifierAt(code, name, '\\s*\\(').reverse()) {
+  for (const at of callHits(code, name).reverse()) {
     const lineStart = out.lastIndexOf('\n', at - 1) + 1
     const lead = /^\s*(?:(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*)?(?:await\s+)?$/.exec(out.slice(lineStart, at))
     if (!lead) continue
@@ -325,7 +354,6 @@ export function removeCallStatements(code: string, name: string): { code: string
     out = next
     removed++
   }
-  if (removed) out = out.replace(/\n{3,}/g, '\n\n')
   return { code: out, removed, remaining: countCalls(out, name) }
 }
 

@@ -67,6 +67,8 @@ export type StepClipboardRequest =
       target: 'background'
       type: 'step:paste'
       targetSlugName: string
+      /** Insert a new blank step of this type instead of the copied one ("Add JS step"). */
+      template?: 'function'
       scriptId?: string
       projectId?: string
       orgId?: string

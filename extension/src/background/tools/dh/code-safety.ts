@@ -738,11 +738,6 @@ export function readOnlyReasons(code: string, opts: ReviewOptions = {}): string[
   return [...r.reasons]
 }
 
-/** Component check (dh_create_component): components back dynamic fields and must only read. */
-export function writeSignals(code: string): string[] {
-  return readOnlyReasons(code)
-}
-
 /** inputData string values are compiled into template literals by the VM, so `${…}` or a backtick there is code. */
 export function inputDataCode(v: unknown, path = 'inputData', depth = 0, out: string[] = []): string[] {
   if (out.length >= 10 || depth > 6) return out

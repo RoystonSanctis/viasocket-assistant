@@ -15,12 +15,12 @@ import {
 import { normalizeInputJson, type ActionRow } from './catalog'
 import { configure, type Configured } from './configure'
 import { connectApp, isExpired, listConnections, resolveConnection, summarizeConnection, type ConnectionRow } from './connections'
-import { call, isAbortError, ToolError } from './errors'
+import { call, fail, isAbortError, ToolError } from './errors'
 import {
   choiceKeys, clearPending, holdValues, loadFieldOptions, mergePending, stepKey, withDynamicInput, type AppliedDefault, type NeedInput, type SavedState,
 } from './fields'
 import {
-  descendants, editorParam, findParent, getFlow, getFunctionRow, listFunctionRows, liveUnlessEditorOpen, normalizeFlow, openPanel, orphanBlocks,
+  descendants, editorParam, findParent, getFlow, getFunctionRow, listFunctionRows, normalizeFlow, openPanel, orphanBlocks,
   panelResult, pluginDataOf, refreshEditorIfOpen, resolveFlow, slugForStepId, triggerKind, type EditorSync,
 } from './flow-api'
 import { knownFlowProject } from './known'
@@ -37,12 +37,16 @@ import {
 } from './step-bodies'
 import { SCRIPT_ID_PARAM } from './tools-read'
 import type { AuthData, Block, FlowRow, FlowTarget, JsonScript, PluginData } from './types'
-import { asRecord, AUTH_ID_RE, FLOW_PAGES, isRecord, label, MASK, parseMaybeJson, prefixedStepId, ROW_ID_RE, SLUG_RE, str, truncate } from './util'
+import { asRecord, AUTH_ID_RE, FLOW_PAGES, isRecord, label, MASK, parseMaybeJson, prefixedStepId, ROW_ID_RE, sleep, SLUG_RE, str, truncate } from './util'
 
 /** App-action steps, including the editor's built-in tools that are app actions underneath. */
 const PLUGIN_LIKE = new Set(['plugin', 'delay', 'approval', 'ai_agent', 'flow_in_flow'])
 /** Steps that take a title (the slug later steps reference). */
 const NAMED = new Set([...PLUGIN_LIKE, 'function', 'api', 'variable'])
+/** An English (AI) flow's Flow view draws only top-level JS steps and steps with a breakPoint (delay, approval). */
+const ENGLISH_FLOW_VISIBLE = new Set(['function', 'delay', 'approval'])
+const ENGLISH_FLOW_NOTE =
+  'This is an English flow: the step runs, but its Flow view only shows top-level JS, Delay and Approval steps. Tell the user, and prefer a JS step.'
 const SPECIAL_NAMES: Record<SpecialKind, string> = {
   delay: 'Delay',
   approval: 'Human Intervention',
@@ -107,7 +111,7 @@ const STEP_FIELDS = {
   ),
   // No value schema, so null can remove a name; values are checked in checkFields.
   dynamicVariables: S.map(
-    `Function/API steps: Input variables (shown under "Input Values" in the UI). You MUST map every external reference (context.res.<slug>.<field>, context.req.body.<field>, context.vals.<slug>) here as a key-value pair, e.g. {"sheets": "\${context.res.List_Spreadsheet_Tabs.sheets}"}. In code, reference the variable name directly (e.g. sheets.map(...)). This keeps code clean, organized, and lets users change mappings outside the code editor via chips. On update they are merged into the saved ones: null removes a name, and a masked "${MASK}" value keeps the saved one.`,
+    `Function/API steps: Input variables (shown under "Input Values" in the UI). You MUST map every external reference (context.res.<slug>.<field>, context.req.body.<field>, context.vals.<slug>) here as a key-value pair, e.g. {"sheets": "\${context.res.List_Spreadsheet_Tabs.sheets}"}. In code, reference the variable name directly (e.g. sheets.map(...)). This keeps code clean, organized, and lets users change mappings outside the code editor via chips. Never secrets: keys belong in a connection, or let the user type them in the panel. On update they are merged into the saved ones: null removes a name, and a masked "${MASK}" value keeps the saved one.`,
   ),
   url: S.str('API steps: request URL; may contain ${context...} references.', { maxLength: 2000 }),
   method: S.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], 'API steps: HTTP method.'),
@@ -182,10 +186,6 @@ function checkFields(f: StepFields): { problems: string[]; warnings: string[] } 
     if (p) problems.push(`condition: ${p}`)
   }
   return { problems, warnings }
-}
-
-function fail(problems: string[]): never {
-  throw new ToolError(`Nothing was changed. Fix these first: ${problems.join(' | ')}`)
 }
 
 /** Every value that may reference data, with how it is evaluated (template text or JavaScript). */
@@ -792,6 +792,7 @@ const addStep = defineTool<AddStepArgs>({
         }
         if (before.untested.length) warnings.push(`Not tested yet: ${before.untested.join(', ')}. Test them before mapping their output.`)
       }
+      if (row.metadata?.AIFlow === true && !(parent === 'root' && ENGLISH_FLOW_VISIBLE.has(a.type))) warnings.push(ENGLISH_FLOW_NOTE)
       let action: ActionRow | undefined
       let authData: AuthData | undefined
       let kind = specialKindOf(a)
@@ -970,7 +971,7 @@ const addStep = defineTool<AddStepArgs>({
           saved: false,
           error: messageOf(e),
           hint: `"${slug}" exists as an unsaved draft. Fix the problem and call vs_update_step with slugName "${slug}", or remove it with vs_delete_step.`,
-          ...(await new Promise((resolve) => setTimeout(resolve, 200)), panelResult(await openStepPanel(ctx, t, block, slug))),
+          ...(await sleep(200, ctx.signal), panelResult(await openStepPanel(ctx, t, block, slug))),
           warnings: warnings.length ? warnings : undefined,
         }
       }
@@ -983,7 +984,7 @@ const addStep = defineTool<AddStepArgs>({
       } else {
         // Allow a brief moment for the RTlayer WebSocket event to reach and update the editor tab's Redux state
         // so that the step block has status 'ACTIVE' before MasterSliderComponent mounts and fetches function data.
-        await new Promise((resolve) => setTimeout(resolve, 200))
+        await sleep(200, ctx.signal)
         const branch = typeof result.branch === 'string' ? result.branch : undefined
         Object.assign(result, panelResult(branch && childId ? await openPanel(ctx, t.scriptId, childId, branch) : await openStepPanel(ctx, t, block, slug)))
       }
@@ -1270,18 +1271,6 @@ const updateStep = defineTool<UpdateStepArgs>({
         const pd = pluginDataOf(block, await getFunctionRow(ctx, t, block.identifier))
         literal = pd ? choiceKeys(normalizeInputJson(pd.inputJson)) : undefined
       }
-      if (block.type === 'function') {
-        const fn = await getFunctionRow(ctx, t, c.stepId)
-        const codeToUpdate = a.code ?? fn?.code
-        if (codeToUpdate) {
-          const mergedVars = mergeDynamicVariables(fn?.metadata?.drafted?.dynamicVariables, a.dynamicVariables)
-          const extracted = autoExtractDynamicVariables(codeToUpdate, mergedVars)
-          if (a.code !== undefined || extracted.extractedCount > 0) {
-            a.code = extracted.code
-          }
-          a.dynamicVariables = extracted.dynamicVariables
-        }
-      }
       const documentedUsed = new Set(await guardMappings(js, getCat, mappingTexts(a, block.type, literal), allowDoc))
       let body: Record<string, unknown>
       let defaultsApplied: AppliedDefault[] | undefined
@@ -1302,7 +1291,7 @@ const updateStep = defineTool<UpdateStepArgs>({
         const sync = await refreshEditorIfOpen(ctx, t.scriptId)
         panel = sync.reason ? { panelOpened: false, panelNote: sync.reason } : { panelOpened: false }
       } else {
-        await new Promise((resolve) => setTimeout(resolve, 200))
+        await sleep(200, ctx.signal)
         panel = panelResult(block.type === 'response' ? await openPanel(ctx, t.scriptId, 'response', 'response') : await openStepPanel(ctx, t, block, title))
       }
       const reference = block.type === 'variable' ? `context.vals.${title}` : block.type === 'response' ? undefined : `context.res.${title}`
@@ -1390,7 +1379,7 @@ const setResponse = defineTool<SetResponseArgs>({
       if (asRecord(js.trigger?.loops).loopsEnabled === true) warnings.push('Run once per item is on, so callers always get "Flow Queued"; this response is not sent until the loop is turned off.')
       const customHeaders = a.responseType === 'custom' ? (headers ? { data: headers, _data: headers } : block.customHeaders) : undefined
       await putStep(ctx, t, 'response', responseBody(a.responseType, body, customHeaders), true)
-      await new Promise((resolve) => setTimeout(resolve, 200))
+      await sleep(200, ctx.signal)
       return {
         saved: true,
         responseType: a.responseType,
@@ -1418,7 +1407,8 @@ async function buildUpdateBody(
       const code = a.code ?? fn?.code
       if (!code) throw new ToolError('code is required: this function step has never been saved.')
       const mergedVars = mergeDynamicVariables(fn?.metadata?.drafted?.dynamicVariables, a.dynamicVariables)
-      const extracted = autoExtractDynamicVariables(code, mergedVars)
+      // Only new code is rewritten; saved code the model did not send stays exactly as the user wrote it.
+      const extracted = a.code !== undefined ? autoExtractDynamicVariables(code, mergedVars) : { code, dynamicVariables: mergedVars }
       return {
         body: functionBody(c, extracted.code, {
           dynamicVariables: extracted.dynamicVariables,

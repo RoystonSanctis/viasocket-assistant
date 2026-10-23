@@ -105,10 +105,6 @@ export function loadThread(key: string): Promise<Thread> {
   return read(key)
 }
 
-export async function loadLines(key: string): Promise<ChatLine[]> {
-  return (await read(key)).lines
-}
-
 export async function loadPlan(key: string): Promise<WorkflowPlan | null> {
   return (await read(key)).plan ?? null
 }

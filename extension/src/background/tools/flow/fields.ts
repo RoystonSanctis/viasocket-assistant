@@ -19,8 +19,6 @@ import type { AuthData, FieldDef, FlowTarget, InputJson } from './types'
 import { asArray, asRecord, isRecord, str, truncate } from './util'
 import { conditionValues, evalCondition, fieldDeps, usedInputs, valueExists } from '../../../shared/field-rules'
 
-export { conditionValues, evalCondition, fieldDeps, valueExists }
-
 export const CUSTOM_INPUT = 'CUSTOM_INPUT'
 const MAX_OPTIONS = 100
 const CACHE_MAX = 300
@@ -431,10 +429,6 @@ export function flowKey(ctx: ToolContext, t: FlowTarget): string {
 /** Key of one step (by its id) or of the trigger of one app event in a flow. */
 export function stepKey(ctx: ToolContext, t: FlowTarget, stepIdOrTrigger: string): string {
   return `${flowKey(ctx, t)}|${stepIdOrTrigger}`
-}
-
-export function getPending(key: string): Pending | undefined {
-  return pending.get(key)
 }
 
 export function clearPending(key: string): void {

@@ -36,7 +36,6 @@ export const SKILL_NAMES = {
   action: 'viasocket-developer-hub-action',
 } as const
 export type SkillKind = keyof typeof SKILL_NAMES
-export const SKILL_NAME = SKILL_NAMES.plug
 
 /**
  * Model, vendor and tool names the skill forbids in metadata, notes and aiContext ("never write Claude or any model/tool

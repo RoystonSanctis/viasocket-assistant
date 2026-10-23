@@ -148,7 +148,7 @@ export function outcomeInBody(kind: ObservedKind): boolean {
   return kind === 'step-tested' || kind === 'dh-dry-run'
 }
 
-function isObj(v: unknown): v is Record<string, unknown> {
+export function isObj(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null
 }
 

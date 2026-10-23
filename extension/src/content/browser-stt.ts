@@ -6,7 +6,7 @@
 import type { VoiceState } from '../shared/messages'
 
 // lib.dom ships the event types but not the recognizer itself.
-interface Recognizer {
+export interface Recognizer {
   continuous: boolean
   interimResults: boolean
   lang: string
@@ -39,7 +39,7 @@ export interface BrowserStt {
   isListening(): boolean
 }
 
-function recognizerCtor(): RecognizerCtor | null {
+export function recognizerCtor(): RecognizerCtor | null {
   const w = window as unknown as { SpeechRecognition?: RecognizerCtor; webkitSpeechRecognition?: RecognizerCtor }
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
 }

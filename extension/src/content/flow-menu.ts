@@ -16,7 +16,7 @@ import {
   type FlowTransferResponse,
 } from '../shared/flow-transfer'
 import { parsePage } from '../shared/page'
-import { buildMenuItem, closeMenuPopover } from './step-menu'
+import { buildMenuItem, closeMenuPopover, errorText } from './step-menu'
 import { showToast } from './toast'
 
 const EXPORT_SVG = `<svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall css-vh810p" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="margin-right: 8px; width: 18px; height: 18px; flex-shrink: 0;"><path fill="currentColor" d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"></path></svg>`
@@ -257,6 +257,3 @@ async function importFlow(file: File): Promise<void> {
   }
 }
 
-function errorText(e: unknown): string {
-  return e instanceof Error && e.message ? e.message : 'Could not reach the extension background'
-}

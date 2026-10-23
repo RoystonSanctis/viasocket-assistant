@@ -18,12 +18,12 @@ import { type ActionRow, normalizeInputJson } from './catalog'
 import { CREDITS_NOTE, getActionRowAny, identifySpecial, paidAction, paidFlowsBlocked } from './builtins'
 import { configure, type Configured } from './configure'
 import { resolveConnection } from './connections'
-import { call, isAbortError, ToolError } from './errors'
+import { call, fail, isAbortError, ToolError } from './errors'
 import {
   choiceKeys, cleanInputData, clearPending, holdValues, mergePending, reachableFields, stepKey, withDynamicInput, type SavedState,
 } from './fields'
 import {
-  editorParam, getFlow, liveUnlessEditorOpen, normalizeFlow, openGetDataPanel, openTriggerFeaturePanel, openTriggerPanel, panelResult,
+  editorParam, getFlow, normalizeFlow, openGetDataPanel, openTriggerFeaturePanel, openTriggerPanel, panelResult,
   refreshEditorIfOpen, resolveFlow, triggerKind,
 } from './flow-api'
 import { checkExpression, checkFunctionCode, checkTemplateText } from './js-check'
@@ -38,20 +38,16 @@ import { dynamicVariableProblems } from './slugs'
 import { buildApiCode, type ApiSpec, type Pair } from './step-bodies'
 import { SCRIPT_ID_PARAM } from './tools-read'
 import type { AuthData, FlowRow, FlowTarget, InputJson, PluginData, Trigger } from './types'
-import { asRecord, AUTH_ID_RE, bounded, FLOW_PAGES, isRecord, label, MASK, parseMaybeJson, ROW_ID_RE, str, trimData, truncate } from './util'
+import { asRecord, AUTH_ID_RE, bounded, FLOW_PAGES, hostsIn, isRecord, label, MASK, parseMaybeJson, ROW_ID_RE, str, trimData, truncate } from './util'
 
 const pages = [...FLOW_PAGES]
 const NO_AUTH: AuthData = { id: 'NoAuth', type: 'NoAuth' }
 const PRE_ID = 'CRON_PRE_PROCESS'
 const LOOP_CAP = 1000
 
-function fail(problems: string[]): never {
-  throw new ToolError(`Nothing was changed. Fix these first: ${problems.join(' | ')}`)
-}
-
-// While this tab shows the flow, pre-process writes skip live-apply and the follow-up panel open (or editor
-// refresh) bumps ?timestamp, so the editor and any open trigger/feature panel reload the saved state instead of
-// keeping a stale cached copy (see flow-api's editor-sync note).
+// Pre-process writes are live-applied, and the follow-up panel open (or editor refresh) bumps ?timestamp so any
+// open trigger/feature panel reloads the saved state instead of keeping a stale cached copy (see flow-api's
+// editor-sync note).
 
 async function postPreprocess(ctx: ToolContext, t: FlowTarget, body: Record<string, unknown>, what: string): Promise<FlowRow | null> {
   const res = await call(what, () =>
@@ -225,19 +221,6 @@ function apiReplyWrapper(m: Record<string, unknown>): Record<string, unknown> {
 
 const API_WRAPPER_NOTE =
   'An API call as Get Data passes on its whole reply: the response body is under context.req.body.response (also .status and .request). Map and loop over response.<field>; for a clean body use source "code" (return (await axios.get(url)).data).'
-
-function hostsIn(text: string): string[] {
-  const hosts = new Set<string>()
-  for (const m of text.matchAll(/\bhttps?:\/\/[^\s'"`<>()[\]{}]+/gi)) {
-    try {
-      hosts.add(new URL(m[0]).host)
-    } catch {
-      // A ${...} template, not a URL.
-    }
-    if (hosts.size >= 6) break
-  }
-  return [...hosts]
-}
 
 const READ_VERB = /^(get|list|find|search|retrieve|fetch|read|lookup|look up|count|download)\b/i
 /** Words that make a "get ..." name do more than read ("Find or Create", "Search and Delete", "Get and Mark"). */
@@ -1093,8 +1076,3 @@ const setRunCondition = defineTool<RunIfArgs>({
 })
 
 export const TRIGGER_FEATURE_TOOLS: Tool<any>[] = [setGetData, setTriggerLoop, setRunCondition]
-
-/** For tests: forget session state. */
-export function resetTriggerFeatureState(): void {
-  pendingGetData.clear()
-}

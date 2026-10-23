@@ -1,25 +1,7 @@
 // Continuous "Hey SOCKET" wake-word listener using Web Speech API (webkitSpeechRecognition).
 // Runs only when settings.voiceEnabled and settings.wakeWordEnabled are true.
 
-interface Recognizer {
-  continuous: boolean
-  interimResults: boolean
-  lang: string
-  maxAlternatives: number
-  onstart: ((ev: Event) => void) | null
-  onresult: ((ev: SpeechRecognitionEvent) => void) | null
-  onerror: ((ev: SpeechRecognitionErrorEvent) => void) | null
-  onend: ((ev: Event) => void) | null
-  start(): void
-  stop(): void
-  abort(): void
-}
-type RecognizerCtor = new () => Recognizer
-
-function recognizerCtor(): RecognizerCtor | null {
-  const w = window as unknown as { SpeechRecognition?: RecognizerCtor; webkitSpeechRecognition?: RecognizerCtor }
-  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null
-}
+import { recognizerCtor, type Recognizer } from './browser-stt'
 
 export interface WakeWordOptions {
   enabled(): boolean

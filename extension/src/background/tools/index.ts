@@ -30,7 +30,3 @@ export function buildToolset({ page, flags, toolsConfig }: ToolsetOptions): Tool
     return description ? { ...t, description } : t
   })
 }
-
-export function findTool(name: string): Tool<any> | undefined {
-  return ALL_TOOLS.find((t) => t.name === name)
-}

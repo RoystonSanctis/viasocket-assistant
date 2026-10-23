@@ -38,7 +38,7 @@ import {
 } from '../shared/subfunctions-parser'
 import { InputsModel, plainValues } from '../shared/subfunction-inputs'
 import type { PageBridge } from './page-bridge'
-import { FORM_CSS, renderInputs, type InputsView } from './subfunction-form'
+import { el, errorText, FORM_CSS, icon, renderInputs, type Child, type InputsView } from './subfunction-form'
 import { showToast } from './toast'
 
 const BAR_ID = 'vs-subfunctions-bar'
@@ -62,7 +62,6 @@ const SVG = {
   back: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>`,
   refresh: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/></svg>`,
   search: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>`,
-  variable: `<svg width="16" height="16" viewBox="0 0 35 35" fill="none"><rect width="35" height="35" rx="6" fill="#F97316"/><path d="M13.8837 25.8141C13.4949 26.1951 12.8727 26.1951 12.4838 25.8141L4.7288 18.2142C4.3287 17.8221 4.3287 17.1779 4.7288 16.7858L12.4838 9.18592C12.8727 8.80488 13.4949 8.80487 13.8837 9.18592L14.6361 9.92328C15.0362 10.3154 15.0362 10.9596 14.6361 11.3517L9.05282 16.8233C8.65272 17.2154 8.65272 17.8596 9.05282 18.2517L14.5978 23.6858C14.9979 24.0779 14.9979 24.7221 14.5978 25.1142L13.8837 25.8141ZM22.5162 25.8141C22.1273 26.1951 21.5051 26.1951 21.1163 25.8141L20.3639 25.0767C19.9638 24.6846 19.9638 24.0404 20.3639 23.6483L25.9472 18.1767C26.3473 17.7846 26.3473 17.1404 25.9472 16.7483L20.4021 11.3142C20.002 10.9221 20.0021 10.2779 20.4021 9.88578L21.1163 9.18592C21.5051 8.80487 22.1273 8.80487 22.5162 9.18592L30.2712 16.7858C30.6713 17.1779 30.6713 17.8221 30.2712 18.2142L22.5162 25.8141Z" fill="white"/></svg>`,
 } as const
 
 // viaSocket's own design tokens (src/scss/base/_var.scss: --col-surface-*, --col-text-*, --col-divider,
@@ -173,23 +172,6 @@ const PANEL_CSS = `
 .vs-sf-spinner { width: 16px; height: 16px; border: 2px solid var(--vs-border-medium); border-top-color: var(--vs-text-primary); border-radius: 50%; animation: vs-spin 0.8s linear infinite; }
 `
 
-type Child = Node | string | null | undefined | false
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, ...children: Child[]): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag)
-  if (cls) e.className = cls
-  for (const c of children) if (c) e.append(c)
-  return e
-}
-
-/** A static icon; `svg` must be one of the SVG constants. */
-function icon(svg: string, cls = ''): HTMLElement {
-  const s = el('span', cls)
-  s.style.display = 'inline-flex'
-  s.innerHTML = svg
-  return s
-}
-
 function button(cls: string, content: Child[], onClick: (e: MouseEvent) => void, title?: string): HTMLButtonElement {
   const b = el('button', cls, ...content)
   b.type = 'button'
@@ -243,10 +225,6 @@ function ensureStyle(id: string, css: string): void {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
-}
-
-function errorText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e)
 }
 
 type WithoutTarget<T> = T extends unknown ? Omit<T, 'target'> : never
@@ -453,10 +431,13 @@ export function initSubfunctionsUI(bridge: PageBridge): SubfunctionsUIController
     let closed = false
     const popovers = new Set<HTMLElement>()
 
-    // Keys typed here are not the editor's shortcuts; Escape closes.
+    // Keys typed here are not the editor's shortcuts; Escape closes an open dropdown first, then the form.
     overlay.addEventListener('keydown', (e) => {
       e.stopPropagation()
-      if (e.key === 'Escape') m.close()
+      if (e.key !== 'Escape') return
+      const open = [...popovers].filter((p) => !p.hidden)
+      if (open.length) for (const p of open) p.hidden = true
+      else m.close()
     })
     overlay.addEventListener('keyup', (e) => e.stopPropagation())
     overlay.addEventListener('keypress', (e) => e.stopPropagation())
@@ -972,7 +953,8 @@ export function initSubfunctionsUI(bridge: PageBridge): SubfunctionsUIController
 
   /** The step's own code or Input Values declare `name`, which would shadow a subfunction of that name. */
   function shadowed(ctx: StepContextData, name: string): boolean {
-    return declaresName(ctx.code, name) || Object.hasOwn(ctx.dynamicVariables ?? {}, name)
+    // A call the code already makes under this name (not yet registered) would be overwritten by the new one.
+    return declaresName(ctx.code, name) || Object.hasOwn(ctx.dynamicVariables ?? {}, name) || countCalls(ctx.code, name) > 0
   }
 
   // ---------- remove ----------

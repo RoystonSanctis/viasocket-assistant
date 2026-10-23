@@ -3,6 +3,7 @@
 // Reloading is never done here: the user may have unsaved edits, so the agent decides (ui_refresh_page asks first).
 
 import type { ToolContext } from '../types'
+import { sleep } from '../flow/util'
 import { dhGet, isSafeThread, pushRtlayer } from './api'
 import { isRow, obj, str, type Row } from './rows'
 import { openEditorVersionId, pagePluginId } from './target'
@@ -40,18 +41,7 @@ async function editorReady(ctx: ToolContext): Promise<void> {
   const wait = EDITOR_SUBSCRIBE_MS - (Date.now() - (seenPage?.at ?? 0))
   if (wait <= 0) return
   ctx.ui.thinking('Waiting for the editor to load')
-  await new Promise<void>((resolve, reject) => {
-    if (ctx.signal.aborted) return reject(new DOMException('Cancelled', 'AbortError'))
-    const onAbort = () => {
-      clearTimeout(timer)
-      reject(new DOMException('Cancelled', 'AbortError'))
-    }
-    const timer = setTimeout(() => {
-      ctx.signal.removeEventListener('abort', onAbort)
-      resolve()
-    }, wait)
-    ctx.signal.addEventListener('abort', onAbort, { once: true })
-  })
+  await sleep(wait, ctx.signal)
 }
 
 /** The editor listens on `${orgId}-${metadata.chatbotthreadid || versionId}`. */

@@ -11,7 +11,7 @@
 
 import type { ToolContext } from '../types'
 import { normalizeInputJson } from './catalog'
-import { ToolError } from './errors'
+import { fail } from './errors'
 import {
   applyDefaults, checkChoices, cleanInputData, expandSourceGroups, missingInputs, withPickedOptions, type AppliedDefault, type NeedInput,
 } from './fields'
@@ -57,10 +57,6 @@ export interface Configured {
   warnings: string[]
   /** Connection set (or not needed) and nothing required missing: ready to test and save */
   complete: boolean
-}
-
-function fail(problems: string[]): never {
-  throw new ToolError(`Nothing was changed. Fix these first: ${problems.join(' | ')}`)
 }
 
 export async function configure(ctx: ToolContext, t: FlowTarget, c: ConfigureInput): Promise<Configured> {

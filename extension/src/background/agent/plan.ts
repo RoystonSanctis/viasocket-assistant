@@ -378,11 +378,11 @@ export function reconcilePlanWithFlow(
           item.id.toLowerCase() === event.slugName.toLowerCase() ||
           item.title.toLowerCase().includes(event.slugName.toLowerCase().replace(/[_-]+/g, ' '))
         )) ||
-        (item.status === 'doing' && (event?.kind === 'step-tested' || event?.kind === 'step-saved')) ||
         (domTitleMatches && (event?.kind === 'step-tested' || event?.kind === 'step-saved'))
       )
 
-      const domTested = domTitleMatches && (domStatus?.testedInUi || domStatus?.hasSampleResponse)
+      // A "Sample Response" label also shows an old saved sample, so only a test seen in this panel counts.
+      const domTested = domTitleMatches && domStatus?.testedInUi
 
       if (isTest) {
         if (event?.kind === 'step-tested' && eventMatchesThis) {

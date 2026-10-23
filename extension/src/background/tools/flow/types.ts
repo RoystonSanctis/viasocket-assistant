@@ -101,7 +101,8 @@ export interface FlowRow {
   status?: string
   json_script: JsonScript
   published_json_script?: JsonScript
-  metadata?: { description?: string; [k: string]: unknown }
+  /** AIFlow: built in viaSocket's English (AI) mode, shown as a Summary and Flow view instead of the canvas */
+  metadata?: { description?: string; AIFlow?: boolean; [k: string]: unknown }
   [k: string]: unknown
 }
 

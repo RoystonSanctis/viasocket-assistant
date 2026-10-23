@@ -28,9 +28,10 @@ function pickVarName(
   const lastStr = typeof last === 'string' ? last : `item_${last}`
   let base = sanitizeIdentifier(lastStr)
 
-  // Avoid collisions with local variables declared in the function code
+  // The VM declares each input with `let` next to the code, so a name the code already uses in any way
+  // (declaration, destructuring, parameter, plain reference) would clash or shadow it.
   const isDeclaredInCode = (name: string) =>
-    new RegExp(`\\b(const|let|var|function|async\\s+function)\\s+${name}\\b`).test(code)
+    new RegExp(`(?<![\\w$.])${name.replace(/\$/g, '\\$')}(?![\\w$])`).test(code)
 
   if (!usedKeys.has(base) && !isDeclaredInCode(base) && isValidVariableName(base)) {
     return base
@@ -122,14 +123,14 @@ export function autoExtractDynamicVariables(
 
     const rawPath = code.slice(c.start, dataEnd).trim()
     if (!rawPath.startsWith('context')) continue
+    // The VM compiles each value into a template literal: a backtick in the path would end it.
+    if (rawPath.includes('`')) continue
 
-    const templatePath = rawPath.replace(/\?\./g, '.')
-    const templateValue = `\${${templatePath}}`
+    // `?.` stays: the VM evaluates it, and without it a path into a step that did not run throws.
+    const templateValue = `\${${rawPath}}`
 
     // Check if an existing dynamic variable already maps to this path
-    let varName = Object.keys(vars).find(
-      (k) => vars[k] === templateValue || vars[k] === templatePath || vars[k] === rawPath,
-    )
+    let varName = Object.keys(vars).find((k) => vars[k] === templateValue || vars[k] === rawPath)
 
     if (!varName) {
       varName = pickVarName(dataSegs, usedKeys, code)

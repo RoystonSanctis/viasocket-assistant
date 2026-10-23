@@ -71,17 +71,18 @@ export const FORM_CSS = `
 .vs-sf-mini:disabled { color: var(--vs-text-faint); cursor: default; }
 `
 
-type Child = Node | string | null | undefined | false
+export type Child = Node | string | null | undefined | false
 
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, ...children: Child[]): HTMLElementTagNameMap[K] {
+export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, ...children: Child[]): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag)
   if (cls) e.className = cls
   for (const c of children) if (c) e.append(c)
   return e
 }
 
-function icon(svg: string): HTMLElement {
-  const s = el('span')
+/** A static icon; `svg` must be one of the SVG constants. */
+export function icon(svg: string, cls = ''): HTMLElement {
+  const s = el('span', cls)
   s.style.display = 'inline-flex'
   s.innerHTML = svg
   return s
@@ -125,7 +126,7 @@ export function placePopover(pop: HTMLElement, anchor: HTMLElement, width?: numb
   }
 }
 
-function errorText(e: unknown): string {
+export function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
@@ -257,9 +258,10 @@ export function renderInputs(host: InputsHost): InputsView {
     if (value) model.set(key, value)
     else model.clear(key)
     const wasInvalid = invalid.delete(key)
+    let dropped = false
     for (const d of model.dependents(key)) {
       const kind = kindOf(model.spec(d) as SubfnFieldSpec)
-      if ((kind === 'dropdown' || kind === 'multiselect') && !manual.has(d)) model.values.delete(d)
+      if ((kind === 'dropdown' || kind === 'multiselect') && !manual.has(d) && model.values.delete(d)) dropped = true
     }
     // Typing reloads groups once it pauses; a pick reloads them now.
     clearTimeout(groupTimer)
@@ -273,7 +275,8 @@ export function renderInputs(host: InputsHost): InputsView {
       }, GROUP_RELOAD_DELAY_MS)
     } else reloadStaleGroups()
     // A cleared field with a default shows the default again, as the panel does.
-    refresh(wasInvalid || (!value && model.spec(key)?.defaultValue !== undefined))
+    // A dropped pick leaves the layout unchanged, so force the redraw or its button keeps showing the old choice.
+    refresh(dropped || wasInvalid || (!value && model.spec(key)?.defaultValue !== undefined))
   }
 
   function signature(): string {
@@ -295,6 +298,8 @@ export function renderInputs(host: InputsHost): InputsView {
     const sel: [number | null, number | null] | null =
       active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement ? [active.selectionStart, active.selectionEnd] : null
     host.closePopovers()
+    // Every field is rebuilt below with its own popover; drop the detached ones.
+    host.popovers.clear()
     root.replaceChildren(...(host.connectionReady() ? renderLocation('root', 0) : [el('div', 'vs-sf-note', 'Choose the account to see the inputs of this action.')]))
     if (focusKey) {
       const target = root.querySelector<HTMLElement>(`[data-vs-field="${CSS.escape(focusKey)}"]${focusPart ? `[data-vs-part="${CSS.escape(focusPart)}"]` : ''}`)
@@ -777,8 +782,9 @@ export function renderInputs(host: InputsHost): InputsView {
       if (open) {
         drawList()
         placePopover(pop, pickBtn)
-        // Opening refreshes choices that are not fresh, as the panel does on open.
-        if (spec.dynamic && (!loaded || loaded.error || Date.now() - loadedAt > STALE_MS)) void load(true)
+        // Opening refreshes choices that are not fresh, as the panel does on open; a changed parent field always
+        // reloads (options() reuses its cache only while the fields it depends on are unchanged).
+        if (spec.dynamic) void load(!loaded || !!loaded.error || Date.now() - loadedAt > STALE_MS)
         setTimeout(() => (search.hidden ? list.querySelector<HTMLElement>('.vs-sf-dd-item')?.focus() : search.focus()), 20)
       }
     })

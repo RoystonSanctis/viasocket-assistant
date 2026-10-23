@@ -9,6 +9,7 @@
 // onChange runs (that is what marks a step unsaved), and the editor is focused first so the app's on-blur commit of the
 // code into the step's draft also runs once the user moves on. A single Cmd/Ctrl+Z undoes the whole format.
 
+import { isObj } from '../shared/classify'
 import { EDITOR_ID_ATTR, type EditorAction, type EditorActionResult } from '../shared/messages'
 import { codeLanguage, formatCode } from './format-code'
 
@@ -49,10 +50,6 @@ const MAX_FIBER_HOPS = 10
 const MAX_HOOKS = 64
 
 const editors = new WeakMap<Element, CodeEditor>()
-
-function isObj(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null
-}
 
 /** Reads a plain data property only, so a getter on some component's state is never run */
 function own(obj: Record<string, unknown>, key: string): unknown {

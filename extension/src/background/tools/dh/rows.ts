@@ -35,10 +35,6 @@ export function deepMerge(a: unknown, b: unknown): unknown {
   return out
 }
 
-export function isDeletedRow(r: Row): boolean {
-  return str(r.status) === 'deleted' || flag(r.isdeleted)
-}
-
 export function str(v: unknown): string | undefined {
   if (typeof v === 'string') return v || undefined
   if (typeof v === 'number' && Number.isFinite(v)) return String(v)

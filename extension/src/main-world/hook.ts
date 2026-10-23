@@ -24,7 +24,7 @@ import type { ObservedEvent } from '../shared/observed'
 import { SUPPORTED_APP_HOSTS } from '../background/tools/env'
 import { editorAction } from './editors'
 import {
-  classify, dryRunFailed, isPageMutation, MAX_PARSE_CHARS, outcomeInBody, parseCapped, shortErrorText, SLUG_MAX,
+  classify, dryRunFailed, isObj, isPageMutation, MAX_PARSE_CHARS, outcomeInBody, parseCapped, shortErrorText, SLUG_MAX,
 } from '../shared/classify'
 
 const DEFAULT_API_HOSTS = ['flow-api.viasocket.com', 'dev-api.viasocket.com']
@@ -58,31 +58,11 @@ interface Pending {
   counted?: boolean
 }
 
-function isObj(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null
-}
-
 function stepSlugInUrl(): string | undefined {
   const params = new URLSearchParams(location.search)
   const v = params.get('slugName')
-  if (v && !TRIGGER_SLUGS.has(v)) return v.slice(0, SLUG_MAX)
-
-  try {
-    const slider = document.querySelector('[data-testid="step-config-slider"], [data-slider-container="true"], .custom_slider')
-    if (slider) {
-      const header = slider.querySelector('h5, h6, [data-testid="plugin-header"], [data-testid="step-title"], [data-testid="action-title"], .MuiTypography-h6')
-      const text = header?.textContent?.trim()
-      if (text && !/^(change|close)$/i.test(text)) {
-        return text.replace(/\s+/g, '_').slice(0, SLUG_MAX)
-      }
-    }
-  } catch {
-    // ignore DOM errors
-  }
-
-  const stepId = params.get('stepId')
-  if (stepId && !TRIGGER_SLUGS.has(stepId)) return stepId.slice(0, SLUG_MAX)
-  return undefined
+  // The editor opens a step's slider only from these URL params; page headings show app names, not slugs.
+  return v && !TRIGGER_SLUGS.has(v) ? v.slice(0, SLUG_MAX) : undefined
 }
 
 function install(): void {
@@ -287,26 +267,23 @@ function install(): void {
         }
       }
 
+      // The reducer drops the step from the flow in the URL, so only touch the open flow; never the whole flow's
+      // step data (that wipes every step's unsaved draft) and never a step the user has unsaved edits in.
+      const urlFlow = extractScriptId(location.pathname)
+      if (!urlFlow || (scriptId && scriptId !== urlFlow)) return
+      const stepsOfUrlFlow = isObj(state.stepsDataV3) ? state.stepsDataV3[urlFlow] : undefined
+      const drop = (id: string) => {
+        const entry = isObj(stepsOfUrlFlow) ? stepsOfUrlFlow[id] : undefined
+        if (isObj(entry) && entry.hasUnsavedCode === true) return
+        store.dispatch({ type: 'stepsDataV3/deleteStepFromStepData', payload: { stepId: id } })
+      }
+
       const urlParams = new URLSearchParams(location.search)
       const urlStepId = urlParams.get('stepId')
       const currentStepId = targetStepId || (urlStepId && !TRIGGER_SLUGS.has(urlStepId) ? urlStepId : undefined)
 
-      if (currentStepId) {
-        store.dispatch({
-          type: 'stepsDataV3/deleteStepFromStepData',
-          payload: { stepId: currentStepId },
-        })
-      }
-      if (urlStepId && urlStepId !== currentStepId && !TRIGGER_SLUGS.has(urlStepId)) {
-        store.dispatch({
-          type: 'stepsDataV3/deleteStepFromStepData',
-          payload: { stepId: urlStepId },
-        })
-      }
-      store.dispatch({
-        type: 'stepsDataV3/deleteScriptFromStepReducer',
-        payload: {},
-      })
+      if (currentStepId) drop(currentStepId)
+      if (urlStepId && urlStepId !== currentStepId && !TRIGGER_SLUGS.has(urlStepId)) drop(urlStepId)
     } catch {
       // never throw into the page
     }

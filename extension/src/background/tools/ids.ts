@@ -23,13 +23,20 @@ export function newStepId(): string {
 export const SCRIPT_ID_RE = /^[A-Za-z0-9]{12}$/
 export const STEP_ID_RE = /^[A-Za-z0-9]{12}$/
 
+/** The editor's ReservedKeywords (socket-flow-UI enums.ts, compared lower-cased) plus names the runtime defines. */
 const RESERVED = new Set([
   'break', 'case', 'catch', 'class', 'const', 'continue', 'debugger', 'default', 'delete', 'do', 'else', 'enum',
   'export', 'extends', 'false', 'finally', 'for', 'function', 'if', 'import', 'in', 'instanceof', 'new', 'null',
   'return', 'super', 'switch', 'this', 'throw', 'true', 'try', 'typeof', 'var', 'void', 'while', 'with', 'yield',
   'let', 'static', 'implements', 'interface', 'package', 'private', 'protected', 'public', 'await', 'async',
-  'context', 'response', 'undefined', 'NaN', 'Infinity', 'arguments', 'eval',
+  'boolean', 'byte', 'char', 'double', 'final', 'float', 'goto', 'int', 'long', 'native', 'short', 'synchronized',
+  'throws', 'transient', 'volatile', 'context', 'response', 'date', 'console', 'undefined', 'nan', 'infinity',
+  'arguments', 'eval',
 ])
+
+export function isReservedName(name: string): boolean {
+  return RESERVED.has(name.toLowerCase())
+}
 
 /**
  * Step titles become JS function names in the generated flow code, so they must be valid identifiers.
@@ -40,10 +47,10 @@ export function toStepSlug(input: string): string {
   if (!s || /^[0-9]/.test(s)) s = `Step_${s}`
   if (s.length < 4) s = `${s}_step`
   s = s.slice(0, 50)
-  if (RESERVED.has(s)) s = `${s}_step`
+  if (isReservedName(s)) s = `${s}_step`
   return s
 }
 
 export function isValidStepSlug(s: string): boolean {
-  return /^[A-Za-z][A-Za-z0-9_]{3,49}$/.test(s) && !RESERVED.has(s)
+  return /^[A-Za-z][A-Za-z0-9_]{3,49}$/.test(s) && !isReservedName(s)
 }

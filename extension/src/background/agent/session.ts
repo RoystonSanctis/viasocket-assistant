@@ -11,6 +11,32 @@ import { ViaSocketClient } from '../tools/viasocket-client'
 import type { UiBridge } from '../tools/types'
 import { threadFor } from './conversation'
 import { createUiBridge } from './ui-bridge'
+import { asRecord, isRecord, maskVariables, truncate } from '../tools/flow/util'
+
+const DOM_FIELDS_MAX = 30
+
+/**
+ * Page text from the content script goes into the system prompt: shape-checked, capped, and with values of
+ * secret-looking fields (API key, token, password…) masked.
+ */
+function cleanDomStatus(v: unknown): DomPageStatus | null {
+  if (!isRecord(v)) return null
+  const text = (x: unknown, max: number) => (typeof x === 'string' && x ? truncate(x, max) : undefined)
+  const fields: Record<string, string> = {}
+  for (const [k, val] of Object.entries(asRecord(v.selectedFields)).slice(0, DOM_FIELDS_MAX)) {
+    if (typeof val === 'string') fields[truncate(k, 80)] = truncate(val, 200)
+  }
+  return {
+    panelOpen: v.panelOpen === true,
+    stepTitle: text(v.stepTitle, 120),
+    connection: text(v.connection, 120),
+    selectedFields: (maskVariables(fields) ?? {}) as Record<string, string>,
+    hasUnsavedChanges: v.hasUnsavedChanges === true,
+    testedInUi: v.testedInUi === true,
+    hasSampleResponse: v.hasSampleResponse === true,
+    canSave: v.canSave === true,
+  }
+}
 
 const RECENT_EVENTS = 10
 const MAX_PENDING_SUGGESTIONS = 20
@@ -55,7 +81,7 @@ export class Session {
   readonly pendingSuggestions = new Map<string, PendingSuggestion>()
   readonly recentEvents: ObservedEvent[] = []
   readonly reactionCooldowns = new Map<string, number>()
-  private pendingDomStatus = new Map<string, (status: DomPageStatus) => void>()
+  private pendingDomStatus = new Map<string, (status: DomPageStatus | null) => void>()
 
   private abortCtl: AbortController | null = null
   /** Thread a run started on. A run that navigates (e.g. into a flow it just created) keeps writing here. */
@@ -224,11 +250,12 @@ export class Session {
     this.pendingConfirms.clear()
   }
 
-  setDomStatus(status: DomPageStatus): void {
-    this.domStatus = status
+  setDomStatus(raw: unknown): void {
+    this.domStatus = cleanDomStatus(raw)
   }
 
-  resolveDomStatus(requestId: string, status: DomPageStatus): void {
+  resolveDomStatus(requestId: string, raw: unknown): void {
+    const status = cleanDomStatus(raw)
     this.domStatus = status
     const resolver = this.pendingDomStatus.get(requestId)
     if (resolver) {

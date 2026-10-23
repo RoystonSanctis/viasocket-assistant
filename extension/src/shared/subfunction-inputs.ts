@@ -226,11 +226,11 @@ export class InputsModel {
   condition(key: string): boolean | undefined {
     const rule = this.spec(key)?.visibleWhen
     if (!rule) return true
-    const flat = this.flatPlain()
-    // A rule over a mapped value cannot be decided before the run: the panel shows the field.
+    // A rule over a mapped value or a code expression (a local variable, an earlier result) cannot be decided
+    // before the run: the panel shows the field, and its value must never be dropped as hidden.
     for (const m of rule.matchAll(/inputData\??\.\s*([A-Za-z_$][\w$]*)/g)) {
-      const v = m[1] ? flat[m[1]] : undefined
-      if (typeof v === 'string' && v.includes('context')) return true
+      const e = m[1] ? this.values.get(m[1]) : undefined
+      if (e && (e.value.kind === 'code' || (e.value.kind === 'text' && e.value.text.includes('${')))) return true
     }
     return evalCondition(rule, this.conditionContext())
   }

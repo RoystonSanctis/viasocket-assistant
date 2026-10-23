@@ -1,5 +1,6 @@
-// Injects "Copy", "Paste", and "Delete" (in English / AI flows where native Delete is omitted) into viaSocket's
-// step three-dot menus: the canvas step-card menu and the step slider header menu, on flow-editor pages only.
+// Injects "Copy", "Paste", and (in English / AI flows, where native Delete and add buttons are omitted) "Add JS step
+// below" and "Delete" into viaSocket's step three-dot menus: the canvas step-card menu and the step slider header
+// menu, on flow-editor pages only.
 // Menus are recognised by their anchors (the expanded trigger button and the containers it sits in), never by
 // menu-item text, so the flow-level menu, dashboard menus and Developer Hub menus — which share ids and item
 // labels with the step menus — are left untouched.
@@ -18,6 +19,7 @@ import { showToast } from './toast'
 
 const COPY_SVG = `<svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall css-vh810p" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="margin-right: 8px; width: 18px; height: 18px; flex-shrink: 0;"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2m0 16H8V7h11z"></path></svg>`
 const PASTE_SVG = `<svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall css-vh810p" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="margin-right: 8px; width: 18px; height: 18px; flex-shrink: 0;"><path fill="currentColor" d="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z"></path></svg>`
+const ADD_JS_SVG = `<svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall css-vh810p" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="margin-right: 8px; width: 18px; height: 18px; flex-shrink: 0;"><path fill="currentColor" d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6z"></path></svg>`
 const DELETE_SVG = `<svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall css-vh810p" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="margin-right: 8px; width: 18px; height: 18px; flex-shrink: 0;"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6zM19 4h-3.5l-1-1h-5l-1 1H5v2h14z"></path></svg>`
 
 /** Real steps have 12-alphanumeric ids; the editor's pseudo-panels (trigger setup, cron pre-process, add step, ...) do not. */
@@ -48,25 +50,9 @@ export interface StepMenuOptions {
  */
 export function closeMenuPopover(popover: Element | null): void {
   if (!popover) return
-  // Primary: call the menu's own onClose through its React fiber — no DOM event at all. The first onClose at
-  // or above the popover root belongs to the menu itself; stop at it whether or not the call succeeds, so a
-  // failure can never escalate into some ancestor's close handler.
-  const fiberKey = Object.keys(popover).find((k) => k.startsWith('__reactFiber$'))
-  let fiber: any = fiberKey ? (popover as unknown as Record<string, unknown>)[fiberKey] : null
-  while (fiber) {
-    const onClose = fiber.memoizedProps?.onClose
-    if (typeof onClose === 'function') {
-      try {
-        onClose({ preventDefault: () => {}, stopPropagation: () => {} }, 'backdropClick')
-        return
-      } catch {
-        break
-      }
-    }
-    fiber = fiber.return
-  }
-  // Fallback: Escape dispatched on this popover's root only. It bubbles through the menu's own modal root,
-  // whose keydown handler stops propagation, so it can never reach the window listener that closes the drawer.
+  // React's fiber props are not visible from this isolated world, so close with Escape dispatched on this
+  // popover's root only. It bubbles through the menu's own modal root, whose keydown handler stops propagation,
+  // so it can never reach the window listener that closes the drawer.
   popover.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true }))
 }
 
@@ -194,6 +180,7 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
     const existingCopy = menu.querySelector('[data-assistant-action="copy"]')
     const existingPaste = menu.querySelector('[data-assistant-action="paste"]')
     const existingDelete = menu.querySelector('[data-assistant-action="delete"]')
+    const existingAddJs = menu.querySelector('[data-assistant-action="add-js"]')
 
     const hasNativeDelete = Array.from(menu.querySelectorAll('li[role="menuitem"]')).some(
       (li) => !li.hasAttribute('data-assistant-action') && /delete/i.test(li.textContent || ''),
@@ -201,10 +188,14 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
     const wantDelete = !hasNativeDelete && slug !== 'response'
     const wantPaste = lastCopied !== null
 
-    if (existingCopy && !!existingPaste === wantPaste && !!existingDelete === wantDelete) return
+    // English flows have neither native Delete nor add buttons, so they get both from here.
+    const wantAddJs = wantDelete
+
+    if (existingCopy && !!existingPaste === wantPaste && !!existingDelete === wantDelete && !!existingAddJs === wantAddJs) return
     existingCopy?.remove()
     existingPaste?.remove()
     existingDelete?.remove()
+    existingAddJs?.remove()
 
     const template = menu.querySelector('li[role="menuitem"]')
     if (!template) return
@@ -235,6 +226,20 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
         }),
       )
     }
+    if (wantAddJs) {
+      menu.appendChild(
+        buildMenuItem(template, {
+          action: 'add-js',
+          testid: 'assistant-add-js',
+          label: 'Add JS step below',
+          iconSvg: ADD_JS_SVG,
+          onActivate: () => {
+            closeMenuPopover(popover)
+            void pasteStep(slug, 'function')
+          },
+        }),
+      )
+    }
     if (wantDelete) {
       menu.appendChild(
         buildMenuItem(template, {
@@ -244,6 +249,8 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
           iconSvg: DELETE_SVG,
           onActivate: () => {
             closeMenuPopover(popover)
+            // The backend deletes a branch with every step inside it, and nothing can undo a delete.
+            if (!window.confirm(`Delete "${slug}"? Steps inside a branch are deleted too. This cannot be undone.`)) return
             void deleteStep(slug, isSlider)
           },
         }),
@@ -285,7 +292,8 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
    * live-apply push was missed (dropped websocket). True when nothing needed refreshing or the bump was
    * delivered; false when the editor may still show the stale flow.
    */
-  function bumpEditorTimestamp(scriptId: string | undefined): boolean {
+  /** Refetches the open editor; with `open`, also opens that step's panel. */
+  function bumpEditorTimestamp(scriptId: string | undefined, open?: { slug: string; stepId: string }): boolean {
     if (!opts.navigate) return false
     const now = parsePage(window.location.href)
     // The user moved to another page while the paste ran: nothing here to refresh.
@@ -295,21 +303,26 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
       const prev = Number(u.searchParams.get('timestamp'))
       const stamp = Number.isFinite(prev) && prev >= Date.now() ? prev + 1 : Date.now()
       u.searchParams.set('timestamp', String(stamp))
+      if (open) {
+        u.searchParams.set('slugName', open.slug)
+        u.searchParams.set('stepId', open.stepId)
+      }
       return opts.navigate(u.pathname + u.search + u.hash, true)
     } catch {
       return false
     }
   }
 
-  async function pasteStep(targetSlug: string): Promise<void> {
-    if (!lastCopied) {
+  /** Pastes the copied step below `targetSlug`, or with `template` inserts a new blank step of that type there. */
+  async function pasteStep(targetSlug: string, template?: 'function'): Promise<void> {
+    if (!template && !lastCopied) {
       showToast({ title: 'Nothing to paste', message: 'Copy a step first.', type: 'info' })
       return
     }
     const page = parsePage(window.location.href)
     const progress = showToast({
-      title: 'Pasting…',
-      message: `Inserting "${lastCopied.source.stepTitle}" below "${targetSlug}"`,
+      title: template ? 'Adding JS step…' : 'Pasting…',
+      message: `Inserting "${template ? 'JS Code' : lastCopied?.source.stepTitle}" below "${targetSlug}"`,
       type: 'info',
       durationMs: 0,
     })
@@ -317,30 +330,33 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
       target: 'background',
       type: 'step:paste',
       targetSlugName: targetSlug,
+      ...(template ? { template } : {}),
       scriptId: page.scriptId,
       projectId: page.projectId,
       orgId: page.orgId,
       host: window.location.host,
     }
     try {
-      const res = (await chrome.runtime.sendMessage(msg)) as StepClipboardResponse<{ title?: string; note?: string }>
+      const res = (await chrome.runtime.sendMessage(msg)) as StepClipboardResponse<{ title?: string; note?: string; slug?: string; stepId?: string }>
       progress.dismiss()
       if (res && res.ok) {
-        // The live-apply push alone can be missed; the bump makes the open editor refetch the flow.
-        const refreshed = bumpEditorTimestamp(page.scriptId)
+        // The live-apply push alone can be missed; the bump makes the open editor refetch the flow. A new JS step
+        // opens in its panel so its code can be written right away.
+        const created = template && res.data?.slug && res.data.stepId ? { slug: res.data.slug, stepId: res.data.stepId } : undefined
+        const refreshed = bumpEditorTimestamp(page.scriptId, created)
         const note = res.data?.note || `"${res.data?.title || targetSlug}" pasted below "${targetSlug}"`
         showToast({
-          title: 'Pasted',
+          title: template ? 'Added' : 'Pasted',
           message: refreshed ? note : `${note} Refresh the page if the step does not appear.`,
           type: 'success',
           durationMs: 4500,
         })
       } else {
-        showToast({ title: 'Paste failed', message: (res && !res.ok && res.error) || 'No response from the extension', type: 'error' })
+        showToast({ title: template ? 'Add failed' : 'Paste failed', message: (res && !res.ok && res.error) || 'No response from the extension', type: 'error' })
       }
     } catch (e) {
       progress.dismiss()
-      showToast({ title: 'Paste error', message: errorText(e), type: 'error' })
+      showToast({ title: template ? 'Add error' : 'Paste error', message: errorText(e), type: 'error' })
     }
   }
 
@@ -439,6 +455,6 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
   }
 }
 
-function errorText(e: unknown): string {
+export function errorText(e: unknown): string {
   return e instanceof Error && e.message ? e.message : 'Could not reach the extension background'
 }

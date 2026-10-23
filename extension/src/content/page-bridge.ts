@@ -14,7 +14,7 @@ import {
   type StepContextData,
 } from '../shared/messages'
 import type { ObservedEvent } from '../shared/observed'
-import { ERROR_TEXT_MAX, isObservedKind, PATH_MAX, SLUG_MAX } from '../shared/classify'
+import { ERROR_TEXT_MAX, isObj, isObservedKind, PATH_MAX, SLUG_MAX } from '../shared/classify'
 import type { SubfunctionRef } from '../shared/subfunctions'
 
 const INIT_RETRY_MS = 400
@@ -53,10 +53,6 @@ export interface PageBridge {
   /** The MAIN-world hook answered (it is missing in tabs that were open before an extension update) */
   readonly ready: boolean
   destroy(): void
-}
-
-function isObj(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null
 }
 
 function makeNonce(): string {

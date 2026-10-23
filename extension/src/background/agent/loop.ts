@@ -22,7 +22,7 @@ import type { Session } from './session'
 import { NO_MODEL_MESSAGE, computeStatus, pickModel } from './status'
 import { normalizeFlow, summarizeFlow } from '../tools/flow/flow-api'
 import type { FlowTarget } from '../tools/flow/types'
-import { asRecord } from '../tools/flow/util'
+import { asRecord, sleep } from '../tools/flow/util'
 import type { PageContext } from '../../shared/page'
 import type { ViaSocketClient } from '../tools/viasocket-client'
 
@@ -471,21 +471,6 @@ async function chatWithRetry(run: RunContext, build: (shrink: boolean) => ChatRe
       throw e
     }
   }
-}
-
-function sleep(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) return reject(signal.reason)
-    const onAbort = () => {
-      clearTimeout(timer)
-      reject(signal.reason)
-    }
-    const timer = setTimeout(() => {
-      signal.removeEventListener('abort', onAbort)
-      resolve()
-    }, ms)
-    signal.addEventListener('abort', onAbort, { once: true })
-  })
 }
 
 async function reportRunError(session: Session, e: unknown, signal: AbortSignal): Promise<void> {

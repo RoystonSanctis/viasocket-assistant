@@ -46,6 +46,20 @@ export function truncate(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, Math.max(0, max - 1)) + '…'
 }
 
+/** Hosts of the http(s) URLs in code or text (at most 8), for test-run warnings. */
+export function hostsIn(text: string): string[] {
+  const hosts = new Set<string>()
+  for (const m of text.matchAll(/\bhttps?:\/\/[^\s'"`<>()[\]{}]+/gi)) {
+    try {
+      hosts.add(new URL(m[0]).host)
+    } catch {
+      // Not a parseable URL (e.g. a ${...} template); skip it.
+    }
+    if (hosts.size >= 8) break
+  }
+  return [...hosts]
+}
+
 /** Short label from model-provided args for mascot text; never trusted beyond display. */
 export function label(v: unknown, fallback: string, max = 32): string {
   return typeof v === 'string' && v.trim() ? truncate(v.trim().replace(/\s+/g, ' '), max) : fallback

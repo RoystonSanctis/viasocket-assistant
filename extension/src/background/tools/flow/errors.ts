@@ -6,6 +6,11 @@ import { asArray, isRecord, str, truncate } from './util'
 
 export class ToolError extends Error {}
 
+/** A check failed before any write: lists every problem so the model can fix them in one go. */
+export function fail(problems: string[]): never {
+  throw new ToolError(`Nothing was changed. Fix these first: ${problems.join(' | ')}`)
+}
+
 /** Cancellation from the user (Stop) must never be swallowed by best-effort catches. */
 export function isAbortError(e: unknown): boolean {
   return (e instanceof VsError && e.kind === 'aborted') || (e instanceof DOMException && e.name === 'AbortError')

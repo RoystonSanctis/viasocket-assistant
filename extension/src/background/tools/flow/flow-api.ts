@@ -366,6 +366,7 @@ export function summarizeFlow(row: FlowRow, t: FlowTarget, fns: FunctionRow[], v
     scriptId: t.scriptId,
     projectId: row.project_id ?? t.projectId,
     title: row.title,
+    englishFlow: row.metadata?.AIFlow === true ? true : undefined,
     description: row.metadata?.description ? truncate(String(row.metadata.description), 300) : undefined,
     status: flowStatusLabel(row.status),
     everPublished: everPublished(row),
@@ -386,8 +387,9 @@ export function summarizeFlow(row: FlowRow, t: FlowTarget, fns: FunctionRow[], v
 // fields, input values) stay stale there. Bumping ?timestamp makes the editor refetch the flow and, when the
 // fetched draft version differs from the one it holds, drop those cached step copies too, so an open panel reloads
 // its step. The two mechanisms defeat each other: a live-applied save syncs the editor's version first, and a later
-// bump then sees no version difference and keeps the stale panel copy. So while this tab shows the flow, tools save
-// WITHOUT live-apply and bump afterwards; only when the flow is not open here is live-apply the mechanism left.
+// bump then sees no version difference and keeps the stale panel copy. Tools still always send live-apply
+// (sent-by-fbai): without the RTLayer push the editor's flowJson and draftFlowJson miss ACTIVE statuses and the
+// latest versiondraft, and step sliders render empty. Open panels are then refreshed explicitly (openPanel).
 //
 // The bump itself travels background -> content script -> page hook -> history, and each hop used to fail silently
 // (page hook not paired after an extension reload, the tab meanwhile elsewhere, the page context momentarily gone).
@@ -446,15 +448,6 @@ function editorPageOf(ctx: ToolContext, scriptId: string): PageContext | null {
 /** This tab shows the flow's editor, so a ?timestamp bump (not live-apply) is what keeps it fresh. */
 export function editorOpen(ctx: ToolContext, scriptId: string): boolean {
   return editorPageOf(ctx, scriptId) !== null
-}
-
-/**
- * All flow mutations must send live-apply (sent-by-fbai: true) so the open editor receives RTlayer
- * updates over WebSocket. This keeps Redux flowJson and draftFlowJson synchronized with ACTIVE step
- * statuses and the latest versiondraft, preventing step sliders from rendering empty or black.
- */
-export function liveUnlessEditorOpen(_ctx: ToolContext, _scriptId: string): boolean {
-  return true
 }
 
 /** Result fields for a tool that opened or refreshed a panel: panelOpened, plus the note to relay on failure. */

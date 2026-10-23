@@ -12,14 +12,14 @@ interface ScanResult {
 const REGEX_AFTER = new Set(['', '(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';'])
 const REGEX_KEYWORD = /(?:^|[^\w$])(?:return|typeof|case|in|of|delete|void|throw|new|instanceof|yield|await)$/
 
-function regexAllowed(lastSig: string, src: string, i: number): boolean {
+export function regexAllowed(lastSig: string, src: string, i: number): boolean {
   if (REGEX_AFTER.has(lastSig)) return true
   if (/[\w$]/.test(lastSig)) return REGEX_KEYWORD.test(src.slice(Math.max(0, i - 12), i).trimEnd())
   return false
 }
 
 /** End index of a regex literal starting at i, or -1 when '/' is more likely a division. */
-function scanRegex(src: string, i: number): number {
+export function scanRegex(src: string, i: number): number {
   let inClass = false
   for (let j = i + 1; j < src.length; j++) {
     const ch = src[j]

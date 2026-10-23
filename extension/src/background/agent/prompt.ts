@@ -145,11 +145,12 @@ function contextBlock(
       '## Current page status (open side panel & UI)',
       'What is currently open and selected in the browser side panel right now:',
       '```json',
-      JSON.stringify(domStatus, null, 2),
+      // With run data stripped, field values stay out of the prompt too; only which fields are filled is sent.
+      JSON.stringify(strip ? { ...domStatus, selectedFields: Object.keys(domStatus.selectedFields) } : domStatus, null, 2),
       '```',
       'CRITICAL: In viaSocket, the backend draft execution script ONLY updates when the user clicks "Save" or vs_update_step is called (and published json updates when published).',
       '- The user can manually select options and test in the side panel. If fields are already selected in the UI (e.g. spreadsheet, sheet, columns), DO NOT repeatedly ask them to choose or configure those fields again!',
-      '- If the step was tested in the UI (testedInUi or hasSampleResponse is true): DO NOT complain that fields are not saved in the backend draft! Acknowledge that the test passed with their selected options, and prompt them to click "Save" in the panel (or save it) so the draft execution script saves it and you can proceed.',
+      '- If the step was tested in the UI (testedInUi is true): DO NOT complain that fields are not saved in the backend draft! Acknowledge that the test passed with their selected options, and prompt them to click "Save" in the panel (or save it) so the draft execution script saves it and you can proceed.',
     )
   }
   if (liveFlow) {
