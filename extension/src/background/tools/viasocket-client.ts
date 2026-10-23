@@ -41,8 +41,12 @@ const ACTIVE_MUTATIONS = new Set<string>()
 export class ViaSocketClient {
   private orgAlignedAt = 0
 
-  /** storeId: the tab's cookie store (incognito tabs have their own); incognito: open auth popups there too. */
-  constructor(readonly env: ViaSocketEnv, readonly page: PageContext, readonly opts: { storeId?: string; incognito?: boolean } = {}) {}
+  /**
+   * storeId: the tab's cookie store (incognito tabs have their own); incognito: open auth popups there too.
+   * `page` follows the tab while the client is reused for the same host and org (Session.setPage), so it is the
+   * page open now; agent runs read their own pinned page instead.
+   */
+  constructor(readonly env: ViaSocketEnv, public page: PageContext, readonly opts: { storeId?: string; incognito?: boolean } = {}) {}
 
   /** The org the user is looking at. Tools act only on this org. */
   get orgId(): string | undefined {

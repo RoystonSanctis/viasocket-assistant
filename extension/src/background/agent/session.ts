@@ -130,7 +130,11 @@ export class Session {
       this.vs = null
       return
     }
-    if (this.vs && prev && prev.host === page.host && prev.orgId === page.orgId) return
+    if (this.vs && prev && prev.host === page.host && prev.orgId === page.orgId) {
+      // Same workspace: keep the client (and its org alignment) but move it to the page open now.
+      this.vs.page = page
+      return
+    }
     this.vs = null
     this.cookieScope ??= findCookieScope(this.tabId, this.incognito)
     const scope = await this.cookieScope
