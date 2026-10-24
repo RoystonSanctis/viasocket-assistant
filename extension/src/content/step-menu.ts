@@ -1,6 +1,6 @@
-// Injects "Copy", "Paste", and (in English / AI flows, where native Delete and add buttons are omitted) "Add JS step
-// below" and "Delete" into viaSocket's step three-dot menus: the canvas step-card menu and the step slider header
-// menu, on flow-editor pages only.
+// Injects "Copy", "Paste", and (in English / AI flows, where native Delete is omitted) "Delete" into viaSocket's step
+// three-dot menus: the canvas step-card menu and the step slider header menu, on flow-editor pages only. English
+// flows have no add buttons either, so their Flow view's zoom bar gets a "+" that adds a JS step at the end.
 // Menus are recognised by their anchors (the expanded trigger button and the containers it sits in), never by
 // menu-item text, so the flow-level menu, dashboard menus and Developer Hub menus — which share ids and item
 // labels with the step menus — are left untouched.
@@ -19,7 +19,7 @@ import { showToast } from './toast'
 
 const COPY_SVG = `<svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall css-vh810p" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="margin-right: 8px; width: 18px; height: 18px; flex-shrink: 0;"><path fill="currentColor" d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2m0 16H8V7h11z"></path></svg>`
 const PASTE_SVG = `<svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall css-vh810p" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="margin-right: 8px; width: 18px; height: 18px; flex-shrink: 0;"><path fill="currentColor" d="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z"></path></svg>`
-const ADD_JS_SVG = `<svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall css-vh810p" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="margin-right: 8px; width: 18px; height: 18px; flex-shrink: 0;"><path fill="currentColor" d="M9.4 16.6 4.8 12l4.6-4.6L8 6l-6 6 6 6zm5.2 0 4.6-4.6-4.6-4.6L16 6l6 6-6 6z"></path></svg>`
+const ADD_SVG = `<svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeMedium" focusable="false" aria-hidden="true" viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z"></path></svg>`
 const DELETE_SVG = `<svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall css-vh810p" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="margin-right: 8px; width: 18px; height: 18px; flex-shrink: 0;"><path fill="currentColor" d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6zM19 4h-3.5l-1-1h-5l-1 1H5v2h14z"></path></svg>`
 
 /** Real steps have 12-alphanumeric ids; the editor's pseudo-panels (trigger setup, cron pre-process, add step, ...) do not. */
@@ -180,7 +180,7 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
     const existingCopy = menu.querySelector('[data-assistant-action="copy"]')
     const existingPaste = menu.querySelector('[data-assistant-action="paste"]')
     const existingDelete = menu.querySelector('[data-assistant-action="delete"]')
-    const existingAddJs = menu.querySelector('[data-assistant-action="add-js"]')
+
 
     const hasNativeDelete = Array.from(menu.querySelectorAll('li[role="menuitem"]')).some(
       (li) => !li.hasAttribute('data-assistant-action') && /delete/i.test(li.textContent || ''),
@@ -188,14 +188,10 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
     const wantDelete = !hasNativeDelete && slug !== 'response'
     const wantPaste = lastCopied !== null
 
-    // English flows have neither native Delete nor add buttons, so they get both from here.
-    const wantAddJs = wantDelete
-
-    if (existingCopy && !!existingPaste === wantPaste && !!existingDelete === wantDelete && !!existingAddJs === wantAddJs) return
+    if (existingCopy && !!existingPaste === wantPaste && !!existingDelete === wantDelete) return
     existingCopy?.remove()
     existingPaste?.remove()
     existingDelete?.remove()
-    existingAddJs?.remove()
 
     const template = menu.querySelector('li[role="menuitem"]')
     if (!template) return
@@ -226,20 +222,6 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
         }),
       )
     }
-    if (wantAddJs) {
-      menu.appendChild(
-        buildMenuItem(template, {
-          action: 'add-js',
-          testid: 'assistant-add-js',
-          label: 'Add JS step below',
-          iconSvg: ADD_JS_SVG,
-          onActivate: () => {
-            closeMenuPopover(popover)
-            void pasteStep(slug, 'function')
-          },
-        }),
-      )
-    }
     if (wantDelete) {
       menu.appendChild(
         buildMenuItem(template, {
@@ -256,6 +238,31 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
         }),
       )
     }
+  }
+
+  /**
+   * The English Flow view's zoom bar (AIFlowRenderer) gets a "+" that adds a JS step at the end of the flow. It is the
+   * only zoom bar whose buttons carry no data-testid: the manual canvas and template previews set one on each.
+   */
+  function scanCanvas(): void {
+    if (parsePage(window.location.href).kind !== 'flow-editor') return
+    const fit = document.querySelector<HTMLButtonElement>('button[aria-label="Fit to Screen"]:not([data-testid])')
+    const bar = fit?.closest('.MuiButtonGroup-root')
+    if (!fit || !bar || bar.querySelector('[data-assistant-action="add-js"]')) return
+    // A copy of the page's own button keeps its styling; only the icon, name and click are ours.
+    const add = fit.cloneNode(false) as HTMLButtonElement
+    add.dataset.assistantAction = 'add-js'
+    add.setAttribute('aria-label', 'Add JS step')
+    add.title = 'Add JS step'
+    add.innerHTML = ADD_SVG
+    add.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      void pasteStep('', 'function')
+    })
+    const divider = bar.querySelector('hr.MuiDivider-root')?.cloneNode(false)
+    if (divider) bar.append(divider)
+    bar.append(add)
   }
 
   async function copyStep(slug: string): Promise<void> {
@@ -313,7 +320,10 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
     }
   }
 
-  /** Pastes the copied step below `targetSlug`, or with `template` inserts a new blank step of that type there. */
+  /**
+   * Pastes the copied step below `targetSlug`, or with `template` inserts a new blank step of that type there. An
+   * empty `targetSlug` appends at the end of the flow.
+   */
   async function pasteStep(targetSlug: string, template?: 'function'): Promise<void> {
     if (!template && !lastCopied) {
       showToast({ title: 'Nothing to paste', message: 'Copy a step first.', type: 'info' })
@@ -322,7 +332,7 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
     const page = parsePage(window.location.href)
     const progress = showToast({
       title: template ? 'Adding JS step…' : 'Pasting…',
-      message: `Inserting "${template ? 'JS Code' : lastCopied?.source.stepTitle}" below "${targetSlug}"`,
+      message: `Inserting "${template ? 'JS Code' : lastCopied?.source.stepTitle}" ${targetSlug ? `below "${targetSlug}"` : 'at the end of the flow'}`,
       type: 'info',
       durationMs: 0,
     })
@@ -432,12 +442,14 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
   const observer = new MutationObserver(() => {
     try {
       scan()
+      scanCanvas()
     } catch (e) {
       console.warn('[step-menu] scan failed:', e)
     }
   })
   observer.observe(document.body, { childList: true, subtree: true })
   scan()
+  scanCanvas()
 
   return {
     destroy() {

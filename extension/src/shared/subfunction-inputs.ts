@@ -363,12 +363,22 @@ export class InputsModel {
    */
   load(fields: Record<string, string>, location = 'root', depth = 0): Record<string, string> {
     const extra: Record<string, string> = { ...fields }
-    for (const key of this.form.steps[location] ?? []) {
-      const spec = this.spec(key)
-      if (!spec) continue
-      const name = childName(key, location)
-      const raw = fields[name]
-      if (raw === undefined) continue
+    const keys = this.form.steps[location] ?? []
+    const used = new Set<string>()
+    // Generated fields can be keyed by an id (a column letter) while the code names them by their label: inside a
+    // group, a name that matches no key takes the field whose key or label differs only in case and punctuation.
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const fieldFor = (name: string): string | undefined => {
+      const exact = keys.find((k) => childName(k, location) === name)
+      const n = norm(name)
+      if (exact || location === 'root' || !n) return exact
+      return keys.find((k) => !used.has(k) && (norm(childName(k, location)) === n || norm(this.spec(k)?.label ?? '') === n))
+    }
+    for (const [name, raw] of Object.entries(fields)) {
+      const key = fieldFor(name)
+      const spec = key ? this.spec(key) : undefined
+      if (!key || !spec || used.has(key)) continue
+      used.add(key)
       delete extra[name]
       if (kindOf(spec) === 'group') {
         const nested = parseObjectEntries(raw)
@@ -379,6 +389,7 @@ export class InputsModel {
       this.values.set(key, { value: valueFromCode(spec, raw), raw })
     }
     if (Object.keys(extra).length) this.extras.set(location, extra)
+    else this.extras.delete(location)
     return extra
   }
 
@@ -387,12 +398,14 @@ export class InputsModel {
     for (const [k, list] of Object.entries(fragment.steps)) this.form.steps[k] = list
     for (const [k, spec] of Object.entries(fragment.fields)) this.form.fields[k] = spec
     const kept = this.values.get(group)
-    if (kept?.raw) {
-      const nested = parseObjectEntries(kept.raw)
-      if (nested) {
-        this.values.delete(group)
-        this.load(nested, group)
-      }
+    const nested = kept?.raw ? parseObjectEntries(kept.raw) : null
+    if (nested) {
+      this.values.delete(group)
+      this.load(nested, group)
+    } else {
+      // Values read while the group had no fields yet wait as extras: they belong to the fields that arrived now.
+      const waiting = this.extras.get(group)
+      if (waiting) this.load(waiting, group)
     }
     this.reconcile()
   }
@@ -509,7 +522,11 @@ export function valueFromCode(spec: SubfnFieldSpec, raw: string): FieldValue {
   return textOrCode(v)
 }
 
+/** A plain read of flow data (context.req…, context.res…, context.vals…), shown as a mapping like the panel does. */
+const DATA_PATH = /^context\.(?:req|res|vals)(?:\??\.[A-Za-z_$][\w$]*|\??\.?\[(?:\d+|"[^"\\]*"|'[^'\\]*')\])*$/
+
 function textOrCode(v: string): FieldValue {
+  if (DATA_PATH.test(v)) return { kind: 'text', text: `\${${v}}` }
   const d = displayValue(v)
   return d.expression ? { kind: 'code', code: v } : { kind: 'text', text: d.text }
 }

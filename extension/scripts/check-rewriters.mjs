@@ -11,6 +11,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const entry = `
 export * from './src/shared/subfunctions-parser.ts'
 export { autoExtractDynamicVariables } from './src/background/tools/flow/function-vars.ts'
+export { InputsModel } from './src/shared/subfunction-inputs.ts'
 `
 const out = await build({
   stdin: { contents: entry, resolveDir: root, sourcefile: 'check-rewriters-entry.js', loader: 'js' },
@@ -68,6 +69,25 @@ const cases = {
     const r = m.removeCallStatements(code, 'sendMessage')
     assert.equal(r.removed, 1)
     assert.match(r.code, /`Hi,\n\n\n\nThanks`/)
+  },
+  'generated group fields load by label and show mappings': () => {
+    const code = 'await addRow({ inputData: {\n  column_selected: ["name"],\n  column_name: {\n    name: context.req.body?.name\n  }\n} })'
+    const call = m.findSubfunctionCalls(code, ['addRow'])[0]
+    const model = new m.InputsModel({
+      // The group is listed but empty until its fields are generated, as the panel loads it.
+      steps: { root: ['column_selected', 'column_name'], column_name: [] },
+      fields: {
+        column_selected: { key: 'column_selected', type: 'multiselect', label: 'Columns' },
+        column_name: { key: 'column_name', type: 'input groups', label: 'Column Values', generates: true },
+      },
+    })
+    model.load(call.fields)
+    const child = 'column_name["A"]'
+    model.groupLoaded('column_name', { steps: { column_name: [child] }, fields: { [child]: { key: child, type: 'string', label: 'Name' } } })
+    assert.deepEqual(model.values.get(child)?.value, { kind: 'text', text: '${context.req.body?.name}' })
+    assert.equal(model.extras.get('column_name'), undefined)
+    // Unchanged values are written back as the code had them, under the app's own key.
+    assert.match(model.inputDataFields().column_name, /A: context\.req\.body\?\.name/)
   },
   'rename skips method definitions': () => {
     const code = 'const api = { sendMessage(x) { return x } }\nawait sendMessage({ inputData: { a: 1 } })\nreturn api.sendMessage(1)'

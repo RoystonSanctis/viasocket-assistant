@@ -218,6 +218,8 @@ export function renderInputs(host: InputsHost): InputsView {
           if (groupLoads.get(key) !== load || !host.alive()) return
           if (res.form) {
             model.groupLoaded(key, res.form)
+            // Mapped values read into the new fields show as typed/mapped input, as at form start.
+            for (const [k, e] of model.values) if (e.value.kind === 'text') manual.add(k)
             load.state = 'loaded'
           } else if (res.needsFirst?.length) {
             load.state = 'waiting'
