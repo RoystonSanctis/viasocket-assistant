@@ -30,10 +30,13 @@ jobs:
       - run: npm run check-config
       # Packages the extension into a Chrome Web Store compliant ZIP archive.
       - run: npm run package
+      # The zip is named after package.json's version; read it so a version bump never breaks the upload.
+      - run: echo "EXT_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
       - uses: actions/upload-artifact@v4
         with:
-          name: viasocket-assistant-0.3.0-webstore-package
-          path: extension/viasocket-assistant-0.3.0.zip
+          name: viasocket-assistant-${{ env.EXT_VERSION }}-webstore-package
+          path: extension/viasocket-assistant-${{ env.EXT_VERSION }}.zip
+          if-no-files-found: error
           retention-days: 14
       # Download unpacked dist for local developer loading in chrome://extensions.
       - uses: actions/upload-artifact@v4

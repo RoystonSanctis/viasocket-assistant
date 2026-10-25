@@ -20,12 +20,12 @@ viaSocket Assistant
 ---
 
 ### Item Summary (Short Description)
-*Maximum 132 characters; plain text only; no HTML; no superlatives ("best", "fastest"); no references to competing extensions.*
+*Maximum 132 characters; plain text only; no HTML; no superlatives ("best", "fastest"); no references to competing extensions. The dashboard reads it from the package: it is `description` in `extension/src/manifest.json`, so change it there.*
 
 ```text
-An interactive AI companion that builds, tests, and edits automation workflows directly on your viaSocket canvas using voice and chat.
+A voice-first mascot that builds, tests and improves your viaSocket workflows and plugs.
 ```
-* **Character count**: 130 / 132 characters.
+* **Character count**: 88 / 132 characters.
 * **Best Practice Check**:
   - ✅ Fits under the strict 132-character limit for search results and category cards.
   - ✅ Highlights core features that resonate with main user cases.

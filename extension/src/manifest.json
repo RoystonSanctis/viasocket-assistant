@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "viaSocket Assistant",
   "short_name": "vS Assistant",
-  "description": "A voice-first mascot that builds, tests and improves your viaSocket workflows and plugs. Open source (AGPL-3.0).",
+  "description": "A voice-first mascot that builds, tests and improves your viaSocket workflows and plugs.",
   "version": "0.4.0",
   "minimum_chrome_version": "120",
   "icons": {
