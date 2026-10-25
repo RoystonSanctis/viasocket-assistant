@@ -2,7 +2,7 @@
 
 > Aligned with official Google Chrome Web Store guidelines:  
 > [Creating a great listing page](https://developer.chrome.com/docs/webstore/best-listing)  
-> Last Updated: 2026-10-20 (v0.4.0)
+> Last Updated: 2026-10-25 (v0.4.0)
 
 ---
 
@@ -34,44 +34,78 @@ An interactive AI companion that builds, tests, and edits automation workflows d
 ---
 
 ### Item Detailed Description
-*Format: Engaging overview paragraph followed by a clean list of key capabilities, quick onboarding steps, privacy pledge, and support links.*
+*Format: plain text (the store does not render Markdown), one emoji per section heading, short benefit-first lines. Max 16,000 characters. No competitor names, no superlatives.*
 
-```markdown
-viaSocket Assistant is an interactive AI-powered companion built specifically for viaSocket users. It features SOCKET, an animated companion that lives directly on your viaSocket canvas to help you construct, debug, test, and refine automation workflows using voice or natural language chat.
+```text
+Build, edit, test and fix viaSocket workflows by chatting or talking to SOCKET, right on your flow canvas.
 
-Whether you are connecting APIs, writing custom JavaScript transformations, or troubleshooting branching logic, SOCKET acts as your co-pilot—analyzing the current canvas in real time, explaining data flow, and applying step modifications with your approval.
+Describe the automation you want in plain words. SOCKET plans it with you, adds the trigger and the steps, fills in every field, tests each step as it goes and publishes only when you say yes, all inside the viaSocket editor you already use.
 
-KEY CAPABILITIES
+🧠 Plans before it builds
+Ask for an automation in plain words. SOCKET shows a step-by-step checklist (trigger, steps, test, publish) and waits for "Looks good, start" or your changes.
 
-• Voice & Natural Language Building: Dictate changes hands-free or press Shift + Space (or Alt + Shift + V) to instruct SOCKET to add steps, configure API parameters, or fix errors.
-• Interactive SOCKET Companion: An intelligent on-canvas companion that moves with you, automatically docks to clear the way when step panels open, and highlights active steps.
-• Real-Time Sidebar & Draft Sync: Edits and draft configurations suggested by the assistant reflect live in the viaSocket sidebar, keeping your canvas and settings perfectly in sync.
-• Cross-Flow Step Transfer: Copy and paste complete steps—including app configurations, custom code, dynamic variable mappings, and authentication references—between different flows and accounts.
-• Clean JavaScript Step Organization: Automatic mapping of input values into structured dynamic variables, keeping custom code clean and easy to maintain.
-• Workflow Walkthroughs & Debugging: Ask SOCKET to explain complex automation paths, inspect step payloads, or diagnose failed executions step by step.
-• Local & Private Speech Processing: Choose between on-device Whisper speech recognition or browser-based transcription to keep voice inputs fast and private.
-• Customizable Interaction: Switch seamlessly between spoken responses, concise audio chime confirmations, or silent text mode. Adjust speech pause sensitivity to match your speaking style.
+🧩 Builds complete flows
+Triggers, app actions, JavaScript, API calls, multipath conditions, delays, human approvals, AI agents, run-once-per-item loops, run-if conditions and Get Data: configured, connected and saved step by step.
 
-HOW TO GET STARTED
+✅ Tests as it goes
+Every step is tested right after it is saved, so later steps map real response data instead of guesses. Steps that send messages or change records ask you before they run.
 
-1. Open any workflow on viaSocket (e.g., flow.viasocket.com).
-2. Click SOCKET (the green mascot on the canvas) or press Shift + Space to open the assistant.
-3. Type or speak what you want to achieve (e.g., "Add a JavaScript step to format this date and send a Slack notification").
-4. Review the assistant's proposed plan, approve the steps, and watch your flow build out smoothly.
+👀 Sees what you see
+SOCKET knows which panel is open, what you already picked and what you already tested, so it never asks you twice.
 
-PRIVACY & SECURITY
+🔤 More power in English flows
+Add a JS step with the + button on the Flow view, delete steps from the step menu, and let SOCKET add delays, approvals, loops and run-if conditions.
 
-viaSocket Assistant communicates exclusively with viaSocket services and your own chosen AI providers. 
-• No browsing history or unrelated website data is ever read or tracked.
-• Session authentication relies on your existing browser cookies; tokens never leave your local session.
-• Speech processing can run fully on-device via WebAssembly/WebGPU.
-• Source code is open and audited under the AGPL-3.0 license.
+⚡ Subfunctions panel for JS steps
+Add app actions inside a JavaScript step with a full form: connection picker, dropdowns that load from the app, generated fields and data mapping. SOCKET writes the call into your code and keeps the form and the code in sync.
 
-SUPPORT & COMMUNITY
+📋 Copy, paste, export and import
+Copy a step with its code, mappings and app settings, and paste it into another flow or account. Export a whole flow to a file and import it anywhere.
 
-• Documentation & Issues: https://github.com/RoystonSanctis/viasocket-assistant
+✨ One-click Beautify
+Tidy JavaScript and JSON in the step code editors without changing what the code does.
+
+🗺️ Explains any flow
+Ask "How does this flow work?" for a guided walkthrough, or ask why the last run failed.
+
+🛠️ Developer Hub plugs
+Build and extend your own viaSocket apps: actions, triggers, connections, test runs and publishing.
+
+🎙️ Talk or type
+Hold a shortcut to talk, say "Hey Socket", or type. Speech recognition can run fully on your device with Whisper.
+
+🤖 Bring your own AI
+OpenAI, Anthropic, Google Gemini, Mistral, DeepSeek, Groq or OpenRouter with your own key, or a local model through Ollama or LM Studio.
+
+🔒 Private by design
+No telemetry or analytics. The extension talks only to viaSocket and the AI provider you choose. Your settings and keys stay in your browser. Open source under AGPL-3.0.
+
+💡 How it works
+1. Install the extension and open a workflow on flow.viasocket.com.
+2. Open the extension options and add your AI provider key, or pick a local model.
+3. Click SOCKET (the green mascot) or press Shift + Space.
+4. Say or type what you want, for example: "When my webhook gets an order, add a row to Google Sheets."
+5. Review the plan, say "Looks good", and watch the flow build itself.
+
+✅ Made for
+• New viaSocket users who want a guide while they build
+• Builders who want flows done in minutes
+• Developers who write JavaScript steps and custom apps
+• Teams who maintain and debug existing flows
+
+💬 Try asking
+• "When a form is submitted, add a row to Google Sheets and message the sales channel on Slack."
+• "Explain this flow step by step."
+• "Why did the last run fail?"
+• "Wait two days before sending the follow-up email."
+• "Only run this flow when the order total is over 100."
+
+ℹ️ Refresh any open viaSocket tabs after installing.
+
+🆘 Support
+• Issues and source: https://github.com/RoystonSanctis/viasocket-assistant
 • Website: https://viasocket.com
-• Feedback: Contact support@viasocket.com or open a discussion on GitHub.
+• Email: support@viasocket.com
 ```
 
 ---
@@ -102,11 +136,12 @@ Per Google's [Best Listing Images Guide](https://developer.chrome.com/docs/webst
 | Asset | Exact Dimensions | Format | Status | Design Requirements / Rules |
 | :--- | :--- | :--- | :--- | :--- |
 | **Store Icon** | **128 × 128 px** | PNG | ✅ Ready (`store-assets/icon-128.png`) | • Simple, recognizable brand logo (SOCKET mascot or viaSocket mark).<br>• High-contrast background.<br>• **NO** screenshots or tiny UI elements inside the icon. |
-| **Screenshot 1** | **1280 × 800 px** | PNG | ✅ Ready (`store-assets/screenshot-1-1280x800.png`) | • **Hero Canvas Overview**: viaSocket builder with SOCKET companion docked on the canvas.<br>• Full-bleed (square corners, no white borders). |
-| **Screenshot 2** | **1280 × 800 px** | PNG | ⬜ Planned | • **Voice & Chat Workflow Building**: Natural language prompt showing step generation and plan review in the chat panel. |
-| **Screenshot 3** | **1280 × 800 px** | PNG | ⬜ Planned | • **Live Step Inspector & Draft Sync**: Step slider open with dynamic variables and real-time live preview. |
-| **Screenshot 4** | **1280 × 800 px** | PNG | ⬜ Planned | • **Step Menu Actions (Copy, Paste, Delete)**: Three-dot menu showcasing seamless step copy/paste and management across flows. |
-| **Screenshot 5** | **1280 × 800 px** | PNG | ⬜ Planned | • **Audio & Speech Privacy Settings**: Options panel demonstrating on-device Whisper transcription and voice reply preferences. |
+| **Screenshot 1** | **1280 × 800 px** | PNG | ✅ Ready (`store-assets/screenshot-2-chat-plan-1280x800.png`) | • **Plans before it builds**: chat request turned into a step-by-step plan with "Looks good, start". |
+| **Screenshot 2** | **1280 × 800 px** | PNG | ✅ Ready (`store-assets/screenshot-3-english-flow-subfunctions-1280x800.png`) | • **English flows + Subfunctions**: Flow view with the Subfunctions panel and the **+** (Add JS step) on the zoom bar. |
+| **Screenshot 3** | **1280 × 800 px** | PNG | ✅ Ready (`store-assets/screenshot-4-subfunction-inputs-1280x800.png`) | • **Subfunction form**: app action inputs with loaded dropdowns and mapped Column Values. |
+| **Screenshot 4** | **1280 × 800 px** | PNG | ✅ Ready (`store-assets/screenshot-1-1280x800.png`) | • **Explains any flow**: SOCKET walking through an existing branching flow. |
+| **Screenshot 5** | **1280 × 800 px** | PNG | ✅ Ready (`store-assets/screenshot-6-step-copy-paste-1280x800.png`) | • **Copy & Paste steps**: step menu with Copy and Paste on the canvas. |
+| *Spare* | **1280 × 800 px** | PNG | ✅ Ready (`store-assets/screenshot-5-flow-export-import-1280x800.png`) | • **Export / Import Flow** in the flow menu. The store takes at most 5 screenshots: swap this in for any of the above if preferred. |
 | **Small Promo Tile** | **440 × 280 px** | PNG | ⬜ Planned (`store-assets/promo-small-440x280.png`) | • Appears in search results and category listings.<br>• Vibrant, saturated colors (dark navy/teal palette).<br>• Clear SOCKET mascot + bold tagline: "Build viaSocket flows with AI & Voice".<br>• Must be legible when scaled down to 50%.<br>• **NO** misleading badges ("#1", "Editor's Choice"). |
 | **Marquee Promo Tile** | **1400 × 560 px** | PNG | ⬜ Planned (`store-assets/promo-marquee-1400x560.png`) | • Used when featured in the top carousel of the Chrome Web Store.<br>• Uncluttered, high-res composition with room on the left/right.<br>• Consistent visual identity with icon and screenshots. |
 
