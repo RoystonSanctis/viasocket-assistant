@@ -193,6 +193,9 @@ async function handlePortMessage(session: Session, raw: unknown): Promise<void> 
         await handleVoiceCommand(session, msg.action)
       }
       return
+    case 'voice-front':
+      for (const s of allSessions()) if (s !== session) s.send({ type: 'voice-yield' })
+      return
     case 'clear-thread': {
       session.cancelRun()
       // A cancelled run still saves its last tool results; clearing first would let that save resurrect the thread.

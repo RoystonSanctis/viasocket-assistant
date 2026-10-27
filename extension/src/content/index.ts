@@ -68,6 +68,8 @@ async function main(): Promise<void> {
   let speechSilenceTimer: ReturnType<typeof setTimeout> | undefined
   let heardSpeechInTurn = false
   let wakeWord: WakeWordListener | null = null
+  /** Chrome runs one speech recognizer at a time, so only the viaSocket tab the user is on listens for the wake word. */
+  let voiceFront = false
 
   let continuousVoice = false
   let pendingConfirmId: string | null = null
@@ -313,7 +315,7 @@ async function main(): Promise<void> {
   // ---------- wake word ----------
 
   wakeWord = createWakeWordListener({
-    enabled: () => active() && settings.voiceEnabled && settings.wakeWordEnabled,
+    enabled: () => voiceFront && active() && settings.voiceEnabled && settings.wakeWordEnabled,
     onWake(trailingText) {
       mascot.openPanel()
       continuousVoice = true
@@ -365,13 +367,34 @@ async function main(): Promise<void> {
     if (!active() || !settings.voiceEnabled) {
       voiceCancel()
       wakeWord?.stop()
-    } else if (settings.wakeWordEnabled) {
+    } else if (settings.wakeWordEnabled && voiceFront) {
       wakeWord?.start()
     } else {
       wakeWord?.stop()
     }
   }
   applyEnabled()
+
+  /** The tab became visible or focused: take the wake word over from the other viaSocket tabs. */
+  function claimVoice(): void {
+    if (voiceFront || dead || document.visibilityState !== 'visible') return
+    voiceFront = true
+    port.send({ type: 'voice-front' })
+    applyEnabled()
+  }
+
+  /** The tab was hidden or another tab took over: stop listening and end a hands-free session. */
+  function yieldVoice(): void {
+    if (!voiceFront) return
+    voiceFront = false
+    continuousVoice = false
+    voiceCancel()
+    applyEnabled()
+  }
+
+  const onVisibility = (): void => (document.visibilityState === 'visible' ? claimVoice() : yieldVoice())
+  document.addEventListener('visibilitychange', onVisibility)
+  window.addEventListener('focus', claimVoice)
 
   // ---------- service worker ----------
 
@@ -442,6 +465,9 @@ async function main(): Promise<void> {
         break
       case 'voice-command':
         voiceCommand(msg.action)
+        break
+      case 'voice-yield':
+        yieldVoice()
         break
       case 'voice-state':
         if (settings.sttEngine !== 'browser') {
@@ -627,6 +653,7 @@ async function main(): Promise<void> {
     },
     onDead: shutdown,
   })
+  claimVoice()
 
   // ---------- injected menus (step copy / paste, flow export / import) ----------
 
@@ -672,6 +699,8 @@ async function main(): Promise<void> {
     safe(() => wakeWord?.destroy())
     safe(() => stt.cancel())
     safe(() => window.removeEventListener('keydown', onWindowKeyDown, true))
+    safe(() => document.removeEventListener('visibilitychange', onVisibility))
+    safe(() => window.removeEventListener('focus', claimVoice))
     safe(() => hotkey.destroy())
     safe(() => bridge.destroy())
     safe(() => pageWatch.destroy())

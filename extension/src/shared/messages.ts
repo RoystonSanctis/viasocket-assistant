@@ -25,6 +25,8 @@ export type ContentToBackground =
   | { type: 'heartbeat' }
   /** cancel throws the recording away instead of transcribing it (e.g. the hotkey turned out to be a shortcut) */
   | { type: 'voice'; action: 'start' | 'stop' | 'toggle' | 'cancel' }
+  /** The tab came to the front and takes over the wake word from the other viaSocket tabs */
+  | { type: 'voice-front' }
   | { type: 'clear-thread' }
   | { type: 'open-options'; section?: string }
   | { type: 'dom-status'; status: DomPageStatus }
@@ -66,6 +68,8 @@ export type BackgroundToContent =
   | { type: 'confirm-cancel'; id: string }
   /** Keyboard command (chrome.commands) forwarded to the tab, which owns push-to-talk for both speech engines */
   | { type: 'voice-command'; action: 'start' | 'stop' | 'toggle' }
+  /** Another tab came to the front: stop listening here (Chrome runs one speech recognizer at a time) */
+  | { type: 'voice-yield' }
   | { type: 'voice-state'; state: VoiceState; detail?: string; progress?: number }
   | { type: 'voice-level'; level: number }
   | { type: 'transcript'; text: string; final: boolean }
