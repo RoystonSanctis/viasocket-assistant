@@ -411,6 +411,18 @@ export class Panel {
     return this.opened
   }
 
+  /** Where the open panel is going. Its left/top are CSS-transitioned, so the live rect lags behind position(). */
+  targetRect(): Rect | null {
+    if (!this.opened) return null
+    if (!Number.isFinite(this.appliedLeft) || !Number.isFinite(this.appliedTop)) return rectOf(this.el)
+    return {
+      left: this.appliedLeft,
+      top: this.appliedTop,
+      right: this.appliedLeft + this.el.offsetWidth,
+      bottom: this.appliedTop + this.el.offsetHeight,
+    }
+  }
+
   get pendingCount(): number {
     return this.pending.size
   }
