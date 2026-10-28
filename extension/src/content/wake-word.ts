@@ -1,7 +1,7 @@
 // Continuous "Hey SOCKET" wake-word listener using Web Speech API (webkitSpeechRecognition).
 // Runs only when settings.voiceEnabled and settings.wakeWordEnabled are true.
 
-import { recognizerCtor, type Recognizer } from './browser-stt'
+import { holdMic, recognizerCtor, type Recognizer } from './browser-stt'
 
 export interface WakeWordOptions {
   enabled(): boolean
@@ -25,6 +25,13 @@ export function createWakeWordListener(opts: WakeWordOptions): WakeWordListener 
   let paused = false
   let restartTimer: ReturnType<typeof setTimeout> | undefined
   let destroyed = false
+  /** Held from start to stop/pause, so Chrome's restart after each pause does not re-open the mic */
+  let releaseMic: (() => void) | null = null
+
+  function dropMic(): void {
+    releaseMic?.()
+    releaseMic = null
+  }
 
   function clearTimer(): void {
     if (restartTimer) {
@@ -42,6 +49,7 @@ export function createWakeWordListener(opts: WakeWordOptions): WakeWordListener 
 
     const Ctor = recognizerCtor()
     if (!Ctor) return
+    releaseMic ??= holdMic()
 
     try {
       const r = new Ctor()
@@ -69,6 +77,7 @@ export function createWakeWordListener(opts: WakeWordOptions): WakeWordListener 
         if (ev.error === 'not-allowed') {
           console.warn('[SOCKET Wake Word] Microphone permission required for wake word detection.')
           running = false
+          dropMic()
           return
         }
         // Other errors (no-speech, network, aborted) are transient; onend will restart if still running.
@@ -93,6 +102,7 @@ export function createWakeWordListener(opts: WakeWordOptions): WakeWordListener 
     running = false
     paused = false
     clearTimer()
+    dropMic()
     if (rec) {
       const r = rec
       rec = null
@@ -105,6 +115,7 @@ export function createWakeWordListener(opts: WakeWordOptions): WakeWordListener 
   function pause(): void {
     paused = true
     clearTimer()
+    dropMic()
     if (rec) {
       const r = rec
       rec = null
