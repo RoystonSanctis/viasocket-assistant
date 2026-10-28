@@ -2,7 +2,7 @@
 // in place instead of duplicating.
 
 import type { ChatLine } from '../../shared/mascot'
-import { h } from './dom'
+import { h, iconButton } from './dom'
 import { renderMarkdown } from './markdown'
 
 const MAX_LINES = 200
@@ -10,6 +10,8 @@ const NEAR_BOTTOM_PX = 48
 
 export interface ChatViewHooks {
   onPrompt?(text: string): void
+  /** Opens a settings section from a system note's link (e.g. "Change model") */
+  onOpenSettings?(section: string): void
 }
 
 export class ChatView {
@@ -65,17 +67,31 @@ export class ChatView {
   private render(line: ChatLine): HTMLElement {
     const time = Number.isFinite(line.at) ? new Date(line.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
     if (line.role === 'system-note') {
-      return h('div', { class: 'msg sys', 'data-line': line.id, title: time, text: line.text })
+      const note = h('div', { class: 'msg sys', 'data-line': line.id, title: time, text: line.text })
+      const link = line.link
+      if (link) {
+        const btn = h('button', { type: 'button', class: 'btn small msg-link', text: link.label })
+        btn.addEventListener('click', () => this.hooks?.onOpenSettings?.(link.section))
+        note.append(btn)
+      }
+      return note
     }
     const body = h('div', { class: line.role === 'assistant' ? 'msg-body md' : 'msg-body plain' })
     if (line.role === 'assistant') body.append(renderMarkdown(line.text))
     else body.textContent = line.text
-    return h(
+    const msg = h(
       'div',
       { class: `msg ${line.role}`, 'data-line': line.id, title: time },
       h('span', { class: 'sr-only', text: line.role === 'user' ? 'You: ' : 'Assistant: ' }),
       body,
     )
+    if (line.role === 'user') {
+      // After an error (rate limit, a model switch in settings) the user sends the same message again.
+      const resend = iconButton('retry', 'Resend this message', 'msg-resend')
+      resend.addEventListener('click', () => this.hooks?.onPrompt?.(line.text))
+      msg.append(resend)
+    }
+    return msg
   }
 
   private trim(): void {

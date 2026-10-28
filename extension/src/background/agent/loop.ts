@@ -1,7 +1,7 @@
 // The agent loop: ask the model, run the tools it calls one at a time, feed results back, repeat until it answers.
 
 import type { FullConfig } from '../../shared/config'
-import { PLAN_APPROVE_TEXT } from '../../shared/mascot'
+import { PLAN_APPROVE_TEXT, type ChatLine } from '../../shared/mascot'
 import type { ObservedEvent } from '../../shared/observed'
 import { loadSettings, type UserSettings } from '../../shared/settings'
 import { getConfig } from '../config-loader'
@@ -145,7 +145,7 @@ export async function runAgent(session: Session, userText: string, _source: 'voi
     if (!model) {
       staleStatus.add(session)
       session.send({ type: 'status', llmReady: false, reason: NO_MODEL_MESSAGE })
-      postLine(session, 'system-note', NO_MODEL_MESSAGE)
+      postLine(session, 'system-note', NO_MODEL_MESSAGE, false, CHANGE_MODEL)
       session.ui.mascot('confused')
       session.settleMascot(4000)
       return
@@ -290,7 +290,13 @@ async function agentLoop(run: RunContext): Promise<void> {
       if (!reply) {
         messages.push({ role: 'assistant', content: '(No answer was given. Do not resume this request unless the user asks again.)' })
         await saveMessages(thread, messages, flags.conversationMaxMessages)
-        postLine(session, 'system-note', `The model returned no answer (finish reason: ${res.finishReason ?? 'unknown'}). Try again or pick another model.`)
+        postLine(
+          session,
+          'system-note',
+          `The model returned no answer (finish reason: ${res.finishReason ?? 'unknown'}). Try again or pick another model.`,
+          false,
+          CHANGE_MODEL,
+        )
         ui.mascot('confused')
         session.settleMascot(4000)
         return
@@ -473,11 +479,14 @@ async function chatWithRetry(run: RunContext, build: (shrink: boolean) => ChatRe
   }
 }
 
+/** Under model errors: the user switches model in settings, then resends their message from the chat. */
+const CHANGE_MODEL: ChatLine['link'] = { label: 'Change model', section: 'model' }
+
 async function reportRunError(session: Session, e: unknown, signal: AbortSignal): Promise<void> {
   const config = await getConfig()
   const lines = config.mascot.lines
   const ui = session.ui
-  const note = (text: string) => postLine(session, 'system-note', text)
+  const note = (text: string, link?: ChatLine['link']) => postLine(session, 'system-note', text, false, link)
 
   if (e instanceof PageMovedError) {
     // finishRun says why, once the panel shows the page the user moved to.
@@ -497,26 +506,30 @@ async function reportRunError(session: Session, e: unknown, signal: AbortSignal)
       case 'auth':
         staleStatus.add(session)
         session.send({ type: 'status', llmReady: false, reason: e.message })
-        note(e.message || lines.noKey || 'I need a working AI key. Open settings to add one.')
+        note(e.message || lines.noKey || 'I need a working AI key. Open settings to add one.', { label: 'Open settings', section: 'provider' })
         return
       case 'quota':
         note(
           e.status === 402
             ? `${e.message} Add credit with your provider, or pick a free model in settings.`
             : `${e.message} This limit does not reset within a minute. Try again later, or switch models in settings.`,
+          CHANGE_MODEL,
         )
         return
       case 'rate-limit':
-        note(`${e.message} Wait a moment and try again.`)
+        note(`${e.message} Wait a moment and try again, or switch models.`, CHANGE_MODEL)
         return
       case 'network':
         note(`I couldn't reach your AI provider. Check your connection and try again. (${e.message})`)
         return
       case 'server':
-        note(`Your AI provider had a problem answering. Try again in a moment. (${e.message})`)
+        note(`Your AI provider had a problem answering. Try again in a moment. (${e.message})`, CHANGE_MODEL)
         return
       case 'bad-request':
-        note(`Your AI provider rejected the request: ${e.message}${isTooLarge(e) ? ' If this keeps happening, clear the conversation.' : ''}`)
+        note(
+          `Your AI provider rejected the request: ${e.message}${isTooLarge(e) ? ' If this keeps happening, clear the conversation.' : ''}`,
+          CHANGE_MODEL,
+        )
         return
       case 'aborted':
         note(lines.cancelled ?? 'Okay, stopped.')

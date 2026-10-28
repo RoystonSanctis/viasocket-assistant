@@ -276,8 +276,14 @@ export function fitBudget(messages: ChatMessage[], budgetChars: number): ChatMes
 }
 
 /** Sends a chat line to the panel and, unless it is a transient note, stores it with the current thread. */
-export function postLine(session: Session, role: ChatRole, text: string, persist = role !== 'system-note'): ChatLine {
-  const line: ChatLine = { id: crypto.randomUUID(), role, text, at: Date.now() }
+export function postLine(
+  session: Session,
+  role: ChatRole,
+  text: string,
+  persist = role !== 'system-note',
+  link?: ChatLine['link'],
+): ChatLine {
+  const line: ChatLine = { id: crypto.randomUUID(), role, text, at: Date.now(), ...(link ? { link } : {}) }
   session.send({ type: 'chat', line })
   const key = session.threadKey
   if (persist && key) {

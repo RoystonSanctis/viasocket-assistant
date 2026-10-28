@@ -292,6 +292,7 @@ export class Panel {
         cb.onUserText(text)
         hooks.onActivity()
       },
+      onOpenSettings: (section) => cb.onOpenSettings(section),
     })
     this.cards = h('div', { class: 'cards' })
     this.transcript = h('div', { class: 'transcript', 'aria-live': 'polite', hidden: true })
