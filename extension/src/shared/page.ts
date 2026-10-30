@@ -36,7 +36,7 @@ const WORKSPACE_SELECT = /^\/(?:org(?:s)?|projects)\/?$/
 const ORG_PAGE = /^\/org(?:s)?\/([^/]+)\/?$/
 
 // Embed routes: /integrations/embed/:orgId/:projectId[/service/:serviceId]/workflow/:scriptId/:tabName
-const EMBED_FLOW_EDITOR = /^\/integrations\/embed\/([^/]+)\/([^/]+)\/(?:service\/([^/]+)\/)?workflow\/([^/]+)(?:\/([^/]+))?/
+const EMBED_FLOW_EDITOR = /^\/integrations\/embed\/([^/]+)\/([^/]+)\/(?:(?:event\/([^/]+)\/)?service\/([^/]+)\/)?workflow\/([^/]+)(?:\/([^/]+))?(\/slider)?/
 const EMBED_PROJECT = /^\/integrations\/embed\/([^/]+)\/([^/]+)/
 
 export function parsePage(href: string): PageContext {
@@ -83,9 +83,9 @@ export function parsePage(href: string): PageContext {
       kind: 'flow-editor',
       orgId: m[1],
       projectId: m[2],
-      serviceId: m[3],
-      scriptId: m[4],
-      tabName: m[5],
+      serviceId: m[4],
+      scriptId: m[5],
+      tabName: m[6],
       stepId: q.get('stepId')?.slice(0, 100) || undefined,
       slugName: q.get('slugName')?.slice(0, 100) || undefined,
     }
