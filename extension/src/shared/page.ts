@@ -35,6 +35,10 @@ const DH = /^\/developer\/([^/]+)/
 const WORKSPACE_SELECT = /^\/(?:org(?:s)?|projects)\/?$/
 const ORG_PAGE = /^\/org(?:s)?\/([^/]+)\/?$/
 
+// Embed routes: /integrations/embed/:orgId/:projectId[/service/:serviceId]/workflow/:scriptId/:tabName
+const EMBED_FLOW_EDITOR = /^\/integrations\/embed\/([^/]+)\/([^/]+)\/(?:service\/([^/]+)\/)?workflow\/([^/]+)(?:\/([^/]+))?/
+const EMBED_PROJECT = /^\/integrations\/embed\/([^/]+)\/([^/]+)/
+
 export function parsePage(href: string): PageContext {
   const u = new URL(href)
   const base: PageContext = { kind: 'other', url: href, host: u.host }
@@ -70,6 +74,25 @@ export function parsePage(href: string): PageContext {
   if (m) return { ...base, kind: 'project', orgId: m[1], projectId: m[2] || undefined }
   m = HOME.exec(path)
   if (m) return { ...base, kind: 'home', orgId: m[1] }
+
+  // Embed routes (/integrations/embed/…) — same URL shape as the flow editor but on the embed host.
+  m = EMBED_FLOW_EDITOR.exec(path)
+  if (m) {
+    return {
+      ...base,
+      kind: 'flow-editor',
+      orgId: m[1],
+      projectId: m[2],
+      serviceId: m[3],
+      scriptId: m[4],
+      tabName: m[5],
+      stepId: q.get('stepId')?.slice(0, 100) || undefined,
+      slugName: q.get('slugName')?.slice(0, 100) || undefined,
+    }
+  }
+  m = EMBED_PROJECT.exec(path)
+  if (m) return { ...base, kind: 'project', orgId: m[1], projectId: m[2] }
+
   return base
 }
 

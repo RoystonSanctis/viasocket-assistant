@@ -141,7 +141,8 @@ export class Session {
     if (!scope) this.cookieScope = null
     // A newer page arrived meanwhile and builds its own client.
     if (this.page !== page || this.closed || !scope) return
-    this.vs = new ViaSocketClient(env, page, scope)
+    // In embed mode pass tabId so token() can read localStorage.proxy_auth_token via scripting.
+    this.vs = new ViaSocketClient(env, page, { ...scope, tabId: env.embed ? this.tabId : undefined })
   }
 
   /** Thread chat lines and messages belong to right now. */

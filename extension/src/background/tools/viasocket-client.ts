@@ -43,10 +43,11 @@ export class ViaSocketClient {
 
   /**
    * storeId: the tab's cookie store (incognito tabs have their own); incognito: open auth popups there too.
+   * tabId: required for embed mode, where the token is read from the page's localStorage via scripting.
    * `page` follows the tab while the client is reused for the same host and org (Session.setPage), so it is the
    * page open now; agent runs read their own pinned page instead.
    */
-  constructor(readonly env: ViaSocketEnv, public page: PageContext, readonly opts: { storeId?: string; incognito?: boolean } = {}) {}
+  constructor(readonly env: ViaSocketEnv, public page: PageContext, readonly opts: { storeId?: string; incognito?: boolean; tabId?: number } = {}) {}
 
   /** The org the user is looking at. Tools act only on this org. */
   get orgId(): string | undefined {
@@ -54,6 +55,21 @@ export class ViaSocketClient {
   }
 
   async token(): Promise<string> {
+    // In embed mode the user is authenticated via localStorage.proxy_auth_token set by the embed bootstrap,
+    // not via the flow.viasocket.com cookie. Read it from the page via chrome.scripting.
+    if (this.env.embed) {
+      const tabId = this.opts.tabId
+      if (!tabId) throw new VsError('Cannot read embed token: tab ID is missing.', 'logged-out')
+      const results = await chrome.scripting.executeScript({
+        target: { tabId },
+        world: 'MAIN',
+        func: () => localStorage.getItem('proxy_auth_token'),
+      }).catch(() => null)
+      const token = results?.[0]?.result
+      if (!token) throw new VsError('You are not signed in to viaSocket. Open the embed and try again.', 'logged-out')
+      return token
+    }
+
     const c = await chrome.cookies.get({
       url: this.env.cookieUrl,
       name: this.env.cookieName,

@@ -36,10 +36,12 @@ function systemNote(text: string): ChatLine {
 }
 
 async function main(): Promise<void> {
-  if (window.top !== window) return
   if (typeof chrome === 'undefined' || !chrome.runtime?.id) return
   const env = resolveEnv(location.host)
   if (!env) return
+  // Allow running inside the embed iframe (env.embed), but bail out for any other nested frame
+  // (oauth popups, step-test iframes, etc.) where the mascot would be misplaced or broken.
+  if (window.top !== window && !env.embed) return
   // Guards against a second injection of this script into the same tab.
   const g = globalThis as unknown as Record<string, unknown>
   if (g[RUN_MARK]) return

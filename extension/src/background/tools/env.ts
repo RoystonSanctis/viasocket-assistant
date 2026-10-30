@@ -13,6 +13,12 @@ export interface ViaSocketEnv {
   authBase: string
   /** True on hosts where the UI renders beta-gated features (anything but flow.viasocket.com) */
   betaUi: boolean
+  /**
+   * True when the extension is running inside the viaSocket embed iframe (embedfrontend.viasocket.com).
+   * In embed mode the user is authenticated via localStorage.proxy_auth_token set by the embed bootstrap,
+   * not via the flow.viasocket.com cookie.
+   */
+  embed?: boolean
 }
 
 const PROD = {
@@ -35,6 +41,9 @@ const HOSTS: Record<string, ViaSocketEnv> = {
   'flow.viasocket.com': { ...PROD, cookieUrl: 'https://flow.viasocket.com/', betaUi: false },
   'beta-flow.viasocket.com': { ...PROD, cookieUrl: 'https://beta-flow.viasocket.com/', betaUi: true },
   'dev-flow.viasocket.com': { ...TESTING, cookieUrl: 'https://dev-flow.viasocket.com/', betaUi: true },
+  // The embed runs the same React app on its own hostname inside an iframe on third-party sites.
+  // Auth is via localStorage.proxy_auth_token set by the embed bootstrap, not a cookie.
+  'embedfrontend.viasocket.com': { ...PROD, cookieUrl: 'https://embedfrontend.viasocket.com/', betaUi: false, embed: true },
 }
 
 /**
