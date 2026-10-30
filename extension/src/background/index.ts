@@ -44,7 +44,14 @@ chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== PORT_NAME) return
   const sender = port.sender
   const tabId = sender?.tab?.id
-  if (sender?.id !== chrome.runtime.id || tabId === undefined || (sender.frameId ?? 0) !== 0) {
+  let env = null
+  try {
+    if (sender?.url) env = resolveEnv(new URL(sender.url).host)
+  } catch {
+    // invalid URL
+  }
+  const allowedFrame = (sender?.frameId ?? 0) === 0 || env?.embed === true
+  if (sender?.id !== chrome.runtime.id || tabId === undefined || !allowedFrame) {
     port.disconnect()
     return
   }

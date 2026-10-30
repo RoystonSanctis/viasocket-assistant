@@ -42,8 +42,9 @@ const HOSTS: Record<string, ViaSocketEnv> = {
   'beta-flow.viasocket.com': { ...PROD, cookieUrl: 'https://beta-flow.viasocket.com/', betaUi: true },
   'dev-flow.viasocket.com': { ...TESTING, cookieUrl: 'https://dev-flow.viasocket.com/', betaUi: true },
   // The embed runs the same React app on its own hostname inside an iframe on third-party sites.
-  // Auth is via localStorage.proxy_auth_token set by the embed bootstrap, not a cookie.
+  // Auth is via sessionStorage.ssoEmbedToken or localStorage.proxy_auth_token set by the embed bootstrap, not a cookie.
   'embedfrontend.viasocket.com': { ...PROD, cookieUrl: 'https://embedfrontend.viasocket.com/', betaUi: false, embed: true },
+  'dev-embedfrontend.viasocket.com': { ...TESTING, cookieUrl: 'https://dev-embedfrontend.viasocket.com/', betaUi: true, embed: true },
 }
 
 /**

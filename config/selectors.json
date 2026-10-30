@@ -1,6 +1,12 @@
 {
   "schemaVersion": 1,
-  "appHosts": ["flow.viasocket.com", "beta-flow.viasocket.com", "dev-flow.viasocket.com"],
+  "appHosts": [
+    "flow.viasocket.com",
+    "beta-flow.viasocket.com",
+    "dev-flow.viasocket.com",
+    "embedfrontend.viasocket.com",
+    "dev-embedfrontend.viasocket.com"
+  ],
   "flow": {
     "canvasViewport": "[data-testid=\"flow-canvas\"]",
     "zoomContainer": "[data-testid=\"flow-zoom-container\"]",

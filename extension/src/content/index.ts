@@ -57,6 +57,7 @@ async function main(): Promise<void> {
 
   /** The config can switch the mascot off on an app host; it can never add hosts beyond the compiled env table. */
   const hostAllowed = (): boolean => {
+    if (env.embed) return true
     const hosts = config?.selectors.appHosts ?? []
     return hosts.length === 0 || hosts.includes(location.host)
   }
