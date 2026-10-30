@@ -297,8 +297,14 @@ export class Panel {
     this.cards = h('div', { class: 'cards' })
     this.transcript = h('div', { class: 'transcript', 'aria-live': 'polite', hidden: true })
     this.announcer = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite' })
-    // Browser speech uses the site's microphone permission, Whisper the extension's; settings has a section for each.
-    this.voice = new VoiceRow((engine) => cb.onOpenSettings(engine === 'browser' ? 'site-mic' : 'mic'))
+    // Browser speech requests permission in the page directly; Whisper uses the extension's settings.
+    this.voice = new VoiceRow((engine) => {
+      if (engine === 'browser' && cb.onRequestMic) {
+        cb.onRequestMic()
+      } else {
+        cb.onOpenSettings(engine === 'browser' ? 'site-mic' : 'mic')
+      }
+    })
 
     // ----- composer -----
     this.input = h('textarea', {

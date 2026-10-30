@@ -64,6 +64,12 @@
       "js": ["content.js"],
       "run_at": "document_idle",
       "all_frames": true
+    },
+    {
+      "matches": ["https://*/*", "http://*/*"],
+      "js": ["embed-host.js"],
+      "run_at": "document_start",
+      "all_frames": false
     }
   ],
   "options_ui": {

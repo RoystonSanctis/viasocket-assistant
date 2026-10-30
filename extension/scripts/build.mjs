@@ -41,6 +41,7 @@ const stripOrtCdn = {
 const entries = [
   { in: 'src/background/index.ts', out: 'background', format: 'esm' },
   { in: 'src/content/index.ts', out: 'content', format: 'iife' },
+  { in: 'src/content/embed-host.ts', out: 'embed-host', format: 'iife' },
   { in: 'src/main-world/hook.ts', out: 'page-hook', format: 'iife' },
   { in: 'src/offscreen/offscreen.ts', out: 'offscreen', format: 'esm', plugins: [stripOrtCdn] },
   { in: 'src/options/options.ts', out: 'options', format: 'esm' },

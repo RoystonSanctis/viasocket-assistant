@@ -7,7 +7,7 @@ import type { ClientConfig } from '../shared/config'
 import type { ChatLine } from '../shared/mascot'
 import type { BackgroundToContent, VoiceState } from '../shared/messages'
 import { DEFAULT_SETTINGS, loadSettings, SETTINGS_KEY, type UserSettings } from '../shared/settings'
-import { createBrowserStt, browserSttSupported } from './browser-stt'
+import { createBrowserStt, browserSttSupported, requestMicrophonePermission } from './browser-stt'
 import { isVoiceExit, parseConfirmIntent } from '../shared/voice-intent'
 import { initFlowMenu } from './flow-menu'
 import { createHotkey } from './hotkey'
@@ -297,6 +297,16 @@ async function main(): Promise<void> {
       port.send({ type: 'cancel' })
     },
     onOpenSettings: (section) => port.send(section ? { type: 'open-options', section } : { type: 'open-options' }),
+    async onRequestMic() {
+      const granted = await requestMicrophonePermission()
+      if (granted) {
+        mascot.setVoiceState('ready', 'Microphone enabled!')
+        wakeWord?.start()
+        voiceStart('manual')
+      } else {
+        mascot.setVoiceState('needs-permission', 'Microphone was not allowed in the browser prompt.')
+      }
+    },
     onClearThread: () => port.send({ type: 'clear-thread' }),
     onHighlightMissed: () => mascot.addChat(systemNote(CANT_SEE)),
     onPanelOpenChange: (open) => {
