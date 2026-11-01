@@ -292,12 +292,19 @@ export class Panel {
         cb.onUserText(text)
         hooks.onActivity()
       },
+      onOpenSettings: (section) => cb.onOpenSettings(section),
     })
     this.cards = h('div', { class: 'cards' })
     this.transcript = h('div', { class: 'transcript', 'aria-live': 'polite', hidden: true })
     this.announcer = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite' })
-    // Browser speech uses the site's microphone permission, Whisper the extension's; settings has a section for each.
-    this.voice = new VoiceRow((engine) => cb.onOpenSettings(engine === 'browser' ? 'site-mic' : 'mic'))
+    // Browser speech requests permission in the page directly; Whisper uses the extension's settings.
+    this.voice = new VoiceRow((engine) => {
+      if (engine === 'browser' && cb.onRequestMic) {
+        cb.onRequestMic()
+      } else {
+        cb.onOpenSettings(engine === 'browser' ? 'site-mic' : 'mic')
+      }
+    })
 
     // ----- composer -----
     this.input = h('textarea', {
@@ -409,6 +416,18 @@ export class Panel {
 
   get isOpen(): boolean {
     return this.opened
+  }
+
+  /** Where the open panel is going. Its left/top are CSS-transitioned, so the live rect lags behind position(). */
+  targetRect(): Rect | null {
+    if (!this.opened) return null
+    if (!Number.isFinite(this.appliedLeft) || !Number.isFinite(this.appliedTop)) return rectOf(this.el)
+    return {
+      left: this.appliedLeft,
+      top: this.appliedTop,
+      right: this.appliedLeft + this.el.offsetWidth,
+      bottom: this.appliedTop + this.el.offsetHeight,
+    }
   }
 
   get pendingCount(): number {

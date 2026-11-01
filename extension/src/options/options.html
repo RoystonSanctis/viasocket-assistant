@@ -11,41 +11,90 @@
   <body>
     <a class="skip-link" href="#main">Skip to settings</a>
 
-    <header class="page-header">
-      <div class="column">
+    <div class="settings-layout">
+      <aside class="settings-sidebar">
         <div class="brand">
-          <img src="icons/icon-48.png" alt="" width="40" height="40">
+          <img src="icons/icon-48.png" alt="" width="38" height="38">
           <div>
             <h1>SOCKET</h1>
             <p class="subtitle">Settings</p>
           </div>
         </div>
-        <nav aria-label="Settings sections">
-          <ul class="section-nav">
-            <li><a href="#provider">Provider</a></li>
-            <li><a href="#model">Model</a></li>
-            <li><a href="#voice">Voice</a></li>
-            <li><a href="#assistant">SOCKET</a></li>
-            <li><a href="#privacy">Privacy</a></li>
-            <li><a href="#about">About</a></li>
+        <nav aria-label="Settings navigation">
+          <ul class="nav-list" role="tablist">
+            <li>
+              <a href="#provider" class="nav-item active" role="tab" id="tab-provider" aria-selected="true" aria-controls="provider">
+                <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="7.5" cy="15.5" r="5.5"/>
+                  <path d="m21 2-9.6 9.6"/>
+                  <path d="m15.5 7.5 3 3L22 7l-3-3"/>
+                </svg>
+                <span>AI Provider</span>
+              </a>
+            </li>
+            <li>
+              <a href="#model" class="nav-item" role="tab" id="tab-model" aria-selected="false" aria-controls="model">
+                <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
+                  <circle cx="12" cy="12" r="4"/>
+                  <path d="m4.93 4.93 2.83 2.83m8.48 8.48 2.83 2.83M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83"/>
+                </svg>
+                <span>Model</span>
+              </a>
+            </li>
+            <li>
+              <a href="#voice" class="nav-item" role="tab" id="tab-voice" aria-selected="false" aria-controls="voice">
+                <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                  <line x1="12" x2="12" y1="19" y2="22"/>
+                </svg>
+                <span>Voice &amp; Audio</span>
+              </a>
+            </li>
+            <li>
+              <a href="#assistant" class="nav-item" role="tab" id="tab-assistant" aria-selected="false" aria-controls="assistant">
+                <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect width="18" height="12" x="3" y="6" rx="2"/>
+                  <path d="M9 12h.01M15 12h.01M12 2v4M2 12h1M21 12h1"/>
+                </svg>
+                <span>SOCKET</span>
+              </a>
+            </li>
+            <li>
+              <a href="#privacy" class="nav-item" role="tab" id="tab-privacy" aria-selected="false" aria-controls="privacy">
+                <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
+                </svg>
+                <span>Privacy</span>
+              </a>
+            </li>
+            <li>
+              <a href="#about" class="nav-item" role="tab" id="tab-about" aria-selected="false" aria-controls="about">
+                <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 16v-4M12 8h.01"/>
+                </svg>
+                <span>About</span>
+              </a>
+            </li>
           </ul>
         </nav>
-      </div>
-    </header>
+      </aside>
 
-    <main id="main" class="column" tabindex="-1">
-      <div id="load-error" class="banner banner-error" role="alert" hidden>
-        <p id="load-error-text"></p>
-        <button type="button" id="load-retry" class="button">Try again</button>
-      </div>
+      <main id="main" class="settings-content" tabindex="-1">
+        <div id="load-error" class="banner banner-error" role="alert" hidden>
+          <p id="load-error-text"></p>
+          <button type="button" id="load-retry" class="button">Try again</button>
+        </div>
 
-      <div id="privacy-banner" class="banner banner-warn" role="region" aria-label="Privacy notice" hidden>
-        <p>Before you start, please read what SOCKET shares with your AI provider.</p>
-        <a class="button" href="#privacy">Review privacy notice</a>
-      </div>
+        <div id="privacy-banner" class="banner banner-warn" role="region" aria-label="Privacy notice" hidden>
+          <p>Before you start, please read what SOCKET shares with your AI provider.</p>
+          <a class="button" href="#privacy">Review privacy notice</a>
+        </div>
 
-      <!-- Provider -->
-      <section id="provider" class="card-section" aria-labelledby="provider-heading">
+        <!-- Provider -->
+        <section id="provider" class="card-section active" aria-labelledby="provider-heading">
         <h2 id="provider-heading" tabindex="-1">AI provider</h2>
         <p class="lead">SOCKET uses your own API key. It is stored only in this browser and sent only to the provider you pick.</p>
 
@@ -444,6 +493,7 @@
         </ul>
       </section>
     </main>
-    <script type="module" src="options.js"></script>
+  </div>
+  <script type="module" src="options.js"></script>
   </body>
 </html>

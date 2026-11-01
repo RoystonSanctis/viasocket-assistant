@@ -53,6 +53,8 @@ export interface ChatLine {
   role: ChatRole
   text: string
   at: number
+  /** A settings shortcut under a system note, e.g. "Change model" after the AI provider failed */
+  link?: { label: string; section: string }
 }
 
 // ---------- workflow plan (the checklist card pinned at the top of the chat) ----------

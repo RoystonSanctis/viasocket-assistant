@@ -48,6 +48,52 @@ export function browserSttSupported(): boolean {
   return recognizerCtor() !== null
 }
 
+/** A hand-over (wake word to dictation) or a restart closes the mic only if it stays unused this long */
+const MIC_RELEASE_MS = 2000
+let micHolders = 0
+let micStream: Promise<MediaStream | null> | null = null
+let micReleaseTimer: ReturnType<typeof setTimeout> | undefined
+
+/**
+ * Explicitly triggers Chrome's native microphone permission prompt in the browser.
+ * Returns true if granted, false if dismissed or denied.
+ */
+export async function requestMicrophonePermission(): Promise<boolean> {
+  if (!navigator.mediaDevices?.getUserMedia) return false
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    // Permission granted! Cache this stream so holdMic() reuses it
+    micStream = Promise.resolve(stream)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Keeps one microphone stream open while any recognizer is in use. Chrome ends recognition on every pause and
+ * each restart re-opened the mic, which blinked the address-bar mic icon and flickered the whole window.
+ * Returns the release function; failing to open the stream only loses the smoothing, never the recognition.
+ */
+export function holdMic(): () => void {
+  micHolders++
+  clearTimeout(micReleaseTimer)
+  micStream ??= navigator.mediaDevices?.getUserMedia({ audio: true }).catch(() => null) ?? Promise.resolve(null)
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    if (--micHolders > 0) return
+    clearTimeout(micReleaseTimer)
+    micReleaseTimer = setTimeout(() => {
+      if (micHolders > 0 || !micStream) return
+      const pending = micStream
+      micStream = null
+      void pending.then((s) => s?.getTracks().forEach((t) => t.stop()))
+    }, MIC_RELEASE_MS)
+  }
+}
+
 const ERROR_STATES: Record<string, { state: VoiceState; detail?: string }> = {
   'not-allowed': { state: 'needs-permission' },
   'service-not-allowed': { state: 'needs-permission', detail: 'Speech recognition is blocked in this browser.' },
@@ -71,6 +117,7 @@ interface Hold {
   noSpeech: boolean
   restarts: number
   timer: ReturnType<typeof setTimeout> | undefined
+  releaseMic: () => void
 }
 
 function join(a: string, b: string): string {
@@ -96,12 +143,41 @@ export function createBrowserStt(opts: BrowserSttOptions): BrowserStt {
       opts.onState('error', 'This browser has no built-in speech recognition. Choose the local Whisper engine in settings.')
       return
     }
-    const h: Hold = { heard: '', stopRequested: false, cancelled: false, failed: false, noSpeech: false, restarts: 0, timer: undefined }
-    hold = h
-    h.timer = setTimeout(() => {
-      if (hold === h) stop()
-    }, MAX_HOLD_MS)
-    listen(Ctor, h)
+
+    void (async () => {
+      // Check permission state: if not granted yet, trigger the Chrome permission prompt
+      if (navigator.permissions?.query) {
+        try {
+          const perm = await navigator.permissions.query({ name: 'microphone' as PermissionName }).catch(() => null)
+          if (perm?.state === 'prompt') {
+            const granted = await requestMicrophonePermission()
+            if (!granted) {
+              opts.onState('needs-permission', 'Microphone access is required for voice input.')
+              return
+            }
+          }
+        } catch {
+          // ignore query failure, continue
+        }
+      }
+
+      if (hold && !hold.stopRequested && !hold.cancelled) return
+      const h: Hold = {
+        heard: '',
+        stopRequested: false,
+        cancelled: false,
+        failed: false,
+        noSpeech: false,
+        restarts: 0,
+        timer: undefined,
+        releaseMic: holdMic(),
+      }
+      hold = h
+      h.timer = setTimeout(() => {
+        if (hold === h) stop()
+      }, MAX_HOLD_MS)
+      listen(Ctor, h)
+    })()
   }
 
   function listen(Ctor: RecognizerCtor, h: Hold): void {
@@ -170,6 +246,7 @@ export function createBrowserStt(opts: BrowserSttOptions): BrowserStt {
 
   function finish(h: Hold): void {
     clearTimeout(h.timer)
+    h.releaseMic()
     if (hold === h) hold = null
     const text = h.heard.trim()
     const deliver = !h.cancelled && !h.failed && text !== ''

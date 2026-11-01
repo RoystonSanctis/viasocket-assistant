@@ -22,6 +22,8 @@ export interface MascotCallbacks {
   /** A highlight() target never showed up, or stayed out of sight, so the user did not see it */
   onHighlightMissed(): void
   onPanelOpenChange?(open: boolean): void
+  /** Request microphone permission directly in the webpage */
+  onRequestMic?(): void
 }
 
 export interface MascotController {

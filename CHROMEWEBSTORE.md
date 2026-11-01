@@ -34,7 +34,7 @@ A voice-first mascot that builds, tests and improves your viaSocket workflows an
 ---
 
 ### Item Detailed Description
-*Format: plain text (the store does not render Markdown), one emoji per section heading, short benefit-first lines. Max 16,000 characters. No competitor names, no superlatives.*
+*Format: plain text (the store does not render Markdown), one emoji per section heading, short benefit-first lines. Max 16,000 characters. No competitor names, no superlatives, and no lists of brand or product names (AI providers, apps, models): v0.4.0 was rejected on 2026-10-25 for "excessive keywords" (Spam and placement, reference Yellow Argon) over a list of AI provider names.*
 
 ```text
 Build, edit, test and fix viaSocket workflows by chatting or talking to SOCKET, right on your flow canvas.
@@ -72,10 +72,10 @@ Ask "How does this flow work?" for a guided walkthrough, or ask why the last run
 Build and extend your own viaSocket apps: actions, triggers, connections, test runs and publishing.
 
 🎙️ Talk or type
-Hold a shortcut to talk, say "Hey Socket", or type. Speech recognition can run fully on your device with Whisper.
+Hold a shortcut to talk, say "Hey Socket", or type. Speech recognition can run fully on your device.
 
 🤖 Bring your own AI
-OpenAI, Anthropic, Google Gemini, Mistral, DeepSeek, Groq or OpenRouter with your own key, or a local model through Ollama or LM Studio.
+Connect the AI model you prefer with your own API key, or run a local model on your computer.
 
 🔒 Private by design
 No telemetry or analytics. The extension talks only to viaSocket and the AI provider you choose. Your settings and keys stay in your browser. Open source under AGPL-3.0.
@@ -84,7 +84,7 @@ No telemetry or analytics. The extension talks only to viaSocket and the AI prov
 1. Install the extension and open a workflow on flow.viasocket.com.
 2. Open the extension options and add your AI provider key, or pick a local model.
 3. Click SOCKET (the green mascot) or press Shift + Space.
-4. Say or type what you want, for example: "When my webhook gets an order, add a row to Google Sheets."
+4. Say or type what you want, for example: "When my webhook gets an order, add a row to my spreadsheet."
 5. Review the plan, say "Looks good", and watch the flow build itself.
 
 ✅ Made for
@@ -94,7 +94,7 @@ No telemetry or analytics. The extension talks only to viaSocket and the AI prov
 • Teams who maintain and debug existing flows
 
 💬 Try asking
-• "When a form is submitted, add a row to Google Sheets and message the sales channel on Slack."
+• "When a form is submitted, add a row to my spreadsheet and message the sales team."
 • "Explain this flow step by step."
 • "Why did the last run fail?"
 • "Wait two days before sending the follow-up email."

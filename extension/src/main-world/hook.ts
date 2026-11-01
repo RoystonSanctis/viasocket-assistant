@@ -21,7 +21,7 @@ import {
   type StepContextData,
 } from '../shared/messages'
 import type { ObservedEvent } from '../shared/observed'
-import { SUPPORTED_APP_HOSTS } from '../background/tools/env'
+import { resolveEnv, SUPPORTED_APP_HOSTS } from '../background/tools/env'
 import { editorAction } from './editors'
 import {
   classify, dryRunFailed, isObj, isPageMutation, MAX_PARSE_CHARS, outcomeInBody, parseCapped, shortErrorText, SLUG_MAX,
@@ -764,7 +764,8 @@ function alreadyInstalled(): boolean {
 }
 
 try {
-  if (window.top === window && SUPPORTED_APP_HOSTS.includes(location.host) && !alreadyInstalled()) install()
+  const env = resolveEnv(location.host)
+  if (env && (window.top === window || env.embed) && !alreadyInstalled()) install()
 } catch {
   // never throw into the page
 }

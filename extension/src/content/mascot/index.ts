@@ -12,7 +12,7 @@ import { Bubble } from './bubble'
 import { DEFAULT_MASCOT } from './defaults'
 import { h, isEditable } from './dom'
 import { resolveTarget, Spotlight, type ResolvedTarget } from './highlight'
-import { rectOf, viewport, type Rect } from './geometry'
+import { viewport, type Rect } from './geometry'
 import { Motion } from './motion'
 import { OrbInput } from './orb-input'
 import { Panel } from './panel'
@@ -158,7 +158,8 @@ class Mascot implements MascotController {
       isHeld: () => this.isHeld(),
       isPanelOpen: () => this.panel.isOpen,
       highlightAnchor: () => this.spot.anchor(),
-      panelRect: () => (this.panel.isOpen ? rectOf(this.panel.el) : null),
+      // The orb dodges the panel's destination: dodging its mid-transition box made the two chase each other.
+      panelRect: () => this.panel.targetRect(),
       onMoved: (x) => this.onMoved(x),
     })
 

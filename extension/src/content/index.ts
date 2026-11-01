@@ -7,7 +7,7 @@ import type { ClientConfig } from '../shared/config'
 import type { ChatLine } from '../shared/mascot'
 import type { BackgroundToContent, VoiceState } from '../shared/messages'
 import { DEFAULT_SETTINGS, loadSettings, SETTINGS_KEY, type UserSettings } from '../shared/settings'
-import { createBrowserStt, browserSttSupported } from './browser-stt'
+import { createBrowserStt, browserSttSupported, requestMicrophonePermission } from './browser-stt'
 import { isVoiceExit, parseConfirmIntent } from '../shared/voice-intent'
 import { initFlowMenu } from './flow-menu'
 import { createHotkey } from './hotkey'
@@ -36,10 +36,12 @@ function systemNote(text: string): ChatLine {
 }
 
 async function main(): Promise<void> {
-  if (window.top !== window) return
   if (typeof chrome === 'undefined' || !chrome.runtime?.id) return
   const env = resolveEnv(location.host)
   if (!env) return
+  // Allow running inside the embed iframe (env.embed), but bail out for any other nested frame
+  // (oauth popups, step-test iframes, etc.) where the mascot would be misplaced or broken.
+  if (window.top !== window && !env.embed) return
   // Guards against a second injection of this script into the same tab.
   const g = globalThis as unknown as Record<string, unknown>
   if (g[RUN_MARK]) return
@@ -55,6 +57,7 @@ async function main(): Promise<void> {
 
   /** The config can switch the mascot off on an app host; it can never add hosts beyond the compiled env table. */
   const hostAllowed = (): boolean => {
+    if (env.embed) return true
     const hosts = config?.selectors.appHosts ?? []
     return hosts.length === 0 || hosts.includes(location.host)
   }
@@ -68,6 +71,8 @@ async function main(): Promise<void> {
   let speechSilenceTimer: ReturnType<typeof setTimeout> | undefined
   let heardSpeechInTurn = false
   let wakeWord: WakeWordListener | null = null
+  /** Chrome runs one speech recognizer at a time, so only the viaSocket tab the user is on listens for the wake word. */
+  let voiceFront = false
 
   let continuousVoice = false
   let pendingConfirmId: string | null = null
@@ -292,6 +297,16 @@ async function main(): Promise<void> {
       port.send({ type: 'cancel' })
     },
     onOpenSettings: (section) => port.send(section ? { type: 'open-options', section } : { type: 'open-options' }),
+    async onRequestMic() {
+      const granted = await requestMicrophonePermission()
+      if (granted) {
+        mascot.setVoiceState('ready', 'Microphone enabled!')
+        wakeWord?.start()
+        voiceStart('manual')
+      } else {
+        mascot.setVoiceState('needs-permission', 'Microphone was not allowed in the browser prompt.')
+      }
+    },
     onClearThread: () => port.send({ type: 'clear-thread' }),
     onHighlightMissed: () => mascot.addChat(systemNote(CANT_SEE)),
     onPanelOpenChange: (open) => {
@@ -313,7 +328,7 @@ async function main(): Promise<void> {
   // ---------- wake word ----------
 
   wakeWord = createWakeWordListener({
-    enabled: () => active() && settings.voiceEnabled && settings.wakeWordEnabled,
+    enabled: () => voiceFront && active() && settings.voiceEnabled && settings.wakeWordEnabled,
     onWake(trailingText) {
       mascot.openPanel()
       continuousVoice = true
@@ -365,13 +380,34 @@ async function main(): Promise<void> {
     if (!active() || !settings.voiceEnabled) {
       voiceCancel()
       wakeWord?.stop()
-    } else if (settings.wakeWordEnabled) {
+    } else if (settings.wakeWordEnabled && voiceFront) {
       wakeWord?.start()
     } else {
       wakeWord?.stop()
     }
   }
   applyEnabled()
+
+  /** The tab became visible or focused: take the wake word over from the other viaSocket tabs. */
+  function claimVoice(): void {
+    if (voiceFront || dead || document.visibilityState !== 'visible') return
+    voiceFront = true
+    port.send({ type: 'voice-front' })
+    applyEnabled()
+  }
+
+  /** The tab was hidden or another tab took over: stop listening and end a hands-free session. */
+  function yieldVoice(): void {
+    if (!voiceFront) return
+    voiceFront = false
+    continuousVoice = false
+    voiceCancel()
+    applyEnabled()
+  }
+
+  const onVisibility = (): void => (document.visibilityState === 'visible' ? claimVoice() : yieldVoice())
+  document.addEventListener('visibilitychange', onVisibility)
+  window.addEventListener('focus', claimVoice)
 
   // ---------- service worker ----------
 
@@ -442,6 +478,9 @@ async function main(): Promise<void> {
         break
       case 'voice-command':
         voiceCommand(msg.action)
+        break
+      case 'voice-yield':
+        yieldVoice()
         break
       case 'voice-state':
         if (settings.sttEngine !== 'browser') {
@@ -627,6 +666,7 @@ async function main(): Promise<void> {
     },
     onDead: shutdown,
   })
+  claimVoice()
 
   // ---------- injected menus (step copy / paste, flow export / import) ----------
 
@@ -672,6 +712,8 @@ async function main(): Promise<void> {
     safe(() => wakeWord?.destroy())
     safe(() => stt.cancel())
     safe(() => window.removeEventListener('keydown', onWindowKeyDown, true))
+    safe(() => document.removeEventListener('visibilitychange', onVisibility))
+    safe(() => window.removeEventListener('focus', claimVoice))
     safe(() => hotkey.destroy())
     safe(() => bridge.destroy())
     safe(() => pageWatch.destroy())

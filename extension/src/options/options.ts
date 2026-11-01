@@ -17,6 +17,14 @@ const loadError = byId('load-error', HTMLDivElement)
 const loadErrorText = byId('load-error-text', HTMLParagraphElement)
 const loadRetry = byId('load-retry', HTMLButtonElement)
 
+const SECTIONS = ['provider', 'model', 'voice', 'assistant', 'privacy', 'about'] as const
+type SectionId = typeof SECTIONS[number]
+
+const SUBSECTION_MAP: Record<string, SectionId> = {
+  mic: 'voice',
+  'site-mic': 'voice',
+}
+
 function initAbout(): void {
   byId('about-version', HTMLElement).textContent = chrome.runtime.getManifest().version
   byId('repo-link', HTMLAnchorElement).href = REPO_URL
@@ -34,14 +42,97 @@ async function loadState(): Promise<void> {
   }
 }
 
-/** Content is built after load, so the browser's own jump to #section happens too early; redo it once rendered. */
-function focusHash(): void {
-  const id = decodeURIComponent(location.hash.slice(1))
-  const target = id ? document.getElementById(id) : null
-  if (!target) return
-  target.scrollIntoView({ block: 'start' })
-  const focusable = id === 'mic' ? byId('mic-allow', HTMLButtonElement) : (target.querySelector<HTMLElement>('h2[tabindex]') ?? target)
-  focusable.focus({ preventScroll: true })
+/** Updates active navigation tab and displays only the selected section */
+function showSection(sectionId: SectionId, subId?: string): void {
+  for (const id of SECTIONS) {
+    const tab = document.getElementById(`tab-${id}`)
+    const sec = document.getElementById(id)
+    const isCurrent = id === sectionId
+    if (tab) {
+      tab.classList.toggle('active', isCurrent)
+      tab.setAttribute('aria-selected', String(isCurrent))
+      tab.tabIndex = isCurrent ? 0 : -1
+    }
+    if (sec) {
+      sec.classList.toggle('active', isCurrent)
+    }
+  }
+
+  if (subId) {
+    const target = document.getElementById(subId)
+    if (target) {
+      target.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      const focusable =
+        subId === 'mic'
+          ? byId('mic-allow', HTMLButtonElement)
+          : (target.querySelector<HTMLElement>('h2[tabindex], h3, button, [tabindex]') ?? target)
+      focusable.focus({ preventScroll: true })
+      return
+    }
+  }
+
+  const activeSec = document.getElementById(sectionId)
+  if (activeSec) {
+    window.scrollTo({ top: 0, behavior: 'auto' })
+    const focusable = activeSec.querySelector<HTMLElement>('h2[tabindex]') ?? activeSec
+    focusable.focus({ preventScroll: true })
+  }
+}
+
+function navigateFromHash(): void {
+  const hash = decodeURIComponent(location.hash.slice(1))
+  let activeSectionId: SectionId = 'provider'
+  let subTargetId: string | undefined
+
+  if (SECTIONS.includes(hash as SectionId)) {
+    activeSectionId = hash as SectionId
+  } else if (hash in SUBSECTION_MAP && SUBSECTION_MAP[hash]) {
+    activeSectionId = SUBSECTION_MAP[hash] as SectionId
+    subTargetId = hash
+  } else if (hash) {
+    const el = document.getElementById(hash)
+    const closestSection = el?.closest<HTMLElement>('.card-section')
+    if (closestSection && SECTIONS.includes(closestSection.id as SectionId)) {
+      activeSectionId = closestSection.id as SectionId
+      subTargetId = hash
+    }
+  }
+
+  showSection(activeSectionId, subTargetId)
+}
+
+function initNavigation(): void {
+  const tabs = Array.from(document.querySelectorAll<HTMLAnchorElement>('.nav-item'))
+  tabs.forEach((tab, index) => {
+    tab.addEventListener('click', (e) => {
+      const targetHash = tab.getAttribute('href')
+      if (location.hash === targetHash) {
+        e.preventDefault()
+        navigateFromHash()
+      }
+    })
+
+    tab.addEventListener('keydown', (e) => {
+      let nextIndex = -1
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+        nextIndex = (index + 1) % tabs.length
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+        nextIndex = (index - 1 + tabs.length) % tabs.length
+      } else if (e.key === 'Home') {
+        nextIndex = 0
+      } else if (e.key === 'End') {
+        nextIndex = tabs.length - 1
+      }
+      if (nextIndex >= 0) {
+        const nextTab = tabs[nextIndex]
+        if (nextTab) {
+          e.preventDefault()
+          nextTab.focus()
+          nextTab.click()
+        }
+      }
+    })
+  })
 }
 
 async function main(): Promise<void> {
@@ -54,6 +145,7 @@ async function main(): Promise<void> {
     initMic()
     initHotkey()
     initAssistant()
+    initNavigation()
 
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === 'local' && SETTINGS_KEY in changes) void reloadSettings()
@@ -62,11 +154,11 @@ async function main(): Promise<void> {
     chrome.permissions.onAdded.addListener(refreshQuietly)
     chrome.permissions.onRemoved.addListener(refreshQuietly)
     loadRetry.addEventListener('click', () => void loadState())
-    window.addEventListener('hashchange', focusHash)
+    window.addEventListener('hashchange', navigateFromHash)
 
     await reloadSettings()
     await loadState()
-    focusHash()
+    navigateFromHash()
   } catch (err) {
     console.warn('[viaSocket Assistant] options main initialization error:', err)
   }

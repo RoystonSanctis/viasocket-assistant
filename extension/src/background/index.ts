@@ -44,7 +44,14 @@ chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== PORT_NAME) return
   const sender = port.sender
   const tabId = sender?.tab?.id
-  if (sender?.id !== chrome.runtime.id || tabId === undefined || (sender.frameId ?? 0) !== 0) {
+  let env = null
+  try {
+    if (sender?.url) env = resolveEnv(new URL(sender.url).host)
+  } catch {
+    // invalid URL
+  }
+  const allowedFrame = (sender?.frameId ?? 0) === 0 || env?.embed === true
+  if (sender?.id !== chrome.runtime.id || tabId === undefined || !allowedFrame) {
     port.disconnect()
     return
   }
@@ -192,6 +199,9 @@ async function handlePortMessage(session: Session, raw: unknown): Promise<void> 
       if (msg.action === 'start' || msg.action === 'stop' || msg.action === 'toggle' || msg.action === 'cancel') {
         await handleVoiceCommand(session, msg.action)
       }
+      return
+    case 'voice-front':
+      for (const s of allSessions()) if (s !== session) s.send({ type: 'voice-yield' })
       return
     case 'clear-thread': {
       session.cancelRun()

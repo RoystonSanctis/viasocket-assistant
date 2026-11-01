@@ -543,6 +543,26 @@ export const STYLES = `
 .msg.user .msg-body { background: var(--user-bg); color: var(--user-fg); border-radius: 14px 14px 4px 14px; white-space: pre-wrap; }
 .msg.assistant .msg-body { background: var(--surface); border-radius: 14px 14px 14px 4px; }
 .msg.sys { align-self: center; max-width: 95%; color: var(--muted); font-size: 11.5px; text-align: center; white-space: pre-wrap; }
+.msg.sys .msg-link { display: table; margin: 6px auto 0; }
+.msg.user { position: relative; }
+.msg-resend {
+  all: unset;
+  box-sizing: border-box;
+  position: absolute; right: 100%; top: 50%;
+  transform: translateY(-50%);
+  margin-right: 4px;
+  display: grid; place-items: center;
+  width: 26px; height: 26px;
+  border-radius: 8px;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+.msg-resend svg { width: 15px; height: 15px; }
+.msg.user:hover .msg-resend, .msg-resend:focus-visible { opacity: 1; }
+.msg-resend:hover { color: var(--accent); background: var(--surface); }
+.msg-resend:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .md p { margin: 0 0 6px; }
 .md p:last-child { margin-bottom: 0; }
 .md ul, .md ol { margin: 4px 0 6px; padding-left: 18px; }
