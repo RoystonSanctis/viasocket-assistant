@@ -1,8 +1,11 @@
 # viaSocket Assistant
 
+[![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-viaSocket_Assistant-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/viasocket-assistant/ikfeheokinklhegllmjkmjgjnmokfabb)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg?style=for-the-badge)](LICENSE)
+
 An open-source (AGPL-3.0-or-later) Chrome extension that puts a voice-first, animated assistant on the viaSocket workflow canvas. Featuring **SOCKET**, an interactive companion with live expressions and thinking text that builds, edits and tests viaSocket workflows and Developer Hub plugs, using your own AI key, and reacts to what you do on the page.
 
-Works on <https://flow.viasocket.com> and <https://beta-flow.viasocket.com>.
+Works on <https://flow.viasocket.com>, <https://beta-flow.viasocket.com>, and viaSocket embeds.
 
 ## SOCKET reactions & canvas behavior
 
