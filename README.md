@@ -1,5 +1,6 @@
 # viaSocket Assistant
 
+[![Website](https://img.shields.io/badge/Website-viasocket--assistant.embarko.app-5DCAA5?style=for-the-badge&logo=googlechrome&logoColor=black)](https://viasocket-assistant.embarko.app)
 [![Chrome Web Store](https://img.shields.io/badge/Chrome_Web_Store-viaSocket_Assistant-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)](https://chromewebstore.google.com/detail/viasocket-assistant/ikfeheokinklhegllmjkmjgjnmokfabb)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg?style=for-the-badge)](LICENSE)
 
