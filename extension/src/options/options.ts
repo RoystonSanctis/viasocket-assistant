@@ -86,8 +86,8 @@ function navigateFromHash(): void {
 
   if (SECTIONS.includes(hash as SectionId)) {
     activeSectionId = hash as SectionId
-  } else if (hash in SUBSECTION_MAP) {
-    activeSectionId = SUBSECTION_MAP[hash]
+  } else if (hash in SUBSECTION_MAP && SUBSECTION_MAP[hash]) {
+    activeSectionId = SUBSECTION_MAP[hash] as SectionId
     subTargetId = hash
   } else if (hash) {
     const el = document.getElementById(hash)
@@ -124,10 +124,12 @@ function initNavigation(): void {
         nextIndex = tabs.length - 1
       }
       if (nextIndex >= 0) {
-        e.preventDefault()
         const nextTab = tabs[nextIndex]
-        nextTab.focus()
-        nextTab.click()
+        if (nextTab) {
+          e.preventDefault()
+          nextTab.focus()
+          nextTab.click()
+        }
       }
     })
   })
