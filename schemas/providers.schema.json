@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/RoystonSanctis/viasocket-assistant/config-stable/schemas/providers.schema.json",
+  "title": "AI providers",
+  "description": "Providers shown on the options page. Built-in providers use the base URL compiled into the extension; baseUrl here is honoured only for providers that are not built in.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "providers"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "providers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/provider" }
+    }
+  },
+  "$defs": {
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "adapter"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "name": { "type": "string", "minLength": 1 },
+        "adapter": { "enum": ["openai", "anthropic"] },
+        "baseUrl": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https?://",
+          "description": "Only for providers that are not built in. The user must grant the extension permission for this origin."
+        },
+        "keyPattern": { "type": "string", "description": "JavaScript regular expression the key must match." },
+        "keyPageUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "validatePath": { "$ref": "#/$defs/apiPath" },
+        "modelsPath": { "$ref": "#/$defs/apiPath" },
+        "noKey": { "type": "boolean" },
+        "badges": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 24 } },
+        "setupTip": { "type": "string", "maxLength": 400 },
+        "recommendedModels": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "requires": { "type": "array", "items": { "enum": ["tools"] } },
+        "extraHeaders": {
+          "type": "object",
+          "description": "Only these header names are ever sent; the extension drops anything else.",
+          "propertyNames": { "enum": ["HTTP-Referer", "X-Title"] },
+          "additionalProperties": { "type": "string" }
+        },
+        "enabled": { "type": "boolean", "default": true }
+      }
+    },
+    "apiPath": {
+      "type": "string",
+      "description": "Path appended to the provider's base URL.",
+      "pattern": "^/(?!.*://)(?!.*\\.\\.)[^\\s]*$"
+    }
+  }
+}
