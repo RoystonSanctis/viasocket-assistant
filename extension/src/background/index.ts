@@ -234,11 +234,14 @@ import type { FlowTransferRequest } from '../shared/flow-transfer'
 import { handleSubfunctionsRequest } from './subfunctions'
 import type { SubfnRequest } from '../shared/subfunctions'
 
-/** The sender tab shows one of the supported viaSocket app hosts. */
-function senderEnvOk(tabUrl: string | undefined): boolean {
-  if (!tabUrl) return false
+/** The sender shows one of the supported viaSocket app hosts. */
+function senderEnvOk(sender: chrome.runtime.MessageSender): boolean {
+  const url = sender.url || sender.tab?.url
+  if (!url) return false
   try {
-    return resolveEnv(new URL(tabUrl).host) !== null
+    const env = resolveEnv(new URL(url).host)
+    if (!env) return false
+    return (sender.frameId ?? 0) === 0 || env.embed === true
   } catch {
     return false
   }
@@ -264,7 +267,7 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
     // Clipboard, transfer and subfunction-panel calls only make sense from a content script on a supported viaSocket host; a
     // message from any other extension context (options page, future pages) is refused instead of silently
     // operating against some default environment.
-    if (sender.tab?.id === undefined || !senderEnvOk(sender.tab.url)) {
+    if (sender.tab?.id === undefined || !senderEnvOk(sender)) {
       sendResponse({ ok: false, error: 'This action only works from a viaSocket page' })
       return true
     }

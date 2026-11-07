@@ -279,7 +279,9 @@ async function importFlow(
     return {
       scriptId,
       title: file.flow.title,
-      path: `/projects/${orgId}/${projectId}/workflow/${scriptId}/draft`,
+      path: client.env.embed
+        ? `/integrations/embed/${orgId}/${projectId}${client.page.serviceId ? `/service/${client.page.serviceId}` : ''}/workflow/${scriptId}/draft`
+        : `/projects/${orgId}/${projectId}/workflow/${scriptId}/draft`,
       warnings: ictx.warnings,
     }
   })

@@ -33,16 +33,20 @@ export async function getClientForSender(
   const tabId = sender.tab?.id
   if (tabId !== undefined) {
     const session = getSession(tabId)
-    if (session?.vs && session.page) return session.vs
+    if (session?.vs && session.page) {
+      if (fallbackTarget?.scriptId) session.page.scriptId = fallbackTarget.scriptId
+      if (fallbackTarget?.projectId) session.page.projectId = fallbackTarget.projectId
+      if (fallbackTarget?.orgId) session.page.orgId = fallbackTarget.orgId
+      return session.vs
+    }
   }
 
   const tab = sender.tab
-  const tabUrl = tab?.url || ''
+  const senderUrl = sender.url || tab?.url || ''
   let host = fallbackTarget?.host || ''
-  if (!host) {
-    // No named target and no parsable tab URL: refuse rather than defaulting to some host.
+  if (!host && senderUrl) {
     try {
-      host = new URL(tabUrl).host
+      host = new URL(senderUrl).host
     } catch {
       return null
     }
@@ -51,14 +55,34 @@ export async function getClientForSender(
   const env = resolveEnv(host)
   if (!env) return null
 
-  const page: PageContext = parsePage(tabUrl || `https://${host}`)
+  let pageUrl = `https://${host}`
+  if (sender.url) {
+    try {
+      if (resolveEnv(new URL(sender.url).host)) pageUrl = sender.url
+    } catch {
+      // invalid sender url
+    }
+  } else if (tab?.url) {
+    try {
+      if (resolveEnv(new URL(tab.url).host)) pageUrl = tab.url
+    } catch {
+      // invalid tab url
+    }
+  }
+
+  const page: PageContext = parsePage(pageUrl)
   if (fallbackTarget?.scriptId) page.scriptId = fallbackTarget.scriptId
   if (fallbackTarget?.projectId) page.projectId = fallbackTarget.projectId
   if (fallbackTarget?.orgId) page.orgId = fallbackTarget.orgId
 
   const stores = await chrome.cookies.getAllCookieStores().catch(() => [])
   const storeId = stores.find((s) => tabId !== undefined && s.tabIds.includes(tabId))?.id
-  return new ViaSocketClient(env, page, { storeId, incognito: tab?.incognito })
+  return new ViaSocketClient(env, page, {
+    storeId,
+    incognito: tab?.incognito,
+    tabId: env.embed ? tabId : undefined,
+    frameId: env.embed ? sender.frameId : undefined,
+  })
 }
 
 /** "Add JS step" goes through the paste path as a blank function step (English flows have no add button). */

@@ -73,7 +73,17 @@ export class ViaSocketClient {
           func: () => sessionStorage.getItem('ssoEmbedToken') || localStorage.getItem('proxy_auth_token'),
         })
         .catch(() => null)
-      const token = results?.map((r) => r.result).find((t): t is string => typeof t === 'string' && t.length > 0)
+      let token = results?.map((r) => r.result).find((t): t is string => typeof t === 'string' && t.length > 0)
+      if (!token && this.opts.frameId !== undefined) {
+        const fallbackResults = await chrome.scripting
+          .executeScript({
+            target: { tabId, allFrames: true },
+            world: 'MAIN',
+            func: () => sessionStorage.getItem('ssoEmbedToken') || localStorage.getItem('proxy_auth_token'),
+          })
+          .catch(() => null)
+        token = fallbackResults?.map((r) => r.result).find((t): t is string => typeof t === 'string' && t.length > 0)
+      }
       if (!token) throw new VsError('You are not signed in to viaSocket. Open the embed and try again.', 'logged-out')
       return token
     }
@@ -170,7 +180,15 @@ export class ViaSocketClient {
   async alignOrg(signal?: AbortSignal, { force = false }: { force?: boolean } = {}): Promise<void> {
     if (!this.orgId) throw new VsError('Open a viaSocket workspace first.', 'validation')
     if (!force && Date.now() - this.orgAlignedAt < ORG_ALIGN_TTL_MS) return
-    await this.request({ method: 'GET', path: `/orgs/${encodeURIComponent(this.orgId)}/projects`, query: { type: 'flow' }, signal })
-    this.orgAlignedAt = Date.now()
+    try {
+      await this.request({ method: 'GET', path: `/orgs/${encodeURIComponent(this.orgId)}/projects`, query: { type: 'flow' }, signal })
+      this.orgAlignedAt = Date.now()
+    } catch (e) {
+      if (this.env.embed) {
+        this.orgAlignedAt = Date.now()
+        return
+      }
+      throw e
+    }
   }
 }
