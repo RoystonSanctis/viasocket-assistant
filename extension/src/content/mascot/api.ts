@@ -24,6 +24,8 @@ export interface MascotCallbacks {
   onPanelOpenChange?(open: boolean): void
   /** Request microphone permission directly in the webpage */
   onRequestMic?(): void
+  /** Switch STT engine (e.g. from blocked browser speech to local whisper) */
+  onSwitchEngine?(engine: SttEngine): void
 }
 
 export interface MascotController {

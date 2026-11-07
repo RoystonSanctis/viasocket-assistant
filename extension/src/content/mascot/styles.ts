@@ -654,6 +654,8 @@ export const STYLES = `
 .voice[data-state="error"] { color: var(--danger); }
 .voice[data-state="error"] .voice-dot { background: var(--danger); }
 .voice-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.voice[data-state="needs-permission"] .voice-label { flex: 1 1 calc(100% - 24px); line-height: 1.45; margin-bottom: 2px; }
+.voice[data-state="needs-permission"] .btn { margin-top: 2px; }
 .bar { flex-basis: 100%; height: 4px; border-radius: 2px; background: var(--surface); overflow: hidden; }
 .bar-fill { height: 100%; width: 0; background: var(--accent); transition: width 0.3s ease; }
 .meter { display: flex; align-items: center; gap: 2px; height: 14px; }

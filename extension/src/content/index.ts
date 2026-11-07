@@ -6,8 +6,8 @@ import { resolveEnv } from '../background/tools/env'
 import type { ClientConfig } from '../shared/config'
 import type { ChatLine } from '../shared/mascot'
 import type { BackgroundToContent, VoiceState } from '../shared/messages'
-import { DEFAULT_SETTINGS, loadSettings, SETTINGS_KEY, type UserSettings } from '../shared/settings'
-import { createBrowserStt, browserSttSupported, requestMicrophonePermission } from './browser-stt'
+import { DEFAULT_SETTINGS, loadSettings, saveSettings, SETTINGS_KEY, type UserSettings } from '../shared/settings'
+import { createBrowserStt, browserSttSupported, requestMicrophonePermission, isIframeMicBlocked, EMBED_MIC_BLOCKED_MSG } from './browser-stt'
 import { isVoiceExit, parseConfirmIntent } from '../shared/voice-intent'
 import { initFlowMenu } from './flow-menu'
 import { createHotkey } from './hotkey'
@@ -298,6 +298,10 @@ async function main(): Promise<void> {
     },
     onOpenSettings: (section) => port.send(section ? { type: 'open-options', section } : { type: 'open-options' }),
     async onRequestMic() {
+      if (isIframeMicBlocked()) {
+        mascot.setVoiceState('needs-permission', EMBED_MIC_BLOCKED_MSG)
+        return
+      }
       const granted = await requestMicrophonePermission()
       if (granted) {
         mascot.setVoiceState('ready', 'Microphone enabled!')
@@ -306,6 +310,9 @@ async function main(): Promise<void> {
       } else {
         mascot.setVoiceState('needs-permission', 'Microphone was not allowed in the browser prompt.')
       }
+    },
+    onSwitchEngine: (engine) => {
+      void saveSettings({ sttEngine: engine })
     },
     onClearThread: () => port.send({ type: 'clear-thread' }),
     onHighlightMissed: () => mascot.addChat(systemNote(CANT_SEE)),

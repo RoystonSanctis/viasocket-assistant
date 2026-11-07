@@ -298,12 +298,16 @@ export class Panel {
     this.transcript = h('div', { class: 'transcript', 'aria-live': 'polite', hidden: true })
     this.announcer = h('div', { class: 'sr-only', role: 'status', 'aria-live': 'polite' })
     // Browser speech requests permission in the page directly; Whisper uses the extension's settings.
-    this.voice = new VoiceRow((engine) => {
-      if (engine === 'browser' && cb.onRequestMic) {
-        cb.onRequestMic()
-      } else {
+    this.voice = new VoiceRow({
+      onAllowMic: () => {
+        if (cb.onRequestMic) cb.onRequestMic()
+      },
+      onOpenSettings: (engine) => {
         cb.onOpenSettings(engine === 'browser' ? 'site-mic' : 'mic')
-      }
+      },
+      onSwitchEngine: (engine) => {
+        if (cb.onSwitchEngine) cb.onSwitchEngine(engine)
+      },
     })
 
     // ----- composer -----

@@ -5,26 +5,46 @@ import { h } from './dom'
 
 const MAX_DETAIL = 90
 
+export interface VoiceRowActions {
+  onAllowMic?: () => void
+  onOpenSettings: (engine: SttEngine) => void
+  onSwitchEngine?: (engine: SttEngine) => void
+}
+
 export class VoiceRow {
   readonly el: HTMLDivElement
   private readonly label: HTMLSpanElement
   private readonly bar: HTMLDivElement
   private readonly fill: HTMLDivElement
   private readonly meter: HTMLDivElement
-  private readonly allow: HTMLButtonElement
+  private readonly switchBtn: HTMLButtonElement
+  private readonly allowBtn: HTMLButtonElement
+  private readonly settingsBtn: HTMLButtonElement
   private state: VoiceState = 'off'
   private engine: SttEngine = 'whisper-local'
   private detail: string | undefined
   private progress: number | undefined
 
-  /** onAllowMic gets the engine: browser speech needs the site's permission, Whisper the extension's */
-  constructor(onAllowMic: (engine: SttEngine) => void) {
+  constructor(actions: VoiceRowActions | ((engine: SttEngine) => void)) {
+    const act: VoiceRowActions =
+      typeof actions === 'function'
+        ? { onOpenSettings: actions, onAllowMic: () => actions(this.engine) }
+        : actions
+
     this.label = h('span', { class: 'voice-label' })
     this.fill = h('div', { class: 'bar-fill' })
     this.bar = h('div', { class: 'bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100' }, this.fill)
     this.meter = h('div', { class: 'meter', 'aria-hidden': 'true' }, h('span'), h('span'), h('span'), h('span'), h('span'))
-    this.allow = h('button', { type: 'button', class: 'btn primary small', text: 'Allow microphone' })
-    this.allow.addEventListener('click', () => onAllowMic(this.engine))
+
+    this.switchBtn = h('button', { type: 'button', class: 'btn primary small', text: 'Switch to Whisper', hidden: true })
+    this.switchBtn.addEventListener('click', () => act.onSwitchEngine?.('whisper-local'))
+
+    this.allowBtn = h('button', { type: 'button', class: 'btn primary small', text: 'Allow microphone', hidden: true })
+    this.allowBtn.addEventListener('click', () => act.onAllowMic?.())
+
+    this.settingsBtn = h('button', { type: 'button', class: 'btn small', text: 'Open settings', hidden: true })
+    this.settingsBtn.addEventListener('click', () => act.onOpenSettings(this.engine))
+
     this.el = h(
       'div',
       { class: 'voice', role: 'status', 'aria-live': 'polite', hidden: true },
@@ -32,7 +52,9 @@ export class VoiceRow {
       this.meter,
       this.label,
       this.bar,
-      this.allow,
+      this.switchBtn,
+      this.allowBtn,
+      this.settingsBtn,
     )
   }
 
@@ -53,6 +75,10 @@ export class VoiceRow {
     this.el.dataset.state = state
     this.el.hidden = state === 'off' || state === 'ready'
     const extra = detail ? truncate(detail) : ''
+
+    this.switchBtn.hidden = true
+    this.allowBtn.hidden = true
+    this.settingsBtn.hidden = true
 
     let text = ''
     switch (state) {
@@ -75,24 +101,65 @@ export class VoiceRow {
       case 'transcribing':
         text = lines.transcribing ?? 'Transcribing…'
         break
-      case 'needs-permission':
-        text =
-          this.engine === 'browser'
-            ? lines.noMicSite ?? 'Browser speech needs microphone access for this site.'
-            : lines.noMic ?? 'I need microphone access to hear you.'
+      case 'needs-permission': {
+        if (this.engine === 'whisper-local') {
+          text = lines.noMic ?? 'I need microphone access to hear you.'
+          this.settingsBtn.hidden = false
+          this.settingsBtn.className = 'btn primary small'
+          this.settingsBtn.textContent = 'Allow microphone'
+        } else {
+          const isEmbedBlocked =
+            extra.toLowerCase().includes('embed') ||
+            (typeof window !== 'undefined' && window.self !== window.top)
+          const isPromptFailed =
+            extra.toLowerCase().includes('not allowed') ||
+            extra.toLowerCase().includes('blocked')
+
+          if (isEmbedBlocked) {
+            text =
+              extra ||
+              'Browser speech is blocked in this embed iframe (missing allow="microphone"). Switch to Whisper for voice.'
+            this.switchBtn.hidden = false
+            this.switchBtn.className = 'btn primary small'
+            this.switchBtn.textContent = 'Switch to Whisper'
+            this.settingsBtn.hidden = false
+            this.settingsBtn.className = 'btn small'
+            this.settingsBtn.textContent = 'Open settings'
+          } else if (isPromptFailed) {
+            text =
+              extra ||
+              lines.noMicSite ||
+              'Browser speech needs microphone access for this site.'
+            this.settingsBtn.hidden = false
+            this.settingsBtn.className = 'btn primary small'
+            this.settingsBtn.textContent = 'Open settings'
+            this.allowBtn.hidden = false
+            this.allowBtn.className = 'btn small'
+            this.allowBtn.textContent = 'Retry allow'
+          } else {
+            text = lines.noMicSite ?? 'Browser speech needs microphone access for this site.'
+            this.allowBtn.hidden = false
+            this.allowBtn.className = 'btn primary small'
+            this.allowBtn.textContent = 'Allow microphone'
+            this.settingsBtn.hidden = false
+            this.settingsBtn.className = 'btn small'
+            this.settingsBtn.textContent = 'Open settings'
+          }
+        }
         break
+      }
       case 'error':
         text = extra || 'Voice input failed.'
         break
       default:
         text = ''
     }
-    if (extra && state !== 'error' && state !== 'loading-model') text = `${text} ${extra}`
+    if (extra && state !== 'error' && state !== 'loading-model' && state !== 'needs-permission') {
+      text = `${text} ${extra}`
+    }
     this.label.textContent = text
     this.bar.hidden = state !== 'loading-model'
     this.meter.hidden = state !== 'listening'
-    this.allow.hidden = state !== 'needs-permission'
-    this.allow.textContent = this.engine === 'browser' ? 'Open settings' : 'Allow microphone'
   }
 
   setLevel(level: number): void {

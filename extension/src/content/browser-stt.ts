@@ -55,10 +55,33 @@ let micStream: Promise<MediaStream | null> | null = null
 let micReleaseTimer: ReturnType<typeof setTimeout> | undefined
 
 /**
+ * Detects whether the current window is an iframe whose permissions policy blocks microphone access.
+ * In cross-origin embed iframes without allow="microphone", calling getUserMedia or SpeechRecognition
+ * is immediately rejected by Chrome.
+ */
+export function isIframeMicBlocked(): boolean {
+  if (typeof window === 'undefined') return false
+  if (window.self !== window.top) {
+    if ('permissionsPolicy' in document && typeof (document as any).permissionsPolicy?.allowsFeature === 'function') {
+      try {
+        if (!(document as any).permissionsPolicy.allowsFeature('microphone')) return true
+      } catch {
+        // ignore
+      }
+    }
+  }
+  return false
+}
+
+export const EMBED_MIC_BLOCKED_MSG =
+  'Browser speech is blocked in this embed iframe (missing allow="microphone"). Switch to Whisper for voice.'
+
+/**
  * Explicitly triggers Chrome's native microphone permission prompt in the browser.
  * Returns true if granted, false if dismissed or denied.
  */
 export async function requestMicrophonePermission(): Promise<boolean> {
+  if (isIframeMicBlocked()) return false
   if (!navigator.mediaDevices?.getUserMedia) return false
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -144,6 +167,11 @@ export function createBrowserStt(opts: BrowserSttOptions): BrowserStt {
       return
     }
 
+    if (isIframeMicBlocked()) {
+      opts.onState('needs-permission', EMBED_MIC_BLOCKED_MSG)
+      return
+    }
+
     void (async () => {
       // Check permission state: if not granted yet, trigger the Chrome permission prompt
       if (navigator.permissions?.query) {
@@ -212,6 +240,14 @@ export function createBrowserStt(opts: BrowserSttOptions): BrowserStt {
         return
       }
       if (ev.error === 'aborted' || h.failed) return
+      if (ev.error === 'not-allowed') {
+        h.failed = true
+        const msg = isIframeMicBlocked()
+          ? EMBED_MIC_BLOCKED_MSG
+          : 'Microphone was not allowed in the browser prompt.'
+        opts.onState('needs-permission', msg)
+        return
+      }
       const mapped = ERROR_STATES[ev.error] ?? { state: 'error' as const, detail: `Speech recognition failed (${ev.error}).` }
       h.failed = true
       opts.onState(mapped.state, mapped.detail)
