@@ -690,7 +690,7 @@ async function main(): Promise<void> {
     sendResponse: (response?: unknown) => void,
   ) => {
     if (!raw || typeof raw !== 'object') return false
-    const msg = raw as { target?: unknown; type?: unknown }
+    const msg = raw as { target?: unknown; type?: unknown; mode?: unknown; cookieName?: unknown }
     if (msg.target === 'content' && msg.type === 'get-auth-token') {
       try {
         const clean = (v: string | null): string | null => {
@@ -701,42 +701,56 @@ async function main(): Promise<void> {
           }
           return s.length > 0 ? s : null
         }
-        const isJwt = (s: string | null): boolean =>
-          Boolean(s && s.startsWith('ey') && s.includes('.') && s.length > 20)
-        const safeDec = (s: string): string => {
-          try {
-            return decodeURIComponent(s)
-          } catch {
-            return s
-          }
-        }
         const splitEq = (s: string): [string, string] => {
           const idx = s.indexOf('=')
           if (idx === -1) return [s.trim(), '']
           return [s.slice(0, idx).trim(), s.slice(idx + 1).trim()]
         }
 
-        const candidateKeys = ['proxy_auth_token', 'token', 'auth_token', 'authToken', 'ssoEmbedToken', 'prod', 'testing']
-        for (const k of candidateKeys) {
-          const l = clean(localStorage.getItem(k))
-          if (l) {
-            sendResponse({ ok: true, token: l })
-            return true
-          }
-          const s = clean(sessionStorage.getItem(k))
-          if (s) {
-            sendResponse({ ok: true, token: s })
-            return true
-          }
-        }
+        const isEmbedMode =
+          msg.mode === 'embed' ||
+          location.pathname.startsWith('/integrations/embed/') ||
+          new URLSearchParams(location.search).get('mode') === 'embed'
 
-        const pairs = (document.cookie || '').split(';')
-        for (const part of pairs) {
-          const [k, rawV] = splitEq(part)
-          if (!k) continue
-          const v = clean(safeDec(rawV))
-          if (v && (candidateKeys.includes(k) || isJwt(v))) {
-            sendResponse({ ok: true, token: v })
+        if (isEmbedMode) {
+          // Embed mode: read sessionStorage.ssoEmbedToken (primary) or localStorage.proxy_auth_token
+          const sso = clean(sessionStorage.getItem('ssoEmbedToken')) || clean(sessionStorage.getItem('proxy_auth_token'))
+          if (sso) {
+            sendResponse({ ok: true, token: sso })
+            return true
+          }
+          const local = clean(localStorage.getItem('proxy_auth_token')) || clean(localStorage.getItem('ssoEmbedToken'))
+          if (local) {
+            sendResponse({ ok: true, token: local })
+            return true
+          }
+        } else {
+          // Flow mode: read document.cookie for this environment's cookieName (e.g. 'prod' or 'testing')
+          const cookieName = typeof msg.cookieName === 'string' && msg.cookieName ? msg.cookieName : 'prod'
+          const cookies = (document.cookie || '').split(';')
+          for (const c of cookies) {
+            const [k, v] = splitEq(c)
+            if (k === cookieName) {
+              const cleaned = clean(v)
+              if (cleaned) {
+                sendResponse({ ok: true, token: cleaned })
+                return true
+              }
+            }
+          }
+          for (const c of cookies) {
+            const [k, v] = splitEq(c)
+            if (k === 'proxy_auth_token') {
+              const cleaned = clean(v)
+              if (cleaned) {
+                sendResponse({ ok: true, token: cleaned })
+                return true
+              }
+            }
+          }
+          const local = clean(localStorage.getItem('proxy_auth_token'))
+          if (local) {
+            sendResponse({ ok: true, token: local })
             return true
           }
         }

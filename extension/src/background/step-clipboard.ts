@@ -9,7 +9,7 @@ import {
   type StepClipboardResponse,
 } from '../shared/step-clipboard'
 import { parsePage, type PageContext } from '../shared/page'
-import { resolveEnv } from './tools/env'
+import { isEmbedContext, resolveEnv } from './tools/env'
 import { ViaSocketClient } from './tools/viasocket-client'
 import { SCRIPT_ID_RE } from './tools/ids'
 import { normalizeFlow, slugForStepId } from './tools/flow/flow-api'
@@ -30,18 +30,8 @@ export async function getClientForSender(
   sender: chrome.runtime.MessageSender,
   fallbackTarget?: { scriptId?: string; projectId?: string; orgId?: string; host?: string },
 ): Promise<ViaSocketClient | null> {
-  const tabId = sender.tab?.id
-  if (tabId !== undefined) {
-    const session = getSession(tabId)
-    if (session?.vs && session.page && (!fallbackTarget?.host || session.page.host === fallbackTarget.host)) {
-      if (fallbackTarget?.scriptId) session.page.scriptId = fallbackTarget.scriptId
-      if (fallbackTarget?.projectId) session.page.projectId = fallbackTarget.projectId
-      if (fallbackTarget?.orgId) session.page.orgId = fallbackTarget.orgId
-      return session.vs
-    }
-  }
-
   const tab = sender.tab
+  const tabId = tab?.id
   const senderUrl = sender.url || tab?.url || ''
   let host = fallbackTarget?.host || ''
   if (!host && senderUrl) {
@@ -54,6 +44,21 @@ export async function getClientForSender(
 
   const env = resolveEnv(host)
   if (!env) return null
+
+  if (tabId !== undefined) {
+    const session = getSession(tabId)
+    if (session?.vs && session.page && (!fallbackTarget?.host || session.page.host === fallbackTarget.host)) {
+      if (fallbackTarget?.scriptId) session.page.scriptId = fallbackTarget.scriptId
+      if (fallbackTarget?.projectId) session.page.projectId = fallbackTarget.projectId
+      if (fallbackTarget?.orgId) session.page.orgId = fallbackTarget.orgId
+      // Only reuse session.vs if both are flow mode or both are embed mode
+      const sessionIsEmbed = isEmbedContext(session.vs.env, session.page)
+      const senderIsEmbed = isEmbedContext(env, parsePage(senderUrl))
+      if (sessionIsEmbed === senderIsEmbed) {
+        return session.vs
+      }
+    }
+  }
 
   let pageUrl = `https://${host}`
   if (sender.url) {

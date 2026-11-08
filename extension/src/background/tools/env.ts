@@ -55,6 +55,19 @@ export function resolveEnv(host: string): ViaSocketEnv | null {
   return HOSTS[host.toLowerCase()] ?? null
 }
 
+export function isEmbedContext(env: ViaSocketEnv, page?: { url?: string }): boolean {
+  if (env.embed) return true
+  if (!page?.url) return false
+  try {
+    const u = new URL(page.url)
+    if (u.pathname.startsWith('/integrations/embed/')) return true
+    if (u.searchParams.get('mode') === 'embed') return true
+  } catch {
+    // ignore
+  }
+  return false
+}
+
 export const SUPPORTED_APP_HOSTS = Object.keys(HOSTS)
 
 /**
