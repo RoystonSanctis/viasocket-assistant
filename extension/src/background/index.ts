@@ -235,23 +235,41 @@ import { handleSubfunctionsRequest } from './subfunctions'
 import type { SubfnRequest } from '../shared/subfunctions'
 
 /** The sender shows one of the supported viaSocket app hosts. */
-function senderEnvOk(sender: chrome.runtime.MessageSender): boolean {
-  const url = sender.url || sender.tab?.url
-  if (!url) return false
-  try {
-    const env = resolveEnv(new URL(url).host)
-    if (!env) return false
-    return (sender.frameId ?? 0) === 0 || env.embed === true
-  } catch {
-    return false
+function senderEnvOk(sender: chrome.runtime.MessageSender, hostHint?: string): boolean {
+  const hostsToCheck: string[] = []
+  if (hostHint) hostsToCheck.push(hostHint)
+  if (sender.url) {
+    try {
+      hostsToCheck.push(new URL(sender.url).host)
+    } catch {
+      // ignore
+    }
   }
+  if (sender.origin) {
+    try {
+      hostsToCheck.push(new URL(sender.origin).host)
+    } catch {
+      // ignore
+    }
+  }
+  if (sender.tab?.url) {
+    try {
+      hostsToCheck.push(new URL(sender.tab.url).host)
+    } catch {
+      // ignore
+    }
+  }
+  for (const h of hostsToCheck) {
+    if (resolveEnv(h)) return true
+  }
+  return false
 }
 
 // ---------- options page and offscreen document ----------
 
 chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id || !raw || typeof raw !== 'object') return false
-  const msg = raw as { target?: unknown; type?: unknown }
+  const msg = raw as { target?: unknown; type?: unknown; host?: unknown }
   if (msg.target !== 'background' || typeof msg.type !== 'string') return false
 
   if (msg.type.startsWith('options:')) {
@@ -267,7 +285,8 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
     // Clipboard, transfer and subfunction-panel calls only make sense from a content script on a supported viaSocket host; a
     // message from any other extension context (options page, future pages) is refused instead of silently
     // operating against some default environment.
-    if (sender.tab?.id === undefined || !senderEnvOk(sender)) {
+    const hostHint = typeof msg.host === 'string' ? msg.host : undefined
+    if (sender.tab?.id === undefined || !senderEnvOk(sender, hostHint)) {
       sendResponse({ ok: false, error: 'This action only works from a viaSocket page' })
       return true
     }

@@ -684,6 +684,72 @@ async function main(): Promise<void> {
   const subfunctionsUI = initSubfunctionsUI(bridge)
   const beautify = initBeautify(bridge)
 
+  const onRuntimeMessage = (
+    raw: unknown,
+    _sender: chrome.runtime.MessageSender,
+    sendResponse: (response?: unknown) => void,
+  ) => {
+    if (!raw || typeof raw !== 'object') return false
+    const msg = raw as { target?: unknown; type?: unknown }
+    if (msg.target === 'content' && msg.type === 'get-auth-token') {
+      try {
+        const clean = (v: string | null): string | null => {
+          if (!v) return null
+          let s = v.trim()
+          if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+            s = s.slice(1, -1).trim()
+          }
+          return s.length > 0 ? s : null
+        }
+        const isJwt = (s: string | null): boolean =>
+          Boolean(s && s.startsWith('ey') && s.includes('.') && s.length > 20)
+        const safeDec = (s: string): string => {
+          try {
+            return decodeURIComponent(s)
+          } catch {
+            return s
+          }
+        }
+        const splitEq = (s: string): [string, string] => {
+          const idx = s.indexOf('=')
+          if (idx === -1) return [s.trim(), '']
+          return [s.slice(0, idx).trim(), s.slice(idx + 1).trim()]
+        }
+
+        const candidateKeys = ['proxy_auth_token', 'token', 'auth_token', 'authToken', 'ssoEmbedToken', 'prod', 'testing']
+        for (const k of candidateKeys) {
+          const l = clean(localStorage.getItem(k))
+          if (l) {
+            sendResponse({ ok: true, token: l })
+            return true
+          }
+          const s = clean(sessionStorage.getItem(k))
+          if (s) {
+            sendResponse({ ok: true, token: s })
+            return true
+          }
+        }
+
+        const pairs = (document.cookie || '').split(';')
+        for (const part of pairs) {
+          const [k, rawV] = splitEq(part)
+          if (!k) continue
+          const v = clean(safeDec(rawV))
+          if (v && (candidateKeys.includes(k) || isJwt(v))) {
+            sendResponse({ ok: true, token: v })
+            return true
+          }
+        }
+      } catch {
+        // ignore
+      }
+      sendResponse({ ok: false })
+      return true
+    }
+    return false
+  }
+  chrome.runtime.onMessage.addListener(onRuntimeMessage)
+
   // The extension was reloaded, updated or removed: this copy of the script is orphaned, so tidy up for good.
   // Each teardown runs even when another throws (an orphan's chrome.* calls throw "Extension context
   // invalidated") - bridge.destroy() in particular must always run, or the MAIN-world hook stays paired to
@@ -698,6 +764,11 @@ async function main(): Promise<void> {
         // context already invalidated
       }
     }
+    safe(() => {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+        chrome.runtime.onMessage.removeListener(onRuntimeMessage)
+      }
+    })
     safe(() => {
       if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
         chrome.storage.onChanged.removeListener(onStorage)

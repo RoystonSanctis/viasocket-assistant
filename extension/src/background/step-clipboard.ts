@@ -33,7 +33,7 @@ export async function getClientForSender(
   const tabId = sender.tab?.id
   if (tabId !== undefined) {
     const session = getSession(tabId)
-    if (session?.vs && session.page) {
+    if (session?.vs && session.page && (!fallbackTarget?.host || session.page.host === fallbackTarget.host)) {
       if (fallbackTarget?.scriptId) session.page.scriptId = fallbackTarget.scriptId
       if (fallbackTarget?.projectId) session.page.projectId = fallbackTarget.projectId
       if (fallbackTarget?.orgId) session.page.orgId = fallbackTarget.orgId

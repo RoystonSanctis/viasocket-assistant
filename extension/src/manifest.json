@@ -24,6 +24,8 @@
   },
   "permissions": ["storage", "cookies", "offscreen", "alarms", "tts", "scripting"],
   "host_permissions": [
+    "https://*.viasocket.com/*",
+    "https://viasocket.com/*",
     "https://flow.viasocket.com/*",
     "https://beta-flow.viasocket.com/*",
     "https://dev-flow.viasocket.com/*",

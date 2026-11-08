@@ -47,6 +47,18 @@ function cleanToken(raw: unknown): string | null {
   return s.length > 0 ? s : null
 }
 
+function isLikelyJwt(s: string): boolean {
+  return typeof s === 'string' && s.startsWith('ey') && s.includes('.') && s.length > 20
+}
+
+function safeDecode(str: string): string {
+  try {
+    return decodeURIComponent(str)
+  } catch {
+    return str
+  }
+}
+
 export class ViaSocketClient {
   private orgAlignedAt = 0
 
@@ -78,15 +90,55 @@ export class ViaSocketClient {
           }
           return s.length > 0 ? s : null
         }
-        const local = clean(localStorage.getItem('proxy_auth_token'))
-        if (local) return local
-        const sso = clean(sessionStorage.getItem('ssoEmbedToken')) || clean(sessionStorage.getItem('proxy_auth_token'))
-        if (sso) return sso
-        const pairs = (document.cookie || '').split(';').map((s) => s.trim().split('='))
-        for (const [k, v] of pairs) {
-          if (k && ['prod', 'testing', 'proxy_auth_token'].includes(k) && v) {
-            const cleaned = clean(decodeURIComponent(v))
-            if (cleaned) return cleaned
+        const isJwt = (s: string | null): boolean =>
+          Boolean(s && s.startsWith('ey') && s.includes('.') && s.length > 20)
+        const safeDec = (s: string): string => {
+          try {
+            return decodeURIComponent(s)
+          } catch {
+            return s
+          }
+        }
+        const splitEq = (s: string): [string, string] => {
+          const idx = s.indexOf('=')
+          if (idx === -1) return [s.trim(), '']
+          return [s.slice(0, idx).trim(), s.slice(idx + 1).trim()]
+        }
+
+        const candidateKeys = ['proxy_auth_token', 'token', 'auth_token', 'authToken', 'ssoEmbedToken', 'prod', 'testing']
+        for (const k of candidateKeys) {
+          const local = clean(localStorage.getItem(k))
+          if (local) return local
+          const sso = clean(sessionStorage.getItem(k))
+          if (sso) return sso
+        }
+
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i)
+            if (k) {
+              const val = clean(localStorage.getItem(k))
+              if (val && isJwt(val)) return val
+            }
+          }
+          for (let i = 0; i < sessionStorage.length; i++) {
+            const k = sessionStorage.key(i)
+            if (k) {
+              const val = clean(sessionStorage.getItem(k))
+              if (val && isJwt(val)) return val
+            }
+          }
+        } catch {
+          // ignore storage scan error
+        }
+
+        const pairs = (document.cookie || '').split(';')
+        for (const part of pairs) {
+          const [k, rawV] = splitEq(part)
+          if (!k) continue
+          const v = clean(safeDec(rawV))
+          if (v && (candidateKeys.includes(k) || isJwt(v))) {
+            return v
           }
         }
       } catch {
@@ -95,110 +147,132 @@ export class ViaSocketClient {
       return null
     }
 
-    // In embed mode the user is authenticated via sessionStorage.ssoEmbedToken or localStorage.proxy_auth_token
-    // set by the embed bootstrap, not via the flow.viasocket.com cookie. Read it from the frame via chrome.scripting.
-    if (this.env.embed) {
-      const tabId = this.opts.tabId
-      if (!tabId) throw new VsError('Cannot read embed token: tab ID is missing.', 'logged-out')
-      const target =
-        this.opts.frameId !== undefined ? { tabId, frameIds: [this.opts.frameId] } : { tabId, allFrames: true }
-      const results = await chrome.scripting
-        .executeScript({
-          target,
-          world: 'MAIN',
-          func: readStorageScript,
-        })
-        .catch(() => null)
-      let token = results?.map((r) => cleanToken(r.result)).find((t): t is string => Boolean(t))
-      if (!token && this.opts.frameId !== undefined) {
-        const fallbackResults = await chrome.scripting
+    const tabId = this.opts.tabId
+
+    // 1. If tabId is available, try reading from the page directly via scripting.
+    // Handles top-level flow pages, embeds (sessionStorage.ssoEmbedToken), and dynamic storage tokens.
+    if (tabId) {
+      try {
+        const target: chrome.scripting.InjectionTarget =
+          this.opts.frameId !== undefined && this.opts.frameId !== 0
+            ? { tabId, frameIds: [this.opts.frameId] }
+            : { tabId }
+        const res = await chrome.scripting
+          .executeScript({
+            target,
+            world: 'MAIN',
+            func: readStorageScript,
+          })
+          .catch(() => null)
+        const t = res?.map((r) => cleanToken(r.result)).find((tok): tok is string => Boolean(tok))
+        if (t) return t
+
+        // Fallback: try all frames in the tab
+        const allRes = await chrome.scripting
           .executeScript({
             target: { tabId, allFrames: true },
             world: 'MAIN',
             func: readStorageScript,
           })
           .catch(() => null)
-        token = fallbackResults?.map((r) => cleanToken(r.result)).find((t): t is string => Boolean(t))
+        const fallbackT = allRes?.map((r) => cleanToken(r.result)).find((tok): tok is string => Boolean(tok))
+        if (fallbackT) return fallbackT
+      } catch {
+        // ignore
       }
-      if (!token) throw new VsError('You are not signed in to viaSocket. Open the embed and try again.', 'logged-out')
-      return token
+
+      // Query content script directly as message fallback
+      try {
+        const opts = this.opts.frameId !== undefined ? { frameId: this.opts.frameId } : undefined
+        const msgRes = (await chrome.tabs.sendMessage(tabId, { target: 'content', type: 'get-auth-token' }, opts).catch(() => null)) as
+          | { ok?: boolean; token?: string }
+          | null
+          | undefined
+        const msgToken = cleanToken(msgRes?.token)
+        if (msgToken) return msgToken
+      } catch {
+        // ignore
+      }
     }
 
-    // In non-embed mode, try cookie discovery first (across candidate names, stores, and origins),
-    // and fall back to querying the page storage directly via scripting if tabId is available.
-    const candidateNames = Array.from(new Set([this.env.cookieName, 'proxy_auth_token', 'prod', 'testing']))
-    const candidateUrls = Array.from(new Set([this.env.cookieUrl, 'https://flow.viasocket.com/', 'https://viasocket.com/']))
+    // 2. Cookie discovery across candidates, candidate URLs, and stores
+    const candidateNames = Array.from(new Set([this.env.cookieName, 'proxy_auth_token', 'prod', 'testing', 'token', 'auth_token']))
+    const candidateUrls = Array.from(
+      new Set([
+        this.env.cookieUrl,
+        'https://flow.viasocket.com/',
+        'https://viasocket.com/',
+        'https://beta-flow.viasocket.com/',
+        'https://dev-flow.viasocket.com/',
+      ]),
+    )
 
-    // 1. Try chrome.cookies.get with the specific storeId (if provided)
+    // With specific storeId (incognito tabs, etc.)
     if (this.opts.storeId) {
       for (const url of candidateUrls) {
         for (const name of candidateNames) {
           const c = await chrome.cookies.get({ url, name, storeId: this.opts.storeId }).catch(() => null)
-          const val = cleanToken(c?.value ? decodeURIComponent(c.value) : null)
+          const val = cleanToken(c?.value ? safeDecode(c.value) : null)
           if (val) return val
         }
       }
     }
 
-    // 2. Try chrome.cookies.get in the default store (without storeId)
+    // Default store
     for (const url of candidateUrls) {
       for (const name of candidateNames) {
         const c = await chrome.cookies.get({ url, name }).catch(() => null)
-        const val = cleanToken(c?.value ? decodeURIComponent(c.value) : null)
+        const val = cleanToken(c?.value ? safeDecode(c.value) : null)
         if (val) return val
       }
     }
 
-    // 3. Try chrome.cookies.getAll for the cookieUrl and viasocket.com domain
-    try {
-      const byUrl = await chrome.cookies.getAll({ url: this.env.cookieUrl })
-      for (const name of candidateNames) {
-        const c = byUrl.find((cookie) => cookie.name === name && cookie.value)
-        const val = cleanToken(c?.value ? decodeURIComponent(c.value) : null)
-        if (val) return val
+    // chrome.cookies.getAll by candidate URLs
+    for (const url of candidateUrls) {
+      try {
+        const byUrl = await chrome.cookies.getAll({ url }).catch(() => [])
+        for (const name of candidateNames) {
+          const c = byUrl.find((cookie) => cookie.name === name && cookie.value)
+          const val = cleanToken(c?.value ? safeDecode(c.value) : null)
+          if (val) return val
+        }
+        for (const c of byUrl) {
+          const val = cleanToken(c.value ? safeDecode(c.value) : null)
+          if (val && isLikelyJwt(val)) return val
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
 
-    try {
-      const all = await chrome.cookies.getAll({ domain: 'viasocket.com' })
-      for (const name of candidateNames) {
-        const c = all.find((cookie) => cookie.name === name && cookie.value)
-        const val = cleanToken(c?.value ? decodeURIComponent(c.value) : null)
-        if (val) return val
+    // chrome.cookies.getAll by domain viasocket.com
+    for (const domain of ['viasocket.com', '.viasocket.com']) {
+      try {
+        const all = await chrome.cookies.getAll({ domain }).catch(() => [])
+        for (const name of candidateNames) {
+          const c = all.find((cookie) => cookie.name === name && cookie.value)
+          const val = cleanToken(c?.value ? safeDecode(c.value) : null)
+          if (val) return val
+        }
+        for (const c of all) {
+          const val = cleanToken(c.value ? safeDecode(c.value) : null)
+          if (val && isLikelyJwt(val)) return val
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
 
-    // 4. Fall back to reading token from the page via chrome.scripting (handles SSO, localStorage, and partitioned cookies)
-    const tabId = this.opts.tabId
-    if (tabId) {
-      const target =
-        this.opts.frameId !== undefined ? { tabId, frameIds: [this.opts.frameId] } : { tabId }
+    console.warn('[viaSocket Assistant] token resolution failed', {
+      env: this.env.name,
+      tabId: this.opts.tabId,
+      frameId: this.opts.frameId,
+      storeId: this.opts.storeId,
+    })
 
-      const results = await chrome.scripting
-        .executeScript({
-          target,
-          world: 'MAIN',
-          func: readStorageScript,
-        })
-        .catch(() => null)
-      let token = results?.map((r) => cleanToken(r.result)).find((t): t is string => Boolean(t))
-      if (!token && this.opts.frameId !== undefined) {
-        const fallbackResults = await chrome.scripting
-          .executeScript({
-            target: { tabId, allFrames: true },
-            world: 'MAIN',
-            func: readStorageScript,
-          })
-          .catch(() => null)
-        token = fallbackResults?.map((r) => cleanToken(r.result)).find((t): t is string => Boolean(t))
-      }
-      if (token) return token
+    if (this.env.embed) {
+      throw new VsError('You are not signed in to viaSocket. Open the embed and try again.', 'logged-out')
     }
-
     throw new VsError('You are signed out of viaSocket. Sign in and try again.', 'logged-out')
   }
 
