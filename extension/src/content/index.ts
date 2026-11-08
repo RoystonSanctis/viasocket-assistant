@@ -690,121 +690,175 @@ async function main(): Promise<void> {
     sendResponse: (response?: unknown) => void,
   ) => {
     if (!raw || typeof raw !== 'object') return false
-    const msg = raw as { target?: unknown; type?: unknown; mode?: unknown; cookieName?: unknown }
+    const msg = raw as { target?: unknown; type?: unknown; mode?: unknown; cookieName?: unknown; apiBase?: unknown }
+
+    if (msg.target === 'content' && msg.type === 'vs-proxy-fetch') {
+      const fetchMsg = raw as {
+        url?: string
+        method?: string
+        headers?: Record<string, string>
+        body?: unknown
+      }
+      if (!fetchMsg.url) {
+        sendResponse({ ok: false, error: 'missing url' })
+        return true
+      }
+      ;(async () => {
+        try {
+          const res = await fetch(fetchMsg.url!, {
+            method: fetchMsg.method || 'GET',
+            headers: fetchMsg.headers,
+            body: fetchMsg.body !== undefined ? JSON.stringify(fetchMsg.body) : undefined,
+            credentials: 'include',
+          })
+          const text = await res.text()
+          let parsed: any
+          try {
+            parsed = text ? JSON.parse(text) : undefined
+          } catch {
+            parsed = text
+          }
+          sendResponse({ ok: res.ok, status: res.status, body: parsed })
+        } catch (e) {
+          sendResponse({ ok: false, error: String(e) })
+        }
+      })()
+      return true
+    }
+
     if (msg.target === 'content' && msg.type === 'get-auth-token') {
-      try {
-        const clean = (v: string | null): string | null => {
-          if (!v) return null
-          let s = v.trim()
-          if (!s) return null
-          if (s.includes('%')) {
-            try { s = decodeURIComponent(s).trim() } catch {}
-          }
-          if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-            s = s.slice(1, -1).trim()
-          }
-          if (s.includes('%')) {
-            try { s = decodeURIComponent(s).trim() } catch {}
-          }
-          if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-            s = s.slice(1, -1).trim()
-          }
-          return s.length > 0 ? s : null
-        }
-        const isJwt = (s: string | null): boolean =>
-          Boolean(s && s.startsWith('ey') && s.includes('.') && s.length > 20)
-
-        const splitEq = (s: string): [string, string] => {
-          const idx = s.indexOf('=')
-          if (idx === -1) return [s.trim(), '']
-          return [s.slice(0, idx).trim(), s.slice(idx + 1).trim()]
-        }
-
-        const isEmbedMode =
-          msg.mode === 'embed' ||
-          location.pathname.startsWith('/integrations/embed/') ||
-          new URLSearchParams(location.search).get('mode') === 'embed'
-
-        if (isEmbedMode) {
-          // Embed mode: read sessionStorage.ssoEmbedToken (primary) or localStorage.proxy_auth_token
-          const sso = clean(sessionStorage.getItem('ssoEmbedToken')) || clean(sessionStorage.getItem('proxy_auth_token'))
-          if (sso) {
-            sendResponse({ ok: true, token: sso })
-            return true
-          }
-          const local = clean(localStorage.getItem('proxy_auth_token')) || clean(localStorage.getItem('ssoEmbedToken'))
-          if (local) {
-            sendResponse({ ok: true, token: local })
-            return true
-          }
-        } else {
-          // Flow mode: read document.cookie for preferred name, candidates, JWT, and localStorage
-          const preferredCookie = typeof msg.cookieName === 'string' && msg.cookieName ? msg.cookieName : 'prod'
-          const parsedCookies = new Map<string, string>()
-          for (const raw of (document.cookie || '').split(';')) {
-            const [k, v] = splitEq(raw)
-            if (k && v) {
-              const val = clean(v)
-              if (val) parsedCookies.set(k, val)
+      ;(async () => {
+        try {
+          const clean = (v: string | null): string | null => {
+            if (!v) return null
+            let s = v.trim()
+            if (!s) return null
+            if (s.includes('%')) {
+              try { s = decodeURIComponent(s).trim() } catch {}
             }
-          }
-
-          // 1. Preferred cookie name
-          if (preferredCookie && parsedCookies.has(preferredCookie)) {
-            sendResponse({ ok: true, token: parsedCookies.get(preferredCookie) })
-            return true
-          }
-
-          // 2. Candidate cookie names
-          const candidates = ['prod', 'testing', 'proxy_auth_token', 'beta', 'token', 'auth_token', 'accessToken', 'access_token', 'authToken']
-          for (const name of candidates) {
-            if (parsedCookies.has(name)) {
-              sendResponse({ ok: true, token: parsedCookies.get(name) })
-              return true
+            if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+              s = s.slice(1, -1).trim()
             }
-          }
-
-          // 3. Any cookie with a likely JWT value
-          for (const val of parsedCookies.values()) {
-            if (isJwt(val)) {
-              sendResponse({ ok: true, token: val })
-              return true
+            if (s.includes('%')) {
+              try { s = decodeURIComponent(s).trim() } catch {}
             }
-          }
-
-          // 4. LocalStorage candidates
-          const storageKeys = ['proxy_auth_token', 'token', 'auth_token', 'prod', 'testing', 'accessToken', 'access_token', 'authToken']
-          for (const key of storageKeys) {
-            const val = clean(localStorage.getItem(key))
-            if (val) {
-              sendResponse({ ok: true, token: val })
-              return true
+            if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+              s = s.slice(1, -1).trim()
             }
+            return s.length > 0 ? s : null
+          }
+          const isJwt = (s: string | null): boolean =>
+            Boolean(s && s.startsWith('ey') && s.includes('.') && s.length > 20)
+
+          const splitEq = (s: string): [string, string] => {
+            const idx = s.indexOf('=')
+            if (idx === -1) return [s.trim(), '']
+            return [s.slice(0, idx).trim(), s.slice(idx + 1).trim()]
           }
 
-          // 5. Any LocalStorage item with a JWT value
-          for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i)
-            if (key) {
-              const val = clean(localStorage.getItem(key))
-              if (isJwt(val)) {
-                sendResponse({ ok: true, token: val })
-                return true
+          const isEmbedMode =
+            msg.mode === 'embed' ||
+            location.pathname.startsWith('/integrations/embed/') ||
+            new URLSearchParams(location.search).get('mode') === 'embed'
+
+          if (isEmbedMode) {
+            // Embed mode: read sessionStorage.ssoEmbedToken (primary) or localStorage.proxy_auth_token
+            const sso = clean(sessionStorage.getItem('ssoEmbedToken')) || clean(sessionStorage.getItem('proxy_auth_token'))
+            if (sso) {
+              sendResponse({ ok: true, token: sso })
+              return
+            }
+            const local = clean(localStorage.getItem('proxy_auth_token')) || clean(localStorage.getItem('ssoEmbedToken'))
+            if (local) {
+              sendResponse({ ok: true, token: local })
+              return
+            }
+          } else {
+            // Flow mode:
+            // 1. Primary: Fetch /auth/token endpoint from page origin with credentials include
+            const apiBase = typeof msg.apiBase === 'string' && msg.apiBase ? msg.apiBase : 'https://flow-api.viasocket.com'
+            try {
+              const res = await fetch(`${apiBase}/auth/token`, { credentials: 'include' })
+              if (res.ok) {
+                const data = await res.json()
+                const tok = clean(data?.data?.token)
+                if (tok) {
+                  sendResponse({ ok: true, token: tok })
+                  return
+                }
+              }
+            } catch {
+              // ignore
+            }
+
+            // 2. Read document.cookie for preferred name, candidates, JWT, and localStorage
+            const preferredCookie = typeof msg.cookieName === 'string' && msg.cookieName ? msg.cookieName : 'prod'
+            const parsedCookies = new Map<string, string>()
+            for (const raw of (document.cookie || '').split(';')) {
+              const [k, v] = splitEq(raw)
+              if (k && v) {
+                const val = clean(v)
+                if (val) parsedCookies.set(k, val)
               }
             }
-          }
 
-          // 6. SessionStorage fallback
-          const sso = clean(sessionStorage.getItem('ssoEmbedToken')) || clean(sessionStorage.getItem('proxy_auth_token'))
-          if (sso) {
-            sendResponse({ ok: true, token: sso })
-            return true
+            // 2a. Preferred cookie name
+            if (preferredCookie && parsedCookies.has(preferredCookie)) {
+              sendResponse({ ok: true, token: parsedCookies.get(preferredCookie) })
+              return
+            }
+
+            // 2b. Candidate cookie names
+            const candidates = ['prod', 'testing', 'proxy_auth_token', 'beta', 'token', 'auth_token', 'accessToken', 'access_token', 'authToken']
+            for (const name of candidates) {
+              if (parsedCookies.has(name)) {
+                sendResponse({ ok: true, token: parsedCookies.get(name) })
+                return
+              }
+            }
+
+            // 2c. Any cookie with a likely JWT value
+            for (const val of parsedCookies.values()) {
+              if (isJwt(val)) {
+                sendResponse({ ok: true, token: val })
+                return
+              }
+            }
+
+            // 2d. LocalStorage candidates
+            const storageKeys = ['proxy_auth_token', 'token', 'auth_token', 'prod', 'testing', 'accessToken', 'access_token', 'authToken']
+            for (const key of storageKeys) {
+              const val = clean(localStorage.getItem(key))
+              if (val) {
+                sendResponse({ ok: true, token: val })
+                return
+              }
+            }
+
+            // 2e. Any LocalStorage item with a JWT value
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i)
+              if (key) {
+                const val = clean(localStorage.getItem(key))
+                if (isJwt(val)) {
+                  sendResponse({ ok: true, token: val })
+                  return
+                }
+              }
+            }
+
+            // 2f. SessionStorage fallback
+            const sso = clean(sessionStorage.getItem('ssoEmbedToken')) || clean(sessionStorage.getItem('proxy_auth_token'))
+            if (sso) {
+              sendResponse({ ok: true, token: sso })
+              return
+            }
           }
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
-      }
-      sendResponse({ ok: false })
+        sendResponse({ ok: false })
+      })()
       return true
     }
     return false

@@ -81,6 +81,7 @@ function safeDecode(str: string): string {
 
 export class ViaSocketClient {
   private orgAlignedAt = 0
+  private cachedToken: { token: string; expiresAt: number } | null = null
 
   /**
    * storeId: the tab's cookie store (incognito tabs have their own); incognito: open auth popups there too.
@@ -99,9 +100,32 @@ export class ViaSocketClient {
     return this.page.orgId
   }
 
+  private async resolveTabId(): Promise<number | undefined> {
+    if (this.opts.tabId !== undefined) return this.opts.tabId
+    try {
+      const tabs = await chrome.tabs.query({
+        url: [
+          this.env.cookieUrl,
+          `https://${this.page.host}/*`,
+          'https://flow.viasocket.com/*',
+          'https://beta-flow.viasocket.com/*',
+          'https://dev-flow.viasocket.com/*',
+        ],
+      })
+      if (tabs[0]?.id !== undefined) return tabs[0].id
+    } catch {
+      // ignore
+    }
+    return undefined
+  }
+
   async token(): Promise<string> {
+    if (this.cachedToken && Date.now() < this.cachedToken.expiresAt) {
+      return this.cachedToken.token
+    }
+
     const isEmbed = isEmbedContext(this.env, this.page)
-    const tabId = this.opts.tabId
+    const tabId = await this.resolveTabId()
 
     // ==========================================
     // 1. EMBED MODE
@@ -154,7 +178,10 @@ export class ViaSocketClient {
           })
           .catch(() => null)
         const t = frameRes?.map((r) => cleanToken(r.result)).find((tok): tok is string => Boolean(tok))
-        if (t) return t
+        if (t) {
+          this.cachedToken = { token: t, expiresAt: Date.now() + 5 * 60_000 }
+          return t
+        }
       }
 
       // 1b. Try all frames in tab
@@ -166,7 +193,10 @@ export class ViaSocketClient {
         })
         .catch(() => null)
       const allToken = allRes?.map((r) => cleanToken(r.result)).find((tok): tok is string => Boolean(tok))
-      if (allToken) return allToken
+      if (allToken) {
+        this.cachedToken = { token: allToken, expiresAt: Date.now() + 5 * 60_000 }
+        return allToken
+      }
 
       // 1c. Try content script message
       try {
@@ -176,7 +206,10 @@ export class ViaSocketClient {
           | null
           | undefined
         const msgToken = cleanToken(msgRes?.token)
-        if (msgToken) return msgToken
+        if (msgToken) {
+          this.cachedToken = { token: msgToken, expiresAt: Date.now() + 5 * 60_000 }
+          return msgToken
+        }
       } catch {
         // ignore
       }
@@ -188,7 +221,9 @@ export class ViaSocketClient {
     // 2. FLOW MODE
     // ==========================================
     // In flow mode (flow.viasocket.com, beta-flow.viasocket.com, dev-flow.viasocket.com),
-    // authentication uses the environment cookie (e.g. 'prod' or 'testing'), with fallbacks
+    // modern viaSocket sessions authenticate using HttpOnly session cookies (e.g. session_production),
+    // which mint a valid proxy_auth_token via GET /auth/token with credentials: 'include'.
+    // We first query the /auth/token endpoint from the tab's authenticated origin, with fallbacks
     // to candidate cookies, JWT detection, localStorage and sessionStorage.
 
     const candidateNames = [
@@ -204,8 +239,93 @@ export class ViaSocketClient {
       'authToken',
     ]
 
-    // 2a. First, try reading cookie from document.cookie and storage in the page via scripting
     if (tabId) {
+      // 2a. Primary: Query /auth/token endpoint with session cookies from the tab
+      const readAuthTokenScript = async (apiBase: string) => {
+        try {
+          const res = await fetch(`${apiBase}/auth/token`, { credentials: 'include' })
+          if (!res.ok) return null
+          const json = await res.json()
+          const raw = json?.data?.token
+          if (typeof raw !== 'string') return null
+          const s = raw.trim()
+          return s.length > 0 ? s : null
+        } catch {
+          return null
+        }
+      }
+
+      try {
+        const target: chrome.scripting.InjectionTarget =
+          this.opts.frameId !== undefined && this.opts.frameId !== 0
+            ? { tabId, frameIds: [this.opts.frameId] }
+            : { tabId }
+        let res = await chrome.scripting
+          .executeScript({
+            target,
+            world: 'MAIN',
+            func: readAuthTokenScript,
+            args: [this.env.apiBase],
+          })
+          .catch(() => null)
+        let t = res?.map((r) => cleanToken(r.result)).find((tok): tok is string => Boolean(tok))
+        if (t) {
+          this.cachedToken = { token: t, expiresAt: Date.now() + 5 * 60_000 }
+          return t
+        }
+
+        if (this.opts.frameId !== undefined && this.opts.frameId !== 0) {
+          res = await chrome.scripting
+            .executeScript({
+              target: { tabId },
+              world: 'MAIN',
+              func: readAuthTokenScript,
+              args: [this.env.apiBase],
+            })
+            .catch(() => null)
+          t = res?.map((r) => cleanToken(r.result)).find((tok): tok is string => Boolean(tok))
+          if (t) {
+            this.cachedToken = { token: t, expiresAt: Date.now() + 5 * 60_000 }
+            return t
+          }
+        }
+
+        res = await chrome.scripting
+          .executeScript({
+            target: { tabId },
+            world: 'ISOLATED',
+            func: readAuthTokenScript,
+            args: [this.env.apiBase],
+          })
+          .catch(() => null)
+        t = res?.map((r) => cleanToken(r.result)).find((tok): tok is string => Boolean(tok))
+        if (t) {
+          this.cachedToken = { token: t, expiresAt: Date.now() + 5 * 60_000 }
+          return t
+        }
+      } catch {
+        // ignore
+      }
+
+      // Try content script message with apiBase
+      try {
+        const msgRes = (await chrome.tabs.sendMessage(tabId, {
+          target: 'content',
+          type: 'get-auth-token',
+          mode: 'flow',
+          cookieName: this.env.cookieName,
+          apiBase: this.env.apiBase,
+        }).catch(() => null)) as { ok?: boolean; token?: string } | null | undefined
+        const msgToken = cleanToken(msgRes?.token)
+        if (msgToken) {
+          this.cachedToken = { token: msgToken, expiresAt: Date.now() + 5 * 60_000 }
+          return msgToken
+        }
+      } catch {
+        // ignore
+      }
+
+      // 2b. Fallback: Try reading cookie from document.cookie and storage in the page via scripting
       const readFlowScript = (preferredName: string) => {
         try {
           const decodeAndClean = (v: string | null): string | null => {
@@ -307,7 +427,10 @@ export class ViaSocketClient {
           })
           .catch(() => null)
         let t = res?.map((r) => cleanToken(r.result)).find((tok): tok is string => Boolean(tok))
-        if (t) return t
+        if (t) {
+          this.cachedToken = { token: t, expiresAt: Date.now() + 5 * 60_000 }
+          return t
+        }
 
         if (this.opts.frameId !== undefined && this.opts.frameId !== 0) {
           res = await chrome.scripting
@@ -319,7 +442,10 @@ export class ViaSocketClient {
             })
             .catch(() => null)
           t = res?.map((r) => cleanToken(r.result)).find((tok): tok is string => Boolean(tok))
-          if (t) return t
+          if (t) {
+            this.cachedToken = { token: t, expiresAt: Date.now() + 5 * 60_000 }
+            return t
+          }
         }
 
         res = await chrome.scripting
@@ -331,7 +457,10 @@ export class ViaSocketClient {
           })
           .catch(() => null)
         t = res?.map((r) => cleanToken(r.result)).find((tok): tok is string => Boolean(tok))
-        if (t) return t
+        if (t) {
+          this.cachedToken = { token: t, expiresAt: Date.now() + 5 * 60_000 }
+          return t
+        }
       } catch {
         // ignore
       }
@@ -345,13 +474,16 @@ export class ViaSocketClient {
           cookieName: this.env.cookieName,
         }).catch(() => null)) as { ok?: boolean; token?: string } | null | undefined
         const msgToken = cleanToken(msgRes?.token)
-        if (msgToken) return msgToken
+        if (msgToken) {
+          this.cachedToken = { token: msgToken, expiresAt: Date.now() + 5 * 60_000 }
+          return msgToken
+        }
       } catch {
         // ignore
       }
     }
 
-    // 2b. Try chrome.cookies API across candidate stores and URLs
+    // 2c. Try chrome.cookies API across candidate stores and URLs
     const candidateUrls = Array.from(
       new Set([
         this.env.cookieUrl,
@@ -372,7 +504,10 @@ export class ViaSocketClient {
         for (const name of candidateNames) {
           const c = await chrome.cookies.get({ url, name, ...storeOpts }).catch(() => null)
           const val = cleanToken(c?.value)
-          if (val) return val
+          if (val) {
+            this.cachedToken = { token: val, expiresAt: Date.now() + 5 * 60_000 }
+            return val
+          }
         }
       }
 
@@ -383,11 +518,17 @@ export class ViaSocketClient {
           for (const name of candidateNames) {
             const c = byUrl.find((cookie) => cookie.name === name && cookie.value)
             const val = cleanToken(c?.value)
-            if (val) return val
+            if (val) {
+              this.cachedToken = { token: val, expiresAt: Date.now() + 5 * 60_000 }
+              return val
+            }
           }
           for (const c of byUrl) {
             const val = cleanToken(c?.value)
-            if (val && isLikelyJwt(val)) return val
+            if (val && isLikelyJwt(val)) {
+              this.cachedToken = { token: val, expiresAt: Date.now() + 5 * 60_000 }
+              return val
+            }
           }
         } catch {
           // ignore
@@ -400,11 +541,17 @@ export class ViaSocketClient {
         for (const name of candidateNames) {
           const c = byDomain.find((cookie) => cookie.name === name && cookie.value)
           const val = cleanToken(c?.value)
-          if (val) return val
+          if (val) {
+            this.cachedToken = { token: val, expiresAt: Date.now() + 5 * 60_000 }
+            return val
+          }
         }
         for (const c of byDomain) {
           const val = cleanToken(c?.value)
-          if (val && isLikelyJwt(val)) return val
+          if (val && isLikelyJwt(val)) {
+            this.cachedToken = { token: val, expiresAt: Date.now() + 5 * 60_000 }
+            return val
+          }
         }
       } catch {
         // ignore
@@ -417,11 +564,17 @@ export class ViaSocketClient {
         for (const name of candidateNames) {
           const c = vsCookies.find((cookie) => cookie.name === name && cookie.value)
           const val = cleanToken(c?.value)
-          if (val) return val
+          if (val) {
+            this.cachedToken = { token: val, expiresAt: Date.now() + 5 * 60_000 }
+            return val
+          }
         }
         for (const c of vsCookies) {
           const val = cleanToken(c?.value)
-          if (val && isLikelyJwt(val)) return val
+          if (val && isLikelyJwt(val)) {
+            this.cachedToken = { token: val, expiresAt: Date.now() + 5 * 60_000 }
+            return val
+          }
         }
       } catch {
         // ignore
@@ -437,6 +590,72 @@ export class ViaSocketClient {
     })
 
     throw new VsError('You are signed out of viaSocket. Sign in and try again.', 'logged-out')
+  }
+
+  private async tryTabProxyFetch<T>(req: VsRequest, url: URL): Promise<T | undefined> {
+    if (isEmbedContext(this.env, this.page)) return undefined
+    const tabId = await this.resolveTabId()
+    if (!tabId) return undefined
+
+    const headers: Record<string, string> = { Accept: 'application/json' }
+    if (req.body !== undefined) headers['Content-Type'] = 'application/json'
+    if (req.live) headers['sent-by-fbai'] = 'true'
+
+    try {
+      const msgRes = (await chrome.tabs.sendMessage(tabId, {
+        target: 'content',
+        type: 'vs-proxy-fetch',
+        url: url.toString(),
+        method: req.method,
+        headers,
+        body: req.body,
+      }).catch(() => null)) as { ok?: boolean; status?: number; body?: unknown } | null | undefined
+
+      if (msgRes && msgRes.ok) {
+        return msgRes.body as T
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const execRes = await chrome.scripting
+        .executeScript({
+          target: { tabId },
+          world: 'MAIN',
+          func: async (fetchUrl: string, method: string, hdrs: Record<string, string>, bodyData: unknown) => {
+            try {
+              const r = await fetch(fetchUrl, {
+                method,
+                headers: hdrs,
+                body: bodyData !== undefined ? JSON.stringify(bodyData) : undefined,
+                credentials: 'include',
+              })
+              const txt = await r.text()
+              let parsed: any
+              try {
+                parsed = txt ? JSON.parse(txt) : undefined
+              } catch {
+                parsed = txt
+              }
+              return { ok: r.ok, status: r.status, body: parsed }
+            } catch (err) {
+              return { ok: false, error: String(err) }
+            }
+          },
+          args: [url.toString(), req.method, headers, req.body],
+        })
+        .catch(() => null)
+
+      const result = execRes?.[0]?.result as { ok?: boolean; status?: number; body?: unknown } | undefined
+      if (result?.ok) {
+        return result.body as T
+      }
+    } catch {
+      // ignore
+    }
+
+    return undefined
   }
 
   async request<T = any>(req: VsRequest): Promise<T> {
@@ -468,7 +687,36 @@ export class ViaSocketClient {
       })
     } catch (e) {
       if ((e as Error).name === 'AbortError') throw new VsError('Cancelled', 'aborted')
+      const proxyRes = await this.tryTabProxyFetch<T>(req, url)
+      if (proxyRes !== undefined) return proxyRes
       throw new VsError('Could not reach viaSocket. Check your connection.', 'network')
+    }
+
+    // If 401 Unauthorized, token may have expired or rotated; clear cache and retry once
+    if (res.status === 401 && headers.proxy_auth_token) {
+      this.cachedToken = null
+      try {
+        const freshToken = await this.token()
+        if (freshToken && freshToken !== headers.proxy_auth_token) {
+          headers.proxy_auth_token = freshToken
+          res = await fetch(url, {
+            method: req.method,
+            headers,
+            body: req.body === undefined ? undefined : JSON.stringify(req.body),
+            credentials: 'omit',
+            cache: 'no-store',
+            redirect: 'error',
+            signal: req.signal,
+          })
+        }
+      } catch {
+        // ignore retry error
+      }
+    }
+
+    if (res.status === 401 && !isEmbedContext(this.env, this.page)) {
+      const proxyRes = await this.tryTabProxyFetch<T>(req, url)
+      if (proxyRes !== undefined) return proxyRes
     }
 
     const text = await res.text()
