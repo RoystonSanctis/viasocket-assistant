@@ -696,11 +696,24 @@ async function main(): Promise<void> {
         const clean = (v: string | null): string | null => {
           if (!v) return null
           let s = v.trim()
+          if (!s) return null
+          if (s.includes('%')) {
+            try { s = decodeURIComponent(s).trim() } catch {}
+          }
+          if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+            s = s.slice(1, -1).trim()
+          }
+          if (s.includes('%')) {
+            try { s = decodeURIComponent(s).trim() } catch {}
+          }
           if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
             s = s.slice(1, -1).trim()
           }
           return s.length > 0 ? s : null
         }
+        const isJwt = (s: string | null): boolean =>
+          Boolean(s && s.startsWith('ey') && s.includes('.') && s.length > 20)
+
         const splitEq = (s: string): [string, string] => {
           const idx = s.indexOf('=')
           if (idx === -1) return [s.trim(), '']
@@ -725,32 +738,66 @@ async function main(): Promise<void> {
             return true
           }
         } else {
-          // Flow mode: read document.cookie for this environment's cookieName (e.g. 'prod' or 'testing')
-          const cookieName = typeof msg.cookieName === 'string' && msg.cookieName ? msg.cookieName : 'prod'
-          const cookies = (document.cookie || '').split(';')
-          for (const c of cookies) {
-            const [k, v] = splitEq(c)
-            if (k === cookieName) {
-              const cleaned = clean(v)
-              if (cleaned) {
-                sendResponse({ ok: true, token: cleaned })
+          // Flow mode: read document.cookie for preferred name, candidates, JWT, and localStorage
+          const preferredCookie = typeof msg.cookieName === 'string' && msg.cookieName ? msg.cookieName : 'prod'
+          const parsedCookies = new Map<string, string>()
+          for (const raw of (document.cookie || '').split(';')) {
+            const [k, v] = splitEq(raw)
+            if (k && v) {
+              const val = clean(v)
+              if (val) parsedCookies.set(k, val)
+            }
+          }
+
+          // 1. Preferred cookie name
+          if (preferredCookie && parsedCookies.has(preferredCookie)) {
+            sendResponse({ ok: true, token: parsedCookies.get(preferredCookie) })
+            return true
+          }
+
+          // 2. Candidate cookie names
+          const candidates = ['prod', 'testing', 'proxy_auth_token', 'beta', 'token', 'auth_token', 'accessToken', 'access_token', 'authToken']
+          for (const name of candidates) {
+            if (parsedCookies.has(name)) {
+              sendResponse({ ok: true, token: parsedCookies.get(name) })
+              return true
+            }
+          }
+
+          // 3. Any cookie with a likely JWT value
+          for (const val of parsedCookies.values()) {
+            if (isJwt(val)) {
+              sendResponse({ ok: true, token: val })
+              return true
+            }
+          }
+
+          // 4. LocalStorage candidates
+          const storageKeys = ['proxy_auth_token', 'token', 'auth_token', 'prod', 'testing', 'accessToken', 'access_token', 'authToken']
+          for (const key of storageKeys) {
+            const val = clean(localStorage.getItem(key))
+            if (val) {
+              sendResponse({ ok: true, token: val })
+              return true
+            }
+          }
+
+          // 5. Any LocalStorage item with a JWT value
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (key) {
+              const val = clean(localStorage.getItem(key))
+              if (isJwt(val)) {
+                sendResponse({ ok: true, token: val })
                 return true
               }
             }
           }
-          for (const c of cookies) {
-            const [k, v] = splitEq(c)
-            if (k === 'proxy_auth_token') {
-              const cleaned = clean(v)
-              if (cleaned) {
-                sendResponse({ ok: true, token: cleaned })
-                return true
-              }
-            }
-          }
-          const local = clean(localStorage.getItem('proxy_auth_token'))
-          if (local) {
-            sendResponse({ ok: true, token: local })
+
+          // 6. SessionStorage fallback
+          const sso = clean(sessionStorage.getItem('ssoEmbedToken')) || clean(sessionStorage.getItem('proxy_auth_token'))
+          if (sso) {
+            sendResponse({ ok: true, token: sso })
             return true
           }
         }

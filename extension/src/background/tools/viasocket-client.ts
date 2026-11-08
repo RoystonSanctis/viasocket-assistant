@@ -41,14 +41,34 @@ const ACTIVE_MUTATIONS = new Set<string>()
 function cleanToken(raw: unknown): string | null {
   if (typeof raw !== 'string') return null
   let s = raw.trim()
+  if (!s) return null
+  if (s.includes('%')) {
+    try {
+      s = decodeURIComponent(s).trim()
+    } catch {
+      // ignore
+    }
+  }
+  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+    s = s.slice(1, -1).trim()
+  }
+  if (s.includes('%')) {
+    try {
+      s = decodeURIComponent(s).trim()
+    } catch {
+      // ignore
+    }
+  }
   if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
     s = s.slice(1, -1).trim()
   }
   return s.length > 0 ? s : null
 }
 
-function isLikelyJwt(s: string): boolean {
-  return typeof s === 'string' && s.startsWith('ey') && s.includes('.') && s.length > 20
+function isLikelyJwt(raw: unknown): boolean {
+  if (typeof raw !== 'string') return false
+  const s = cleanToken(raw)
+  return Boolean(s && s.startsWith('ey') && s.includes('.') && s.length > 20)
 }
 
 function safeDecode(str: string): string {
@@ -99,6 +119,16 @@ export class ViaSocketClient {
           const clean = (v: string | null): string | null => {
             if (!v) return null
             let s = v.trim()
+            if (!s) return null
+            if (s.includes('%')) {
+              try { s = decodeURIComponent(s).trim() } catch {}
+            }
+            if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+              s = s.slice(1, -1).trim()
+            }
+            if (s.includes('%')) {
+              try { s = decodeURIComponent(s).trim() } catch {}
+            }
             if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
               s = s.slice(1, -1).trim()
             }
@@ -158,45 +188,105 @@ export class ViaSocketClient {
     // 2. FLOW MODE
     // ==========================================
     // In flow mode (flow.viasocket.com, beta-flow.viasocket.com, dev-flow.viasocket.com),
-    // authentication uses the environment cookie (e.g. 'prod' or 'testing'), never ssoEmbedToken.
+    // authentication uses the environment cookie (e.g. 'prod' or 'testing'), with fallbacks
+    // to candidate cookies, JWT detection, localStorage and sessionStorage.
 
-    // 2a. First, try reading cookie from document.cookie in the page via scripting (matches socket-flow-UI getFromCookies)
+    const candidateNames = [
+      this.env.cookieName,
+      'prod',
+      'testing',
+      'proxy_auth_token',
+      'beta',
+      'token',
+      'auth_token',
+      'accessToken',
+      'access_token',
+      'authToken',
+    ]
+
+    // 2a. First, try reading cookie from document.cookie and storage in the page via scripting
     if (tabId) {
-      const readFlowScript = (cookieName: string) => {
+      const readFlowScript = (preferredName: string) => {
         try {
-          const clean = (v: string | null): string | null => {
+          const decodeAndClean = (v: string | null): string | null => {
             if (!v) return null
             let s = v.trim()
+            if (!s) return null
+            if (s.includes('%')) {
+              try { s = decodeURIComponent(s).trim() } catch {}
+            }
+            if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
+              s = s.slice(1, -1).trim()
+            }
+            if (s.includes('%')) {
+              try { s = decodeURIComponent(s).trim() } catch {}
+            }
             if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
               s = s.slice(1, -1).trim()
             }
             return s.length > 0 ? s : null
           }
+          const isJwt = (s: string | null): boolean =>
+            Boolean(s && s.startsWith('ey') && s.includes('.') && s.length > 20)
+
           const splitFromFirstEqual = (str: string) => {
             if (!str || str.indexOf('=') === -1) return [str, '']
             const index = str.indexOf('=')
             return [str.slice(0, index).trim(), str.slice(index + 1).trim()]
           }
-          const cookies = (document.cookie || '').split(';')
-          // 1. Look for environment cookie name (e.g. 'prod' or 'testing')
-          for (const c of cookies) {
-            const [k, v] = splitFromFirstEqual(c)
-            if (k === cookieName) {
-              const cleaned = clean(v ?? null)
-              if (cleaned) return cleaned
+
+          const parsedCookies = new Map<string, string>()
+          for (const raw of (document.cookie || '').split(';')) {
+            const [k, v] = splitFromFirstEqual(raw)
+            if (k && v) {
+              const val = decodeAndClean(v)
+              if (val) parsedCookies.set(k, val)
             }
           }
-          // 2. Look for proxy_auth_token cookie
-          for (const c of cookies) {
-            const [k, v] = splitFromFirstEqual(c)
-            if (k === 'proxy_auth_token') {
-              const cleaned = clean(v ?? null)
-              if (cleaned) return cleaned
+
+          // 1. Preferred cookie name (e.g. 'prod' or 'testing')
+          if (preferredName && parsedCookies.has(preferredName)) {
+            return parsedCookies.get(preferredName)!
+          }
+
+          // 2. Candidate cookie names
+          const candidates = ['prod', 'testing', 'proxy_auth_token', 'beta', 'token', 'auth_token', 'accessToken', 'access_token', 'authToken']
+          for (const name of candidates) {
+            if (parsedCookies.has(name)) {
+              return parsedCookies.get(name)!
             }
           }
-          // 3. Look for proxy_auth_token in localStorage
-          const local = clean(localStorage.getItem('proxy_auth_token'))
-          if (local) return local
+
+          // 3. Any cookie with a likely JWT value
+          for (const val of parsedCookies.values()) {
+            if (isJwt(val)) return val
+          }
+
+          // 4. LocalStorage candidate keys
+          const storageKeys = ['proxy_auth_token', 'token', 'auth_token', 'prod', 'testing', 'accessToken', 'access_token', 'authToken']
+          for (const key of storageKeys) {
+            try {
+              const val = decodeAndClean(localStorage.getItem(key))
+              if (val) return val
+            } catch {}
+          }
+
+          // 5. Any LocalStorage item with a JWT value
+          try {
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i)
+              if (key) {
+                const val = decodeAndClean(localStorage.getItem(key))
+                if (isJwt(val)) return val!
+              }
+            }
+          } catch {}
+
+          // 6. SessionStorage fallback
+          try {
+            const sso = decodeAndClean(sessionStorage.getItem('ssoEmbedToken')) || decodeAndClean(sessionStorage.getItem('proxy_auth_token'))
+            if (sso) return sso
+          } catch {}
         } catch {
           return null
         }
@@ -208,7 +298,7 @@ export class ViaSocketClient {
           this.opts.frameId !== undefined && this.opts.frameId !== 0
             ? { tabId, frameIds: [this.opts.frameId] }
             : { tabId }
-        const res = await chrome.scripting
+        let res = await chrome.scripting
           .executeScript({
             target,
             world: 'MAIN',
@@ -216,7 +306,31 @@ export class ViaSocketClient {
             args: [this.env.cookieName],
           })
           .catch(() => null)
-        const t = res?.map((r) => cleanToken(r.result)).find((tok): tok is string => Boolean(tok))
+        let t = res?.map((r) => cleanToken(r.result)).find((tok): tok is string => Boolean(tok))
+        if (t) return t
+
+        if (this.opts.frameId !== undefined && this.opts.frameId !== 0) {
+          res = await chrome.scripting
+            .executeScript({
+              target: { tabId },
+              world: 'MAIN',
+              func: readFlowScript,
+              args: [this.env.cookieName],
+            })
+            .catch(() => null)
+          t = res?.map((r) => cleanToken(r.result)).find((tok): tok is string => Boolean(tok))
+          if (t) return t
+        }
+
+        res = await chrome.scripting
+          .executeScript({
+            target: { tabId },
+            world: 'ISOLATED',
+            func: readFlowScript,
+            args: [this.env.cookieName],
+          })
+          .catch(() => null)
+        t = res?.map((r) => cleanToken(r.result)).find((tok): tok is string => Boolean(tok))
         if (t) return t
       } catch {
         // ignore
@@ -237,60 +351,77 @@ export class ViaSocketClient {
       }
     }
 
-    // 2b. Try chrome.cookies API specifically for this.env.cookieName and proxy_auth_token
-    const candidateNames = [this.env.cookieName, 'proxy_auth_token']
+    // 2b. Try chrome.cookies API across candidate stores and URLs
     const candidateUrls = Array.from(
       new Set([
         this.env.cookieUrl,
         'https://flow.viasocket.com/',
-        'https://viasocket.com/',
         'https://beta-flow.viasocket.com/',
         'https://dev-flow.viasocket.com/',
+        'https://viasocket.com/',
       ]),
     )
 
-    // With specific storeId
-    if (this.opts.storeId) {
+    const stores = [this.opts.storeId, undefined].filter((s, i, arr) => arr.indexOf(s) === i)
+
+    for (const storeId of stores) {
+      const storeOpts = storeId ? { storeId } : {}
+
+      // 1. Try specific candidate URLs and names
       for (const url of candidateUrls) {
         for (const name of candidateNames) {
-          const c = await chrome.cookies.get({ url, name, storeId: this.opts.storeId }).catch(() => null)
+          const c = await chrome.cookies.get({ url, name, ...storeOpts }).catch(() => null)
           const val = cleanToken(c?.value)
           if (val) return val
         }
       }
-    }
 
-    // Default store
-    for (const url of candidateUrls) {
-      for (const name of candidateNames) {
-        const c = await chrome.cookies.get({ url, name }).catch(() => null)
-        const val = cleanToken(c?.value)
-        if (val) return val
+      // 2. Try getAll by URL
+      for (const url of candidateUrls) {
+        try {
+          const byUrl = await chrome.cookies.getAll({ url, ...storeOpts }).catch(() => [])
+          for (const name of candidateNames) {
+            const c = byUrl.find((cookie) => cookie.name === name && cookie.value)
+            const val = cleanToken(c?.value)
+            if (val) return val
+          }
+          for (const c of byUrl) {
+            const val = cleanToken(c?.value)
+            if (val && isLikelyJwt(val)) return val
+          }
+        } catch {
+          // ignore
+        }
       }
-    }
 
-    // getAll by URL
-    for (const url of candidateUrls) {
+      // 3. Try getAll by domain viasocket.com
       try {
-        const byUrl = await chrome.cookies.getAll({ url }).catch(() => [])
+        const byDomain = await chrome.cookies.getAll({ domain: 'viasocket.com', ...storeOpts }).catch(() => [])
         for (const name of candidateNames) {
-          const c = byUrl.find((cookie) => cookie.name === name && cookie.value)
+          const c = byDomain.find((cookie) => cookie.name === name && cookie.value)
           const val = cleanToken(c?.value)
           if (val) return val
+        }
+        for (const c of byDomain) {
+          const val = cleanToken(c?.value)
+          if (val && isLikelyJwt(val)) return val
         }
       } catch {
         // ignore
       }
-    }
 
-    // getAll by domain viasocket.com
-    for (const domain of ['viasocket.com', '.viasocket.com']) {
+      // 4. Try getAll across entire store and filter by viasocket.com domain
       try {
-        const all = await chrome.cookies.getAll({ domain }).catch(() => [])
+        const all = await chrome.cookies.getAll(storeOpts).catch(() => [])
+        const vsCookies = all.filter((c) => c.domain && c.domain.toLowerCase().includes('viasocket.com'))
         for (const name of candidateNames) {
-          const c = all.find((cookie) => cookie.name === name && cookie.value)
+          const c = vsCookies.find((cookie) => cookie.name === name && cookie.value)
           const val = cleanToken(c?.value)
           if (val) return val
+        }
+        for (const c of vsCookies) {
+          const val = cleanToken(c?.value)
+          if (val && isLikelyJwt(val)) return val
         }
       } catch {
         // ignore
