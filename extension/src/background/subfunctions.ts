@@ -326,7 +326,15 @@ async function save(ctx: VsContext, req: Extract<SubfnRequest, { type: 'subfn:sa
   const flow = flowOf(ctx.vs.page)
   // Only the flow open in the sender tab, and only its open step.
   if (!flow || req.scriptId !== flow.scriptId) return { ok: false, error: 'Open the flow in this tab first' }
-  if (!STEP_ID_RE.test(req.stepId) || !isValidSlug(req.slugName)) return { ok: false, error: 'This step cannot be edited here' }
+  const isPreProcess =
+    req.stepId === 'CRON_PRE_PROCESS' ||
+    req.stepId === 'WEBHOOK_PRE_PROCESS' ||
+    req.slugName === 'CRON_PRE_PROCESS' ||
+    req.slugName === 'WEBHOOK_PRE_PROCESS'
+
+  if (!isPreProcess && (!STEP_ID_RE.test(req.stepId) || !isValidSlug(req.slugName))) {
+    return { ok: false, error: 'This step cannot be edited here' }
+  }
   if (typeof req.code !== 'string') return { ok: false, error: 'The step has no code' }
   const subfunctions = subfunctionsOf(req.subfunctions)
   if (typeof subfunctions === 'string') return { ok: false, error: subfunctions }
@@ -339,6 +347,48 @@ async function save(ctx: VsContext, req: Extract<SubfnRequest, { type: 'subfn:sa
   let stepRow: Record<string, unknown> | undefined
   await vs.mutate(flow.scriptId, async () => {
     await vs.alignOrg(ctx.signal, { force: true })
+    if (isPreProcess) {
+      const flowData = await getFlow(ctx, flow)
+      const trigger = flowData.json_script.trigger
+      if (!trigger) throw new Error('This flow has no trigger')
+      const existingPre = asRecord(trigger.preProcess)
+      const dynamicVariables = shownVars ?? asRecord(existingPre.dynamicVariables)
+      const preProcessBody: Record<string, unknown> = {
+        ...existingPre,
+        type: 'function',
+        code: req.code,
+        title: req.slugName,
+        stepId: req.stepId,
+        steps: '2',
+        subfunctions,
+        ...(Object.keys(dynamicVariables).length ? { dynamicVariables } : {}),
+      }
+      const res = await vs.request({
+        method: 'POST',
+        path: `/scripts/${flow.projectId}/${flow.scriptId}/trigger/preprocess`,
+        body: { preProcess: preProcessBody },
+        live: true,
+        signal: ctx.signal,
+      })
+      const root = asRecord(res)
+      const script = asRecord(root.script || root.data)
+      flowJson = isRecord(script.json_script) ? (script.json_script as Record<string, unknown>) : undefined
+      stepRow = {
+        id: req.stepId,
+        script_id: flow.scriptId,
+        title: req.slugName,
+        type: 'function',
+        code: req.code,
+        subfunctions,
+        metadata: {
+          drafted: {
+            dynamicVariables,
+          },
+        },
+      }
+      return
+    }
+
     const blocks = (await getFlow(ctx, flow)).json_script.blocks
     const block = blocks[req.slugName]
     if (!block || block.type !== 'function') throw new Error(`"${req.slugName}" is not a JS code step in this flow`)

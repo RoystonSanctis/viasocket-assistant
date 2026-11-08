@@ -206,6 +206,12 @@ function install(): void {
       // RTLayer handler: setFlowAndDraftFlowJson), so a step saved for the first time is no longer DRAFTED here.
       if (flowJson && openFlow) store.dispatch({ type: 'flowJsonV2/setFlowAndDraftFlowJson', payload: flowJson })
 
+      const isPreProcess =
+        slugName === 'CRON_PRE_PROCESS' ||
+        stepId === 'CRON_PRE_PROCESS' ||
+        slugName === 'WEBHOOK_PRE_PROCESS' ||
+        stepId === 'WEBHOOK_PRE_PROCESS'
+
       // The saved step, stored the way the editor stores a fetched step (resetButtonForSlider: setFunctionJsonThunkV3
       // then setKeyValueInstance). Dropping the step data instead is not enough for a step that was never loaded
       // from the server (a new one): MasterSliderComponent refetches only when dataFromBackend changes, which such a
@@ -219,6 +225,21 @@ function install(): void {
         stepRow.script_id === scriptId &&
         new URLSearchParams(location.search).get('stepId') === stepId
       ) {
+        if (isPreProcess) {
+          store.dispatch({
+            type: 'stepsDataV3/setFunctionJson/fulfilled',
+            payload: {
+              data: stepRow,
+              draftdecription: '',
+              publisheddecription: '',
+              aistep: false,
+              subfunctions: stepRow.subfunctions,
+            },
+          })
+          store.dispatch({ type: 'stepsDataV3/setKeyValueInstance', payload: { title: slugName, hasUnsavedCode: false } })
+          return
+        }
+
         const flowState = isObj(state.flowJsonV2) ? (store.getState().flowJsonV2 as Record<string, unknown>)[scriptId as string] : undefined
         const blockOf = (key: 'flowJson' | 'publishedFlowJson'): Record<string, unknown> => {
           const json = isObj(flowState) ? flowState[key] : undefined
@@ -310,12 +331,40 @@ function install(): void {
       let slugName = msg.slugName || params.get('slugName') || ''
       let stepId = msg.stepId || params.get('stepId') || ''
       if (!slugName && stepId) slugName = Object.keys(blocks).find((k) => obj(blocks[k]).identifier === stepId) ?? ''
-      const block = obj(blocks[slugName])
-      if (!stepId && typeof block.identifier === 'string') stepId = block.identifier
-      if (!slugName || !stepId || TRIGGER_SLUGS.has(slugName) || block.type !== 'function') return null
 
-      const draft = obj(obj(obj(obj(state.stepsDataV3)[scriptId])[stepId]).draft)
-      if (typeof draft.code !== 'string') return null
+      const isPreProcess =
+        slugName === 'CRON_PRE_PROCESS' ||
+        stepId === 'CRON_PRE_PROCESS' ||
+        slugName === 'WEBHOOK_PRE_PROCESS' ||
+        stepId === 'WEBHOOK_PRE_PROCESS'
+
+      let block: Record<string, unknown>
+      let stepType = 'function'
+      let draft: Record<string, unknown>
+
+      if (isPreProcess) {
+        slugName = slugName || stepId || 'CRON_PRE_PROCESS'
+        stepId = stepId || slugName || 'CRON_PRE_PROCESS'
+        const preProcess = obj(obj(flowJson.trigger).preProcess)
+        stepType = params.get('stepType') || (typeof preProcess.type === 'string' ? preProcess.type : '') || 'function'
+        if (stepType !== 'function') return null
+        draft = obj(obj(obj(obj(state.stepsDataV3)[scriptId])[stepId]).draft)
+        const code = typeof draft.code === 'string' ? draft.code : typeof preProcess.code === 'string' ? preProcess.code : null
+        if (typeof code !== 'string') return null
+        block = {
+          type: 'function',
+          identifier: stepId,
+          code,
+          subfunctions: Array.isArray(draft.subfunctions) ? draft.subfunctions : Array.isArray(preProcess.subfunctions) ? preProcess.subfunctions : [],
+          dynamicVariables: isObj(draft.dynamicVariables) ? draft.dynamicVariables : isObj(preProcess.dynamicVariables) ? preProcess.dynamicVariables : undefined,
+        }
+      } else {
+        block = obj(blocks[slugName])
+        if (!stepId && typeof block.identifier === 'string') stepId = block.identifier
+        if (!slugName || !stepId || TRIGGER_SLUGS.has(slugName) || block.type !== 'function') return null
+        draft = obj(obj(obj(obj(state.stepsDataV3)[scriptId])[stepId]).draft)
+        if (typeof draft.code !== 'string') return null
+      }
 
       const otherSubfunctions: StepContextData['otherSubfunctions'] = []
       for (const [slug, raw] of Object.entries(blocks)) {
@@ -331,14 +380,19 @@ function install(): void {
       const variables: string[] = []
       const sample = obj(obj(flowJson.trigger).sampleData)
       for (const k of Object.keys(isObj(sample.body) ? sample.body : sample)) variables.push(`context.req.body.${k}`)
-      const order = Array.isArray(flowState.stepOrder) ? flowState.stepOrder.filter((k): k is string => typeof k === 'string') : []
-      const here = order.indexOf(slugName)
-      const earlier = here >= 0 ? order.slice(0, here) : Object.keys(blocks).filter((k) => k !== slugName)
-      for (const slug of earlier) {
-        const b = obj(blocks[slug])
-        if (b.status === 'DELETE' || b.status === 'DRAFTED') continue
-        if (b.type === 'function' || b.type === 'api' || b.type === 'plugin') variables.push(`context.res.${slug}`)
-        else if (b.type === 'variable') variables.push(`context.vals.${slug}`)
+      for (const k of Object.keys(isObj(sample.query) ? sample.query : {})) variables.push(`context.req.query.${k}`)
+      for (const k of Object.keys(isObj(sample.headers) ? sample.headers : {})) variables.push(`context.req.headers.${k}`)
+
+      if (!isPreProcess) {
+        const order = Array.isArray(flowState.stepOrder) ? flowState.stepOrder.filter((k): k is string => typeof k === 'string') : []
+        const here = order.indexOf(slugName)
+        const earlier = here >= 0 ? order.slice(0, here) : Object.keys(blocks).filter((k) => k !== slugName)
+        for (const slug of earlier) {
+          const b = obj(blocks[slug])
+          if (b.status === 'DELETE' || b.status === 'DRAFTED') continue
+          if (b.type === 'function' || b.type === 'api' || b.type === 'plugin') variables.push(`context.res.${slug}`)
+          else if (b.type === 'variable') variables.push(`context.vals.${slug}`)
+        }
       }
 
       const connectedApps: StepContextData['connectedApps'] = []
@@ -356,13 +410,17 @@ function install(): void {
         stepId,
         slugName,
         stepType: 'function',
-        code: draft.code,
+        code: typeof draft.code === 'string' ? draft.code : (block.code as string),
         subfunctions: subfunctions.filter(isObj).map((sf) => ({
           name: String(sf.name ?? ''),
           actionId: String(sf.actionId ?? ''),
           authId: String(sf.authId ?? ''),
         })),
-        dynamicVariables: isObj(draft.dynamicVariables) ? (draft.dynamicVariables as Record<string, string>) : undefined,
+        dynamicVariables: isObj(draft.dynamicVariables)
+          ? (draft.dynamicVariables as Record<string, string>)
+          : isObj(block.dynamicVariables)
+            ? (block.dynamicVariables as Record<string, string>)
+            : undefined,
         otherSubfunctions,
         connectedApps,
         variables,
