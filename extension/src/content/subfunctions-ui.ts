@@ -350,7 +350,7 @@ export function initSubfunctionsUI(bridge: PageBridge): SubfunctionsUIController
     )
     const chips = el('div', 'vs-sf-chips')
     if (ctx.subfunctions.length === 0) {
-      chips.append(el('div', 'vs-sf-muted', 'Call an app action (send a Slack message, add a sheet row, …) from this code: pick the app, action, connection and inputs, and the call is written for you.'))
+      chips.append(el('div', 'vs-sf-muted', 'Call an app action'))
     }
     ctx.subfunctions.forEach((sub, i) => chips.append(chip(ctx, sub, calls[i] ?? 0)))
     bar.replaceChildren(header, chips)
