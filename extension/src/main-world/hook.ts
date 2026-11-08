@@ -21,7 +21,7 @@ import {
   type StepContextData,
 } from '../shared/messages'
 import type { ObservedEvent } from '../shared/observed'
-import { resolveEnv, SUPPORTED_APP_HOSTS } from '../background/tools/env'
+import { resolveEnv } from '../background/tools/env'
 import { editorAction } from './editors'
 import {
   classify, dryRunFailed, isObj, isPageMutation, MAX_PARSE_CHARS, outcomeInBody, parseCapped, shortErrorText, SLUG_MAX,

@@ -1,7 +1,7 @@
 // Voice section: speech engine, on-device model and language, model download, spoken replies,
 // and a pointer to Chrome's own keyboard shortcut.
 
-import { SUPPORTED_APP_HOSTS } from '../background/tools/env'
+import { BROWSER_SPEECH_HOSTS } from '../background/tools/env'
 import type { FromOffscreen } from '../shared/messages'
 import type { AudioOutputMode, ChatToggleShortcut } from '../shared/settings'
 import { byId, checkedValue, errorMessage, h, openBrowserPage, radios, setChecked, setStatus } from './dom'
@@ -67,7 +67,7 @@ export function initVoice(): void {
   }
   download.addEventListener('click', () => void onDownload())
   shortcutOpen.addEventListener('click', () => openBrowserPage('chrome://extensions/shortcuts'))
-  for (const host of SUPPORTED_APP_HOSTS) {
+  for (const host of BROWSER_SPEECH_HOSTS) {
     const button = h('button', { type: 'button', class: 'button' }, `Open settings for ${host}`)
     button.addEventListener('click', () =>
       openBrowserPage(`chrome://settings/content/siteDetails?site=${encodeURIComponent(`https://${host}`)}`),

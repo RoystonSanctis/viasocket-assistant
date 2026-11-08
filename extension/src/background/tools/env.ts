@@ -56,3 +56,10 @@ export function resolveEnv(host: string): ViaSocketEnv | null {
 }
 
 export const SUPPORTED_APP_HOSTS = Object.keys(HOSTS)
+
+/**
+ * Hosts shown in browser speech audio settings.
+ * Only flow.viasocket.com and beta-flow.viasocket.com are shown; dev and embed hosts are omitted
+ * (embed iframes use Whisper for audio due to iframe permissions policy).
+ */
+export const BROWSER_SPEECH_HOSTS = ['flow.viasocket.com', 'beta-flow.viasocket.com'] as const

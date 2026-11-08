@@ -122,9 +122,7 @@ export class VoiceRow {
             this.switchBtn.hidden = false
             this.switchBtn.className = 'btn primary small'
             this.switchBtn.textContent = 'Switch to Whisper'
-            this.settingsBtn.hidden = false
-            this.settingsBtn.className = 'btn small'
-            this.settingsBtn.textContent = 'Open settings'
+            this.settingsBtn.hidden = true
           } else if (isPromptFailed) {
             text =
               extra ||
