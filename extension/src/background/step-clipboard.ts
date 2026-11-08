@@ -80,8 +80,8 @@ export async function getClientForSender(
   return new ViaSocketClient(env, page, {
     storeId,
     incognito: tab?.incognito,
-    tabId: env.embed ? tabId : undefined,
-    frameId: env.embed ? sender.frameId : undefined,
+    tabId,
+    frameId: sender.frameId,
   })
 }
 

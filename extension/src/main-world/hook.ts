@@ -346,11 +346,17 @@ function install(): void {
         slugName = slugName || stepId || 'CRON_PRE_PROCESS'
         stepId = stepId || slugName || 'CRON_PRE_PROCESS'
         const preProcess = obj(obj(flowJson.trigger).preProcess)
-        stepType = params.get('stepType') || (typeof preProcess.type === 'string' ? preProcess.type : '') || 'function'
+        const rawType = params.get('stepType') || (typeof preProcess.type === 'string' ? preProcess.type : '') || 'function'
+        stepType = rawType.toLowerCase().startsWith('func') ? 'function' : rawType
         if (stepType !== 'function') return null
-        draft = obj(obj(obj(obj(state.stepsDataV3)[scriptId])[stepId]).draft)
-        const code = typeof draft.code === 'string' ? draft.code : typeof preProcess.code === 'string' ? preProcess.code : null
-        if (typeof code !== 'string') return null
+        const stepEntry = obj(obj(state.stepsDataV3)[scriptId])[stepId]
+        draft = obj(isObj(stepEntry) ? stepEntry.draft || stepEntry : {})
+        const code =
+          typeof draft.code === 'string'
+            ? draft.code
+            : typeof preProcess.code === 'string'
+              ? preProcess.code
+              : ''
         block = {
           type: 'function',
           identifier: stepId,

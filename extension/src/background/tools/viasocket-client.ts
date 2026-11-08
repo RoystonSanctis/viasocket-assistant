@@ -88,13 +88,83 @@ export class ViaSocketClient {
       return token
     }
 
-    const c = await chrome.cookies.get({
-      url: this.env.cookieUrl,
-      name: this.env.cookieName,
-      ...(this.opts.storeId ? { storeId: this.opts.storeId } : {}),
-    })
-    if (!c?.value) throw new VsError('You are signed out of viaSocket. Sign in and try again.', 'logged-out')
-    return decodeURIComponent(c.value)
+    // In non-embed mode, try cookie discovery first (across candidate names, stores, and origins),
+    // and fall back to querying the page storage directly via scripting if tabId is available.
+    const candidateNames = Array.from(new Set([this.env.cookieName, 'proxy_auth_token', 'prod', 'testing']))
+    const candidateUrls = Array.from(new Set([this.env.cookieUrl, 'https://flow.viasocket.com/', 'https://viasocket.com/']))
+
+    // 1. Try chrome.cookies.get with the specific storeId (if provided)
+    if (this.opts.storeId) {
+      for (const url of candidateUrls) {
+        for (const name of candidateNames) {
+          const c = await chrome.cookies.get({ url, name, storeId: this.opts.storeId }).catch(() => null)
+          if (c?.value) return decodeURIComponent(c.value)
+        }
+      }
+    }
+
+    // 2. Try chrome.cookies.get in the default store (without storeId)
+    for (const url of candidateUrls) {
+      for (const name of candidateNames) {
+        const c = await chrome.cookies.get({ url, name }).catch(() => null)
+        if (c?.value) return decodeURIComponent(c.value)
+      }
+    }
+
+    // 3. Try chrome.cookies.getAll on viasocket.com domain
+    try {
+      const all = await chrome.cookies.getAll({ domain: 'viasocket.com' })
+      for (const name of candidateNames) {
+        const c = all.find((cookie) => cookie.name === name && cookie.value)
+        if (c?.value) return decodeURIComponent(c.value)
+      }
+    } catch {
+      // ignore
+    }
+
+    // 4. Fall back to reading token from the page via chrome.scripting (handles SSO, localStorage, and partitioned cookies)
+    const tabId = this.opts.tabId
+    if (tabId) {
+      const target =
+        this.opts.frameId !== undefined ? { tabId, frameIds: [this.opts.frameId] } : { tabId }
+      const readStorage = () => {
+        try {
+          const local = localStorage.getItem('proxy_auth_token')
+          if (local) return local
+          const sso = sessionStorage.getItem('ssoEmbedToken') || sessionStorage.getItem('proxy_auth_token')
+          if (sso) return sso
+          const pairs = (document.cookie || '').split(';').map((s) => s.trim().split('='))
+          for (const [k, v] of pairs) {
+            if (k && ['prod', 'testing', 'proxy_auth_token'].includes(k) && v) return decodeURIComponent(v)
+          }
+        } catch {
+          return null
+        }
+        return null
+      }
+
+      const results = await chrome.scripting
+        .executeScript({
+          target,
+          world: 'MAIN',
+          func: readStorage,
+        })
+        .catch(() => null)
+      let token = results?.map((r) => r.result).find((t): t is string => typeof t === 'string' && t.length > 0)
+      if (!token && this.opts.frameId !== undefined) {
+        const fallbackResults = await chrome.scripting
+          .executeScript({
+            target: { tabId, allFrames: true },
+            world: 'MAIN',
+            func: readStorage,
+          })
+          .catch(() => null)
+        token = fallbackResults?.map((r) => r.result).find((t): t is string => typeof t === 'string' && t.length > 0)
+      }
+      if (token) return token
+    }
+
+    throw new VsError('You are signed out of viaSocket. Sign in and try again.', 'logged-out')
   }
 
   async request<T = any>(req: VsRequest): Promise<T> {
