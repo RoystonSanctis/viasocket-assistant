@@ -72,7 +72,7 @@ export interface FlowExportFile {
 
 export type FlowTransferRequest =
   | { target: 'background'; type: 'flow:export'; scriptId: string; projectId: string; orgId?: string; host: string }
-  | { target: 'background'; type: 'flow:import'; json: string; projectId: string; orgId?: string; host: string }
+  | { target: 'background'; type: 'flow:import'; json: string; projectId: string; scriptId?: string; orgId?: string; host: string }
 
 export type FlowTransferResponse<T = unknown> = { ok: true; data: T } | { ok: false; error: string }
 

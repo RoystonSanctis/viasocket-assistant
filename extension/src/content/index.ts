@@ -680,7 +680,7 @@ async function main(): Promise<void> {
   // The step menu bumps the editor's ?timestamp after a paste, which must ride the MAIN-world history hook
   // (react-router only sees navigations made there).
   const stepMenu = initStepMenu({ navigate: (url, replace) => bridge.navigate(url, replace) })
-  const flowMenu = initFlowMenu()
+  const flowMenu = initFlowMenu({ navigate: (url, replace) => bridge.navigate(url, replace) })
   const subfunctionsUI = initSubfunctionsUI(bridge)
   const beautify = initBeautify(bridge)
 

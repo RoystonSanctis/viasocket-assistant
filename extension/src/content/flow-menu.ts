@@ -26,7 +26,18 @@ export interface FlowMenuController {
   destroy(): void
 }
 
-export function initFlowMenu(): FlowMenuController {
+export interface FlowMenuOptions {
+  /**
+   * Replace-navigates the editor through the MAIN-world history hook (react-router compatible).
+   * Used to bump ?timestamp after an import so the editor refetches the replaced flow.
+   */
+  navigate?: (url: string, replace: boolean) => boolean
+}
+
+let menuOpts: FlowMenuOptions = {}
+
+export function initFlowMenu(opts: FlowMenuOptions = {}): FlowMenuController {
+  menuOpts = opts
   /**
    * The open flow menu, or null when the open menu (if any) is something else. The menu id is shared with the
    * avatar and workspace menus, so the discriminator is the flow trigger's own expanded state.
@@ -143,21 +154,37 @@ async function exportFlow(): Promise<void> {
 
 /** Hands the export JSON to the browser as a file download; the data never leaves the page. */
 function downloadJson(fileName: string, json: string): void {
-  const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName
-  a.style.display = 'none'
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  // The click has handed the blob to the download; the object URL itself can go on the next turn.
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  try {
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    a.style.display = 'none'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    // The click has handed the blob to the download; the object URL itself can go on the next turn.
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+  } catch {
+    try {
+      const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(json)
+      const a = document.createElement('a')
+      a.href = dataUri
+      a.download = fileName
+      a.target = '_blank'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    } catch (e2) {
+      console.error('[flow-menu] downloadJson failed:', e2)
+    }
+  }
 }
 
 // ---------- import ----------
 
-/** An import is many serial API calls; a second one started meanwhile would create a second flow. */
+/** An import is many serial API calls; a second one started meanwhile would corrupt the flow. */
 let importBusy = false
 
 function pickImportFile(): void {
@@ -208,8 +235,8 @@ async function importFlow(file: File): Promise<void> {
     return
   }
   const page = parsePage(window.location.href)
-  if (page.kind !== 'flow-editor' || !page.projectId) {
-    showToast({ title: 'Import failed', message: 'Open a flow in the destination project first.', type: 'error' })
+  if (page.kind !== 'flow-editor' || !page.projectId || !page.scriptId) {
+    showToast({ title: 'Import failed', message: 'Open the flow you want to import into first.', type: 'error' })
     return
   }
   let json: string
@@ -225,6 +252,7 @@ async function importFlow(file: File): Promise<void> {
     target: 'background',
     type: 'flow:import',
     json,
+    scriptId: page.scriptId,
     projectId: page.projectId,
     orgId: page.orgId,
     host: window.location.host,
@@ -236,18 +264,29 @@ async function importFlow(file: File): Promise<void> {
       const warnings = (res.data.warnings ?? []).join(' ')
       showToast({
         title: 'Flow imported',
-        message: warnings ? `"${res.data.title}" created. ${warnings}` : `"${res.data.title}" created — opening it…`,
+        message: warnings
+          ? `Flow replaced successfully. ${warnings}`
+          : `Flow replaced successfully. Refreshing flow…`,
         type: 'success',
-        durationMs: 6000,
+        durationMs: 4000,
       })
-      // Leave the toast on screen for a beat, then move to the new flow on this origin.
+
+      // Refresh the existing flow in-place so the canvas shows the newly imported flow
       window.setTimeout(() => {
         try {
-          window.location.assign(new URL(res.data.path, window.location.origin).toString())
-        } catch {
-          // Malformed path in the response: stay here, the flow itself was created.
-        }
-      }, 1200)
+          if (menuOpts.navigate) {
+            const u = new URL(window.location.href)
+            u.searchParams.delete('slugName')
+            u.searchParams.delete('stepId')
+            const prev = Number(u.searchParams.get('timestamp'))
+            const stamp = Number.isFinite(prev) && prev >= Date.now() ? prev + 1 : Date.now()
+            u.searchParams.set('timestamp', String(stamp))
+            menuOpts.navigate(u.pathname + u.search + u.hash, true)
+          }
+        } catch {}
+        // Reload page/iframe to completely refetch and display the replaced flow
+        window.location.reload()
+      }, 1000)
     } else {
       showToast({ title: 'Import failed', message: (res && !res.ok && res.error) || 'No response from the extension', type: 'error' })
     }

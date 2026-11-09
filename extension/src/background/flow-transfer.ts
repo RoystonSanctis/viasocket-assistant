@@ -218,6 +218,69 @@ interface ImportCtx {
 /** Thrown when a malformed file would drive more creates than MAX_IMPORT_BLOCKS; never turned into a warning. */
 class ImportLimitError extends Error {}
 
+/**
+ * Deletes all existing non-deleted steps in an existing flow prior to importing a new flow,
+ * so the imported flow cleanly replaces the existing one.
+ */
+async function clearExistingFlowSteps(
+  client: ViaSocketClient,
+  projectId: string,
+  scriptId: string,
+): Promise<void> {
+  let flowRes: unknown
+  try {
+    flowRes = await client.request({
+      method: 'GET',
+      path: `/projects/${projectId}/scripts/${scriptId}`,
+      query: { type: 'flow' },
+    })
+  } catch (e) {
+    console.warn(`[flow-transfer] Could not read existing flow ${scriptId} to clear steps:`, e)
+    return
+  }
+
+  const row = normalizeFlow(asRecord(flowRes).data)
+  if (!row) return
+  const js = row.json_script
+  if (!js || !js.blocks || !js.order) return
+
+  const rootSlugs = [...(js.order.root ?? [])]
+  for (const slug of rootSlugs) {
+    if (slug === 'response') continue
+    const block = js.blocks[slug]
+    if (!block || block.status === 'DELETE') continue
+
+    if (block.type === 'ifGroup') {
+      const branches = js.order[slug] ?? []
+      for (const branch of branches) {
+        const branchBlock = js.blocks[branch]
+        if (!branchBlock || branchBlock.status === 'DELETE' || branchBlock.isElseBlock) continue
+        try {
+          await client.request({
+            method: 'DELETE',
+            path: `/scripts/${scriptId}/stepv2/${encodeURIComponent(branch)}`,
+            body: { title: `${branch}_DELETED` },
+            live: false,
+          })
+        } catch (e) {
+          console.warn(`[flow-transfer] Failed to delete condition branch "${branch}":`, e)
+        }
+      }
+    } else {
+      try {
+        await client.request({
+          method: 'DELETE',
+          path: `/scripts/${scriptId}/stepv2/${encodeURIComponent(slug)}`,
+          body: { title: `${slug}_DELETED` },
+          live: false,
+        })
+      } catch (e) {
+        console.warn(`[flow-transfer] Failed to delete step "${slug}":`, e)
+      }
+    }
+  }
+}
+
 async function importFlow(
   req: Extract<FlowTransferRequest, { type: 'flow:import' }>,
   sender: chrome.runtime.MessageSender,
@@ -240,7 +303,12 @@ async function importFlow(
     throw new Error(`The export has more than ${MAX_IMPORT_BLOCKS} steps; this importer refuses it`)
   }
 
-  const client = await getClientForSender(sender, { projectId: req.projectId, orgId: req.orgId, host: req.host })
+  const client = await getClientForSender(sender, {
+    scriptId: req.scriptId,
+    projectId: req.projectId,
+    orgId: req.orgId,
+    host: req.host,
+  })
   if (!client) throw new Error('Could not connect to viaSocket for this page')
   const orgId = client.orgId && ORG_ID_RE.test(client.orgId) ? client.orgId : (req.orgId ?? '')
   if (!ORG_ID_RE.test(orgId)) throw new Error('Open a viaSocket workspace page first')
@@ -252,25 +320,58 @@ async function importFlow(
   // The flow-create route runs in the token's cached org, so align it to the page's org right before creating.
   await client.alignOrg(undefined, { force: true })
 
-  // Email triggers address the flow as <id>@..., and that address is lowercased - so the id must be too.
-  const identifier = newScriptId(triggerType === 'email')
+  // If a scriptId was provided (existing flow open in the editor), replace that flow!
+  // Otherwise, fallback to creating a new flow.
+  const isReplacingExisting = Boolean(req.scriptId && SCRIPT_ID_RE.test(req.scriptId))
+  const targetScriptId = isReplacingExisting ? req.scriptId! : newScriptId(triggerType === 'email')
 
-  return client.mutate(identifier, async () => {
-    const createBody: Record<string, unknown> = { identifier, title: file.flow.title }
-    if (file.flow.description?.trim()) createBody.description = file.flow.description.trim()
-    const createRes = await client.request({
-      method: 'POST',
-      path: `/projects/${projectId}/scripts`,
-      body: createBody,
-      live: false,
-    })
-    const returnedId = str(asRecord(asRecord(createRes).data).id)
-    const scriptId = returnedId && SCRIPT_ID_RE.test(returnedId) ? returnedId : identifier
+  return client.mutate(targetScriptId, async () => {
+    let scriptId = targetScriptId
+
+    if (isReplacingExisting) {
+      // 1. Update title and description if provided
+      if (file.flow.title) {
+        try {
+          const updateBody: Record<string, unknown> = { title: file.flow.title }
+          if (file.flow.description?.trim()) updateBody.description = file.flow.description.trim()
+          await client.request({
+            method: 'PUT',
+            path: `/projects/${projectId}/scripts/${scriptId}`,
+            body: updateBody,
+            live: false,
+          })
+        } catch (e) {
+          console.warn('[flow-transfer] Could not update flow title/description:', e)
+        }
+      }
+
+      // 2. Clear existing steps in the flow so the imported flow cleanly replaces it
+      await clearExistingFlowSteps(client, projectId, scriptId)
+    } else {
+      const createBody: Record<string, unknown> = { identifier: targetScriptId, title: file.flow.title }
+      if (file.flow.description?.trim()) createBody.description = file.flow.description.trim()
+      const createRes = await client.request({
+        method: 'POST',
+        path: `/projects/${projectId}/scripts`,
+        body: createBody,
+        live: false,
+      })
+      const returnedId = str(asRecord(asRecord(createRes).data).id)
+      scriptId = returnedId && SCRIPT_ID_RE.test(returnedId) ? returnedId : targetScriptId
+    }
 
     const ictx: ImportCtx = {
-      client, orgId, projectId, scriptId, blocks, order,
+      client,
+      orgId,
+      projectId,
+      scriptId,
+      blocks,
+      order,
       functions: file.flow.functions as Record<string, ExportedFunction>,
-      warnings: [], drafted: [], visited: new Set(), created: 0,
+      warnings: [],
+      drafted: [],
+      visited: new Set(),
+      created: 0,
     }
     if (trigger && triggerType) await importTrigger(ictx, trigger, triggerType)
     await importChildren(ictx, 'root', 'root', 0)
