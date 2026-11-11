@@ -152,8 +152,16 @@ The extension downloads prompts, selectors, providers, mascot wording, flags, to
 
 See [PRIVACY.md](PRIVACY.md) for what data goes where.
 
+## Acknowledgements & Third-Party Notices
+
+This project incorporates and adapts code from open-source libraries:
+- **Mascot Companion & Animation**: The interactive on-canvas companion incorporates procedural avatar styling, eye tracking, and animation techniques adapted from the open-source Strobi mascot engine, licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](../LICENSE).
+- **Transformers.js**: Speech-to-text pipeline powered by [@huggingface/transformers](https://github.com/huggingface/transformers.js) (Apache-2.0).
+- **js-beautify**: Code formatting powered by [js-beautify](https://github.com/beautifier/js-beautify) (MIT).
+- **Zod**: Schema validation powered by [zod](https://github.com/colinhacks/zod) (MIT).
+
 ## License
 
-AGPL-3.0-or-later. Add the full license text as `LICENSE` (from <https://www.gnu.org/licenses/agpl-3.0.txt>) before publishing.
+viaSocket Assistant is free software licensed under the **GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)**. See [LICENSE](../LICENSE) for the full license text.
 
 viaSocket Assistant is a community, open-source assistant for viaSocket.

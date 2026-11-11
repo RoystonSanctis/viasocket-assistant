@@ -115,6 +115,14 @@ Bump `configVersion` in `config/manifest.json` with every change, then push to `
 
 The current config needs extension 0.2.0 or newer (`minExtensionVersion`), because its prompts and tool switches use the 0.2.0 Developer Hub tools. Older installs skip it and keep the config they already have until they update. Raise `minExtensionVersion` whenever a config change depends on a newer extension.
 
+## Acknowledgements & Third-Party Notices
+
+This project incorporates and adapts code from open-source libraries:
+- **Mascot Companion & Animation**: The interactive on-canvas companion (SOCKET) incorporates procedural avatar styling, eye tracking, and animation techniques inspired by and adapted from the open-source Strobi mascot engine, licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](LICENSE).
+- **Transformers.js**: Speech-to-text pipeline powered by [@huggingface/transformers](https://github.com/huggingface/transformers.js), licensed under Apache-2.0.
+- **js-beautify**: Code formatting powered by [js-beautify](https://github.com/beautifier/js-beautify), licensed under the MIT License.
+- **Zod**: Schema validation powered by [zod](https://github.com/colinhacks/zod), licensed under the MIT License.
+
 ## License
 
-AGPL-3.0-or-later. See [LICENSE](LICENSE).
+viaSocket Assistant is free software licensed under the **GNU Affero General Public License v3.0 or later (AGPL-3.0-or-later)**. See [LICENSE](LICENSE) for the full license text.
