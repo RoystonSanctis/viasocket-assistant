@@ -155,7 +155,7 @@ See [PRIVACY.md](PRIVACY.md) for what data goes where.
 ## Acknowledgements & Third-Party Notices
 
 This project incorporates and adapts code from open-source libraries:
-- **Mascot Companion & Animation**: The interactive on-canvas companion incorporates procedural avatar styling, eye tracking, and animation techniques adapted from the open-source Strobi mascot engine, licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](../LICENSE).
+- **Mascot Companion & Animation**: The interactive on-canvas companion incorporates procedural avatar styling, eye tracking, and animation techniques adapted from [Bible Strong Avatar Lab](https://github.com/smontlouis/bible-strong-avatar-lab) by [Stéphane Montlouis-Calixte](https://github.com/smontlouis) ([@_smontlouis](https://x.com/_smontlouis)), licensed under the [GNU Affero General Public License v3.0 (AGPL-3.0)](../LICENSE).
 - **Transformers.js**: Speech-to-text pipeline powered by [@huggingface/transformers](https://github.com/huggingface/transformers.js) (Apache-2.0).
 - **js-beautify**: Code formatting powered by [js-beautify](https://github.com/beautifier/js-beautify) (MIT).
 - **Zod**: Schema validation powered by [zod](https://github.com/colinhacks/zod) (MIT).
