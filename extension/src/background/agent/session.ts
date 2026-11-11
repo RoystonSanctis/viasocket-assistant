@@ -26,11 +26,33 @@ function cleanDomStatus(v: unknown): DomPageStatus | null {
   for (const [k, val] of Object.entries(asRecord(v.selectedFields)).slice(0, DOM_FIELDS_MAX)) {
     if (typeof val === 'string') fields[truncate(k, 80)] = truncate(val, 200)
   }
+  const mappings: Record<string, string> = {}
+  for (const [k, val] of Object.entries(asRecord(v.draftMappings)).slice(0, DOM_FIELDS_MAX)) {
+    if (typeof val === 'string') mappings[truncate(k, 80)] = truncate(val, 200)
+  }
+  const errors: Record<string, string> = {}
+  for (const [k, val] of Object.entries(asRecord(v.fieldErrors)).slice(0, DOM_FIELDS_MAX)) {
+    if (typeof val === 'string') errors[truncate(k, 80)] = truncate(val, 200)
+  }
+  const emptyReq = Array.isArray(v.emptyRequiredFields)
+    ? v.emptyRequiredFields.filter((x): x is string => typeof x === 'string' && Boolean(x.trim())).slice(0, DOM_FIELDS_MAX).map((x) => truncate(x, 80))
+    : undefined
+  const sliderErrors = Array.isArray(v.sliderErrors)
+    ? v.sliderErrors.filter((x): x is string => typeof x === 'string' && Boolean(x.trim())).slice(0, 5).map((x) => truncate(x, 200))
+    : undefined
+
   return {
     panelOpen: v.panelOpen === true,
     stepTitle: text(v.stepTitle, 120),
+    actionTitle: text(v.actionTitle, 120),
+    serviceTitle: text(v.serviceTitle, 120),
     connection: text(v.connection, 120),
+    authId: text(v.authId, 64),
     selectedFields: (maskVariables(fields) ?? {}) as Record<string, string>,
+    draftMappings: Object.keys(mappings).length ? (maskVariables(mappings) ?? {}) as Record<string, string> : undefined,
+    fieldErrors: Object.keys(errors).length ? errors : undefined,
+    emptyRequiredFields: emptyReq && emptyReq.length ? emptyReq : undefined,
+    sliderErrors: sliderErrors && sliderErrors.length ? sliderErrors : undefined,
     hasUnsavedChanges: v.hasUnsavedChanges === true,
     testedInUi: v.testedInUi === true,
     hasSampleResponse: v.hasSampleResponse === true,
@@ -259,7 +281,21 @@ export class Session {
   }
 
   setDomStatus(raw: unknown): void {
-    this.domStatus = cleanDomStatus(raw)
+    const prev = this.domStatus
+    const next = cleanDomStatus(raw)
+    this.domStatus = next
+
+    // When newly discovered validation errors appear in the open panel, alert the user via mascot
+    if (!this.busy && next?.panelOpen && next.fieldErrors && Object.keys(next.fieldErrors).length > 0) {
+      const prevErrors = prev?.fieldErrors ?? {}
+      const newKeys = Object.keys(next.fieldErrors).filter((k) => !prevErrors[k])
+      if (newKeys.length > 0 && newKeys[0]) {
+        const firstKey = newKeys[0]
+        const errMsg = next.fieldErrors[firstKey]
+        this.ui.mascot('confused', `"${firstKey}": ${errMsg}`)
+        this.settleMascot(4000)
+      }
+    }
   }
 
   resolveDomStatus(requestId: string, raw: unknown): void {

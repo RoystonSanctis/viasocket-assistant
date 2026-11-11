@@ -35,8 +35,15 @@ export type ContentToBackground =
 export interface DomPageStatus {
   panelOpen: boolean
   stepTitle?: string
+  actionTitle?: string
+  serviceTitle?: string
   connection?: string
+  authId?: string
   selectedFields: Record<string, string>
+  draftMappings?: Record<string, string>
+  fieldErrors?: Record<string, string>
+  emptyRequiredFields?: string[]
+  sliderErrors?: string[]
   hasUnsavedChanges: boolean
   testedInUi: boolean
   hasSampleResponse: boolean

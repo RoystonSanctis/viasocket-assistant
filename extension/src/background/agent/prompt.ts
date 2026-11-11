@@ -143,14 +143,16 @@ function contextBlock(
   if (domStatus && domStatus.panelOpen) {
     lines.push(
       '## Current page status (open side panel & UI)',
-      'What is currently open and selected in the browser side panel right now:',
+      'What is currently open and selected in the browser side panel right now (live draft state before saving):',
       '```json',
-      // With run data stripped, field values stay out of the prompt too; only which fields are filled is sent.
-      JSON.stringify(strip ? { ...domStatus, selectedFields: Object.keys(domStatus.selectedFields) } : domStatus, null, 2),
+      JSON.stringify(domStatus, null, 2),
       '```',
-      'CRITICAL: In viaSocket, the backend draft execution script ONLY updates when the user clicks "Save" or vs_update_step is called (and published json updates when published).',
-      '- The user can manually select options and test in the side panel. If fields are already selected in the UI (e.g. spreadsheet, sheet, columns), DO NOT repeatedly ask them to choose or configure those fields again!',
-      '- If the step was tested in the UI (testedInUi is true): DO NOT complain that fields are not saved in the backend draft! Acknowledge that the test passed with their selected options, and prompt them to click "Save" in the panel (or save it) so the draft execution script saves it and you can proceed.',
+      'CRITICAL DRAFT STATE RULES:',
+      '- Ground truth: The side panel is currently open. This status shows the connection, options selected, draft mappings, and any validation errors currently present in the UI before clicking Save.',
+      '- Unsaved selections: If fields or options are already selected in this draft status (e.g. spreadsheet, sheet, columns, radio choices), or connection is selected, DO NOT ask the user to choose or configure them again! Treat them as selected in draft.',
+      '- Mistakes and validation errors: If fieldErrors or emptyRequiredFields are present (e.g. a required field has "This field can\'t be empty." or is blank), NOTIFY THE USER IMMEDIATELY about the mistake or missing field! Point out which field needs attention and suggest or provide the exact mapping expression (e.g. ${context.req.body.<field>}).',
+      '- User asks to proceed or complete mapping: NEVER claim you cannot see the fields, and NEVER demand that they click "Save" first when required fields are empty (the UI blocks saving while required fields are empty!). Instead, acknowledge the draft selections and provide the exact mapping values or save them via vs_update_step.',
+      '- If tested in the UI (testedInUi is true): Acknowledge that the test passed with the selected options, and if save is available, prompt them to click "Save" (or call vs_update_step) to proceed to the next item in the plan.',
     )
   }
   if (liveFlow) {

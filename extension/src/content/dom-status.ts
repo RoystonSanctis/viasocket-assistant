@@ -37,8 +37,11 @@ export function extractDomPageStatus(): DomPageStatus {
     }
   }
 
-  // 1. Step or trigger title from slider header
+  // 1. Step, action, and service title from slider header
   let stepTitle: string | undefined
+  let actionTitle: string | undefined
+  let serviceTitle: string | undefined
+
   const headerEl = slider.querySelector<HTMLElement>(
     'h5, h6, [data-testid="plugin-header"], [data-testid="step-title"], [data-testid="action-title"], .MuiTypography-h6'
   )
@@ -46,6 +49,7 @@ export function extractDomPageStatus(): DomPageStatus {
     const raw = headerEl.textContent.trim()
     if (raw && !/^(change|close)$/i.test(raw)) {
       stepTitle = raw
+      actionTitle = raw
     }
   }
   if (!stepTitle) {
@@ -53,18 +57,57 @@ export function extractDomPageStatus(): DomPageStatus {
     stepTitle = urlParams.get('slugName') || urlParams.get('stepId') || undefined
   }
 
-  // 2. Connection
+  const serviceIcon = slider.querySelector<HTMLImageElement>('img[alt], [data-testid="plugin-icon"]')
+  if (serviceIcon) {
+    const alt = serviceIcon.getAttribute('alt') || serviceIcon.getAttribute('title')
+    if (alt && !/icon|logo/i.test(alt)) serviceTitle = alt.trim()
+  }
+
+  // 2. Connection and Auth ID
   let connection: string | undefined
-  const authEl = slider.querySelector<HTMLElement>(
-    '[data-testid="plugin-authentication-section"], [data-auth-title-row], [data-testid="auth-connection-title-textfield"]'
-  )
-  if (authEl) {
-    const desc = authEl.querySelector('button, [data-testid="auth-connection-title-textfield"], .MuiTypography-root')
-    if (desc?.textContent?.trim()) {
-      const text = desc.textContent.trim()
-      if (!/add title/i.test(text)) connection = text
+  let authId: string | undefined
+
+  const authTitleRow = slider.querySelector<HTMLElement>('[data-auth-title-row]')
+  if (authTitleRow) {
+    const parts: string[] = []
+    const labelEl = authTitleRow.querySelector<HTMLElement>(
+      'button, .truncate, .MuiChip-label, .MuiTypography-root'
+    )
+    if (labelEl?.textContent?.trim()) {
+      const text = labelEl.textContent.trim()
+      if (!/^(using connection|add title|\*)$/i.test(text)) parts.push(text)
+    }
+    const descEl = authTitleRow.querySelector<HTMLElement>(
+      '[data-testid="auth-connection-title-textfield"], p, span'
+    )
+    if (descEl?.textContent?.trim()) {
+      const descText = descEl.textContent.trim().replace(/^\[|\]$/g, '')
+      if (descText && !/add title/i.test(descText) && !parts.includes(descText)) {
+        parts.push(descText)
+      }
+    }
+    if (parts.length > 0) {
+      connection = parts.join(' ')
+    } else if (authTitleRow.textContent?.trim()) {
+      const clean = authTitleRow.textContent.replace(/add title/gi, '').trim()
+      if (clean) connection = clean
     }
   }
+
+  if (!connection) {
+    const authCard = slider.querySelector<HTMLElement>(
+      '[data-testid="auth-connection-card"], [data-testid="plugin-authentication-section"]'
+    )
+    if (authCard) {
+      const texts = Array.from(authCard.querySelectorAll('p, span, button, [class*="chip"]'))
+        .map((el) => el.textContent?.trim() || '')
+        .filter((t) => t && !/^(using connection|add title|\*)$/i.test(t))
+      if (texts.length > 0) {
+        connection = Array.from(new Set(texts)).join(' ')
+      }
+    }
+  }
+
   if (!connection) {
     // Look for "Using Connection" text in slider
     const walker = document.createTreeWalker(slider, NodeFilter.SHOW_TEXT)
@@ -81,11 +124,30 @@ export function extractDomPageStatus(): DomPageStatus {
     }
   }
 
-  // 3. Selected fields in slider
-  const selectedFields: Record<string, string> = {}
-  const fieldRows = slider.querySelectorAll<HTMLElement>(
-    '[data-testid^="plugin-field-"], [data-testid="plugin-form-container"] > div, .plugin-field-row'
+  const authSelectInput = slider.querySelector<HTMLInputElement>(
+    '[data-testid="auth-connection-select"] input[type="hidden"], [data-testid="auth-connection-select"] .MuiSelect-nativeInput'
   )
+  if (authSelectInput && authSelectInput.value && authSelectInput.value !== 'select') {
+    authId = authSelectInput.value.trim()
+  }
+
+  // 3. Form fields, mappings, and validation errors
+  const selectedFields: Record<string, string> = {}
+  const draftMappings: Record<string, string> = {}
+  const fieldErrors: Record<string, string> = {}
+  const emptyRequiredFields: string[] = []
+
+  const allFieldRows = Array.from(
+    slider.querySelectorAll<HTMLElement>(
+      '[data-testid^="plugin-field-"], [data-testid="plugin-form-container"] > div, .plugin-field-row, [data-testid="custom-field-box"]'
+    )
+  )
+  // Prefer leaf field rows (rows that do not contain other plugin-field elements)
+  const leafRows = allFieldRows.filter((row) => {
+    const nested = row.querySelectorAll('[data-testid^="plugin-field-"]')
+    return nested.length === 0
+  })
+  const fieldRows = leafRows.length > 0 ? leafRows : allFieldRows
 
   fieldRows.forEach((row) => {
     const labelEl = row.querySelector<HTMLElement>(
@@ -98,42 +160,127 @@ export function extractDomPageStatus(): DomPageStatus {
       .trim()
     if (!rawLabel || /^(using connection|add title)$/i.test(rawLabel)) return
 
-    // Find value:
-    // a) Autocomplete chips (e.g. Spreadsheet: "msg91", Sheet: "Notes")
+    const isRequired = Boolean(
+      labelEl.textContent?.includes('*') ||
+      labelEl.querySelector('[color="error"], .MuiFormLabel-asterisk, span.text-red-500, [data-required="true"]') ||
+      row.getAttribute('id')?.startsWith('scroll-') ||
+      row.getAttribute('data-required') === 'true'
+    )
+
+    let value: string | undefined
+
+    // a) Autocomplete chips (e.g. Spreadsheet: "Google Sheets Testing Sheet", Sheet: "Sheet1", Columns: "name")
     const chips = row.querySelectorAll<HTMLElement>(
-      '[data-testid^="dropdown-chip-"], .MuiChip-label, .MuiAutocomplete-tag'
+      '[data-testid^="dropdown-chip-"], .MuiChip-label, .MuiAutocomplete-tag, .chip'
     )
     if (chips.length > 0) {
       const vals = Array.from(chips)
         .map((c) => c.textContent?.trim())
-        .filter(Boolean)
+        .filter((t): t is string => Boolean(t && t !== '×' && !/^(add title|choose)$/i.test(t)))
       if (vals.length > 0) {
-        selectedFields[rawLabel] = vals.join(', ')
-        return
+        value = vals.join(', ')
       }
     }
 
-    // b) Radio buttons / toggle buttons (e.g. "Does your first row contain column name?: Yes")
-    const checkedRadio = row.querySelector<HTMLInputElement>('input[type="radio"]:checked')
-    if (checkedRadio) {
-      const radioLabel = checkedRadio.closest('label')?.textContent?.trim() || checkedRadio.value
-      if (radioLabel) {
-        selectedFields[rawLabel] = radioLabel
-        return
+    // b) Radio buttons / toggle buttons
+    if (!value) {
+      const checkedRadio = row.querySelector<HTMLInputElement>('input[type="radio"]:checked')
+      if (checkedRadio) {
+        const radioLabel = checkedRadio.closest('label')?.textContent?.trim() || checkedRadio.value
+        if (radioLabel) value = radioLabel.trim()
       }
     }
 
-    // c) Text / select input
-    const input = row.querySelector<HTMLInputElement | HTMLSelectElement>(
-      'input[type="text"]:not([type="hidden"]), select'
+    // c) Checkbox
+    if (!value) {
+      const checkedCheckbox = row.querySelector<HTMLInputElement>('input[type="checkbox"]:checked')
+      if (checkedCheckbox) {
+        value = 'true'
+      }
+    }
+
+    // d) Text / select input
+    if (!value) {
+      const input = row.querySelector<HTMLInputElement | HTMLSelectElement>(
+        'input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]), select'
+      )
+      if (input && input.value?.trim()) {
+        value = input.value.trim()
+      }
+    }
+
+    // e) Textarea / CustomAutoSuggestV2 / Mentions
+    if (!value) {
+      const textarea = row.querySelector<HTMLTextAreaElement>('textarea')
+      if (textarea && textarea.value?.trim()) {
+        value = textarea.value.trim()
+      }
+    }
+
+    // f) Custom chips or elements inside CustomAutoSuggest
+    if (!value) {
+      const suggestChips = row.querySelectorAll<HTMLElement>(
+        '.customAutoSuggestForPlugin .MuiChip-label, [data-testid="custom-autosuggest"] .MuiChip-label, .mentions__mention'
+      )
+      if (suggestChips.length > 0) {
+        const vals = Array.from(suggestChips).map((c) => c.textContent?.trim()).filter(Boolean)
+        if (vals.length > 0) value = vals.join(' ')
+      }
+    }
+
+    // Validation error text inside this field row
+    let fieldError: string | undefined
+    const errorEls = row.querySelectorAll<HTMLElement>(
+      '[color="error"], .MuiTypography-colorError, .Mui-error, [role="alert"], [data-testid="local-notification-alert"], .text-red-500, .text-danger, p.MuiFormHelperText-root.Mui-error'
     )
-    if (input && input.value?.trim()) {
-      selectedFields[rawLabel] = input.value.trim()
-      return
+    for (const errEl of Array.from(errorEls)) {
+      const t = errEl.textContent?.trim()
+      if (t && t !== '*' && !/^\*+$/.test(t)) {
+        fieldError = t
+        break
+      }
+    }
+    if (!fieldError) {
+      const text = row.innerText || ''
+      const match = text.match(/(this field can't be empty\.?|enter valid number[^.\n]*|invalid value[^.\n]*)/i)
+      if (match && match[1]) {
+        fieldError = match[1].trim()
+      }
+    }
+    if (fieldError) {
+      fieldErrors[rawLabel] = fieldError
+    }
+
+    // Check if required field is empty
+    if (isRequired && (!value || value.trim() === '')) {
+      emptyRequiredFields.push(rawLabel)
+    }
+
+    const isMappingField = Boolean(
+      row.querySelector('textarea, .customAutoSuggestForPlugin, [data-testid="custom-autosuggest"]') ||
+      row.closest('[data-testid*="column"], [data-testid*="record"], [data-testid*="input-group"]') ||
+      row.querySelector('textarea[placeholder*="Map data"], input[placeholder*="Map data"]')
+    )
+    if (isMappingField) {
+      draftMappings[rawLabel] = value || ''
+    }
+
+    if (value) {
+      selectedFields[rawLabel] = value
     }
   })
 
-  // 4. Has Unsaved Changes
+  // 4. Slider alerts / notifications
+  const sliderErrors: string[] = []
+  const alerts = slider.querySelectorAll<HTMLElement>(
+    '[data-testid="local-notification-alert"], .MuiAlert-root[class*="Error"], .MuiAlert-standardError, .MuiAlert-filledError'
+  )
+  alerts.forEach((alert) => {
+    const t = alert.textContent?.trim()
+    if (t && !sliderErrors.includes(t)) sliderErrors.push(t)
+  })
+
+  // 5. Has Unsaved Changes
   const discardBtn = Array.from(slider.querySelectorAll('button')).find((b) =>
     /discard changes/i.test(b.textContent || '')
   )
@@ -141,32 +288,38 @@ export function extractDomPageStatus(): DomPageStatus {
     hasUnsavedChanges = true
   }
 
-  // 5. Tested in UI / Sample response
+  // 6. Tested in UI / Sample response
   let testedInUi = false
   let hasSampleResponse = false
   const sliderText = slider.innerText || ''
   if (/sample response|sample data/i.test(sliderText)) {
     hasSampleResponse = true
-    // Check if there is actual output below Sample Response
     const codeBlock = slider.querySelector('pre, code, [data-testid="sample-response"]')
     if (codeBlock?.textContent?.trim() || /"success":\s*true|"data":/i.test(sliderText)) {
       testedInUi = true
     }
   }
 
-  // 6. Can save button
+  // 7. Can save button
   const saveBtn = slider.querySelector<HTMLButtonElement>(
     '[data-testid="save-button"], [data-testid="trigger-save-button"]'
   ) || Array.from(slider.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
     /^(save|save & continue)$/i.test(b.textContent?.trim() || '')
   )
-  const canSave = Boolean(saveBtn && !saveBtn.disabled)
+  const canSave = Boolean(saveBtn && !saveBtn.disabled && !saveBtn.getAttribute('aria-disabled'))
 
   return {
     panelOpen: true,
     stepTitle,
+    actionTitle,
+    serviceTitle,
     connection,
+    authId,
     selectedFields,
+    draftMappings: Object.keys(draftMappings).length > 0 ? draftMappings : undefined,
+    fieldErrors: Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined,
+    emptyRequiredFields: emptyRequiredFields.length > 0 ? emptyRequiredFields : undefined,
+    sliderErrors: sliderErrors.length > 0 ? sliderErrors : undefined,
     hasUnsavedChanges,
     testedInUi,
     hasSampleResponse,
