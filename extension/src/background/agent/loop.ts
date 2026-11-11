@@ -51,14 +51,17 @@ export async function fetchLiveFlowSummary(target: { page: PageContext; vs: ViaS
 }
 
 export function enrichFlowWithDomStatus(liveFlow: Record<string, unknown>, dom: DomPageStatus): void {
-  if (!dom.panelOpen) return
+  if (!dom.panelOpen && !dom.hasUnsavedChanges) return
   const steps = Array.isArray(liveFlow.steps) ? (liveFlow.steps as Record<string, unknown>[]) : []
   const visit = (list: Record<string, unknown>[]) => {
     for (const step of list) {
+      const stepSlug = typeof step.slug === 'string' ? step.slug.toLowerCase().replace(/[_-]+/g, ' ').trim() : ''
+      const domTitle = typeof dom.stepTitle === 'string' ? dom.stepTitle.toLowerCase().replace(/[_-]+/g, ' ').trim() : ''
       const matches = Boolean(
         (typeof step.id === 'string' && dom.stepId && step.id === dom.stepId) ||
         (typeof step.slug === 'string' && dom.slugName && step.slug === dom.slugName) ||
-        (typeof step.slug === 'string' && dom.stepTitle && step.slug.toLowerCase().replace(/[_-]+/g, ' ').includes(dom.stepTitle.toLowerCase().replace(/[_-]+/g, ' ')))
+        (stepSlug && domTitle && (stepSlug.includes(domTitle) || domTitle.includes(stepSlug))) ||
+        (list.length === 1 && Boolean(dom.stepId || dom.connection || dom.authId || dom.selectedFields))
       )
       if (matches) {
         if (dom.connection || dom.authId) {

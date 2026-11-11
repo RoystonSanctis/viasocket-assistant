@@ -1438,13 +1438,21 @@ async function buildUpdateBody(
         dom?.panelOpen && (
           dom.stepId === c.stepId ||
           dom.slugName === slug ||
-          (dom.stepTitle && slug.toLowerCase().replace(/[_-]+/g, ' ').includes(dom.stepTitle.toLowerCase().replace(/[_-]+/g, ' ')))
+          (dom.stepTitle && (
+            slug.toLowerCase().replace(/[_-]+/g, ' ').includes(dom.stepTitle.toLowerCase().replace(/[_-]+/g, ' ')) ||
+            dom.stepTitle.toLowerCase().replace(/[_-]+/g, ' ').includes(slug.toLowerCase().replace(/[_-]+/g, ' '))
+          )) ||
+          dom.hasUnsavedChanges
         )
       )
-      const baseInputData = isThisStepOpen && dom?.draftInputData
-        ? { ...(dom.draftInputData as Record<string, unknown>), ...asRecord(pd.selectedValues?.inputData) }
+      const baseInputData = isThisStepOpen
+        ? {
+            ...asRecord(pd.selectedValues?.inputData),
+            ...(dom?.selectedFields || {}),
+            ...asRecord(dom?.draftInputData),
+          }
         : asRecord(pd.selectedValues?.inputData)
-      const baseAuthId = str(pd.selectedValues?.authData?.id) || (isThisStepOpen ? dom?.authId : undefined)
+      const baseAuthId = (isThisStepOpen && (dom?.authId || str(pd.selectedValues?.authData?.id))) || str(pd.selectedValues?.authData?.id)
       const saved: SavedState = { inputData: baseInputData, authId: baseAuthId }
       // Convenience fields (delay, agent, message, flow to run) under the tool's real field keys; inputData wins.
       const stepKind = kindFromStep(block, pd)

@@ -216,14 +216,19 @@ function install(): void {
       // then setKeyValueInstance). Dropping the step data instead is not enough for a step that was never loaded
       // from the server (a new one): MasterSliderComponent refetches only when dataFromBackend changes, which such a
       // step never had, so the panel stayed empty until it was reopened.
+      const activeUrlStepId = new URLSearchParams(location.search).get('stepId')
+      const currentActiveStepId =
+        activeUrlStepId ||
+        (isObj(state.appInfo) && typeof state.appInfo.currentStepId === 'string' && state.appInfo.currentStepId ? state.appInfo.currentStepId : undefined)
+
       if (
         stepRow &&
         openFlow &&
         slugName &&
         stepId &&
         stepRow.id === stepId &&
-        stepRow.script_id === scriptId &&
-        new URLSearchParams(location.search).get('stepId') === stepId
+        (!stepRow.script_id || stepRow.script_id === resolvedScriptId) &&
+        (!currentActiveStepId || currentActiveStepId === stepId)
       ) {
         const urlData = {
           sectionIdOrScriptId: resolvedScriptId || scriptId || extractScriptId(location.pathname),
@@ -242,6 +247,7 @@ function install(): void {
             },
           })
           store.dispatch({ type: 'stepsDataV3/setKeyValueInstance', urlData, payload: { title: slugName, hasUnsavedCode: false } })
+          syncDraftToDom()
           return
         }
 
@@ -278,6 +284,7 @@ function install(): void {
         })
         store.dispatch({ type: 'stepsDataV3/setKeyValueInstance', urlData, payload: { title: slugName, hasUnsavedCode: false } })
         if (Object.keys(pending).length) store.dispatch({ type: 'stepsDataV3/setKeyValueInstance', urlData, payload: pending })
+        syncDraftToDom()
         return
       }
 
@@ -452,8 +459,12 @@ function install(): void {
         (isObj(state.appInfo) && typeof state.appInfo.currentScriptId === 'string' ? state.appInfo.currentScriptId : undefined)
       if (!scriptId) return
       const urlParams = new URLSearchParams(location.search)
-      const stepId = urlParams.get('stepId')
-      const slugName = urlParams.get('slugName')
+      const stepId =
+        urlParams.get('stepId') ||
+        (isObj(state.appInfo) && typeof state.appInfo.currentStepId === 'string' && state.appInfo.currentStepId ? state.appInfo.currentStepId : undefined)
+      const slugName =
+        urlParams.get('slugName') ||
+        (isObj(state.appInfo) && typeof state.appInfo.currentSlugName === 'string' && state.appInfo.currentSlugName ? state.appInfo.currentSlugName : undefined)
       if (!stepId) {
         if (document.documentElement.hasAttribute('data-vs-draft-step')) {
           document.documentElement.removeAttribute('data-vs-draft-step')
@@ -483,6 +494,7 @@ function install(): void {
         authId: typeof authData?.id === 'string' ? authData.id : undefined,
         connectionLabel: typeof authData?.connection_label === 'string' ? authData.connection_label : undefined,
         inputData,
+        selectedValues,
       }
       const serialized = JSON.stringify(info)
       if (document.documentElement.getAttribute('data-vs-draft-step') !== serialized) {
@@ -571,7 +583,7 @@ function install(): void {
         }
       }
 
-      // 2. Native input setter & event dispatch
+      // 2. Native input setter & event dispatch (DO NOT dispatch blur - blur triggers onBlur with stale localData)
       const input = targetRow.querySelector<HTMLInputElement | HTMLTextAreaElement>('textarea, input:not([type="hidden"])')
       if (input) {
         const proto = Object.getPrototypeOf(input)
@@ -580,10 +592,9 @@ function install(): void {
         else input.value = value
         input.dispatchEvent(new Event('input', { bubbles: true, composed: true }))
         input.dispatchEvent(new Event('change', { bubbles: true, composed: true }))
-        input.dispatchEvent(new Event('blur', { bubbles: true, composed: true }))
       }
 
-      // 3. Mark hasUnsavedCode: true and clear localNotification error in Redux store
+      // 3. Redux Store update: dispatch setValueOnKey & mark hasUnsavedCode: true
       try {
         const store = findReduxStore()
         if (store) {
@@ -592,12 +603,37 @@ function install(): void {
             extractScriptId(location.pathname) ||
             (isObj(state.appInfo) && typeof state.appInfo.currentScriptId === 'string' ? state.appInfo.currentScriptId : undefined)
           const urlParams = new URLSearchParams(location.search)
-          const stepId = urlParams.get('stepId')
+          const stepId =
+            urlParams.get('stepId') ||
+            (isObj(state.appInfo) && typeof state.appInfo.currentStepId === 'string' ? state.appInfo.currentStepId : undefined)
+
+          const fieldKey =
+            targetRow.getAttribute('data-testid')?.replace(/^plugin-field-/, '') ||
+            targetRow.id?.replace(/^scroll-/, '')?.replace(/-/g, '.') ||
+            norm
+
           if (scriptId && stepId) {
+            store.dispatch({
+              type: 'stepsDataV3/setValueOnKey',
+              urlData: { sectionIdOrScriptId: scriptId, versionIdOrStepId: stepId, tabName: 'draft' },
+              payload: {
+                [fieldKey]: value,
+                [`_${fieldKey}`]: value,
+                [`_${fieldKey}-Type`]: 'string',
+              },
+            })
             store.dispatch({
               type: 'stepsDataV3/setKeyValueInstance',
               urlData: { sectionIdOrScriptId: scriptId, versionIdOrStepId: stepId, tabName: 'draft' },
               payload: { hasUnsavedCode: true },
+            })
+            store.dispatch({
+              type: 'notification/cancelNotification',
+              payload: `${stepId}_PLUGIN_REQUIRED_FIELD_${fieldKey}`,
+            })
+            store.dispatch({
+              type: 'notification/cancelNotification',
+              payload: `${stepId}_PLUGIN_WRONG_INPUT_${fieldKey}`,
             })
           }
           const notifs =
@@ -605,10 +641,10 @@ function install(): void {
               ? ((state.notification as Record<string, unknown>).localNotification as Record<string, unknown>)
               : undefined
           if (notifs) {
-            const cleanKey = fieldLabel.replace(/[*:]/g, '').trim().toLowerCase()
-            for (const key of Object.keys(notifs)) {
-              if (key.toLowerCase().includes(cleanKey)) {
-                delete notifs[key]
+            const cleanKey = norm.replace(/[*:[\]"']/g, '')
+            for (const k of Object.keys(notifs)) {
+              if (k.toLowerCase().includes(cleanKey)) {
+                delete notifs[k]
               }
             }
           }
@@ -619,11 +655,13 @@ function install(): void {
 
       if (clickSave) {
         setTimeout(() => {
-          const saveBtn = Array.from(slider.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
-            /^(save|save & continue)$/i.test(b.textContent?.trim() || '')
-          )
+          const saveBtn =
+            slider.querySelector<HTMLButtonElement>('[data-testid="save-button"], [data-testid="trigger-save-button"]') ||
+            Array.from(slider.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+              /^(save|save & continue)$/i.test(b.textContent?.trim() || '')
+            )
           if (saveBtn && !saveBtn.disabled) saveBtn.click()
-        }, 200)
+        }, 250)
       }
 
       syncDraftToDom()

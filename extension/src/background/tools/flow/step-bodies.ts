@@ -49,11 +49,31 @@ export async function putStep(
   const res = await call(`Saving step "${slug}"`, () =>
     ctx.vs.request({ method: 'PUT', path: `/scripts/${t.scriptId}/stepv2/${encodeURIComponent(slug)}`, body, live, signal: ctx.signal }),
   )
-  const stepId = typeof body.id === 'string' ? body.id : typeof body.stepId === 'string' ? body.stepId : undefined
   const root = isRecord(res) ? res : {}
   const script = isRecord(root.script) ? (root.script as Record<string, unknown>) : undefined
-  const flowJson = isRecord(script?.json_script) ? (script.json_script as Record<string, unknown>) : undefined
-  const stepRow = isRecord(root.data) ? (root.data as Record<string, unknown>) : undefined
+  const scriptData = isRecord(script?.scriptData) ? (script.scriptData as Record<string, unknown>) : undefined
+  const flowJson = isRecord(script?.json_script)
+    ? (script.json_script as Record<string, unknown>)
+    : isRecord(scriptData?.json_script)
+      ? (scriptData.json_script as Record<string, unknown>)
+      : isRecord(root.json_script)
+        ? (root.json_script as Record<string, unknown>)
+        : undefined
+  const stepRow = isRecord(root.functionData)
+    ? (root.functionData as Record<string, unknown>)
+    : isRecord(root.data)
+      ? (root.data as Record<string, unknown>)
+      : isRecord(root.function)
+        ? (root.function as Record<string, unknown>)
+        : undefined
+  const stepId =
+    typeof body.id === 'string'
+      ? body.id
+      : typeof body.stepId === 'string'
+        ? body.stepId
+        : typeof stepRow?.id === 'string'
+          ? (stepRow.id as string)
+          : undefined
   try {
     ctx.ui.refreshStep({ scriptId: t.scriptId, stepId, slugName: slug, flowJson, stepRow })
   } catch {

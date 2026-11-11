@@ -334,18 +334,34 @@ export function extractDomPageStatus(): DomPageStatus {
     // ignore parse error
   }
 
+  const mergedSelectedFields = { ...selectedFields }
+  if (draftInputData) {
+    for (const [k, v] of Object.entries(draftInputData)) {
+      if (v !== undefined && v !== null && !k.startsWith('_')) {
+        const valStr = typeof v === 'object' ? JSON.stringify(v) : String(v)
+        if (!mergedSelectedFields[k]) {
+          mergedSelectedFields[k] = valStr
+        }
+      }
+    }
+  }
+
+  const urlParams = new URLSearchParams(location.search)
+  const resolvedStepId = reduxStepId || urlParams.get('stepId') || undefined
+  const resolvedSlugName = reduxSlugName || urlParams.get('slugName') || undefined
+
   return {
     panelOpen: true,
-    stepTitle,
+    stepTitle: stepTitle || resolvedSlugName || resolvedStepId,
     actionTitle,
     serviceTitle,
     connection,
     authId,
-    selectedFields,
+    selectedFields: mergedSelectedFields,
     draftMappings: Object.keys(draftMappings).length > 0 ? draftMappings : undefined,
     draftInputData,
-    stepId: reduxStepId,
-    slugName: reduxSlugName,
+    stepId: resolvedStepId,
+    slugName: resolvedSlugName,
     serviceId,
     selectedCreate,
     actionVersionId,

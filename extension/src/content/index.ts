@@ -513,7 +513,6 @@ async function main(): Promise<void> {
 
           input.dispatchEvent(new Event('input', { bubbles: true, composed: true }))
           input.dispatchEvent(new Event('change', { bubbles: true, composed: true }))
-          input.dispatchEvent(new Event('blur', { bubbles: true, composed: true }))
 
           if (msg.clickSave) {
             setTimeout(() => {
