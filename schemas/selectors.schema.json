@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/RoystonSanctis/viasocket-assistant/config-stable/schemas/selectors.schema.json",
+  "title": "Page selectors",
+  "description": "CSS selectors the mascot uses to find things on the viaSocket page. Templates use {slugName}. Extra keys are allowed and can be referenced from mascot reactions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "appHosts",
+    "flow",
+    "devHub",
+    "fieldLabel",
+    "avoid"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "appHosts": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9.-]+\\.[a-z]{2,}$"
+      }
+    },
+    "flow": {
+      "type": "object",
+      "required": [
+        "canvasViewport",
+        "zoomContainer",
+        "stepNode",
+        "triggerNode",
+        "stepPanel",
+        "stepSave",
+        "stepTest",
+        "publishButton",
+        "discardButton",
+        "controls",
+        "askAiButton",
+        "zoomFitButton",
+        "navbar"
+      ],
+      "properties": {
+        "canvasViewport": {
+          "$ref": "#/$defs/selector"
+        },
+        "zoomContainer": {
+          "$ref": "#/$defs/selector"
+        },
+        "stepNode": {
+          "$ref": "#/$defs/selector",
+          "type": "string",
+          "pattern": "\\{slugName\\}"
+        },
+        "triggerNode": {
+          "$ref": "#/$defs/selector"
+        },
+        "stepPanel": {
+          "$ref": "#/$defs/selector"
+        },
+        "stepSave": {
+          "$ref": "#/$defs/selector"
+        },
+        "stepTest": {
+          "$ref": "#/$defs/selector"
+        },
+        "publishButton": {
+          "$ref": "#/$defs/selector"
+        },
+        "discardButton": {
+          "$ref": "#/$defs/selector"
+        },
+        "controls": {
+          "$ref": "#/$defs/selector"
+        },
+        "askAiButton": {
+          "$ref": "#/$defs/selector"
+        },
+        "zoomFitButton": {
+          "$ref": "#/$defs/selector"
+        },
+        "navbar": {
+          "$ref": "#/$defs/selector"
+        }
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/key"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/selector"
+      }
+    },
+    "devHub": {
+      "type": "object",
+      "required": [
+        "section",
+        "saveButton",
+        "dryRunButton",
+        "sidebar"
+      ],
+      "properties": {
+        "section": {
+          "$ref": "#/$defs/selector"
+        },
+        "saveButton": {
+          "$ref": "#/$defs/selector"
+        },
+        "dryRunButton": {
+          "$ref": "#/$defs/selector"
+        },
+        "sidebar": {
+          "$ref": "#/$defs/selector"
+        }
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/key"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/selector"
+      }
+    },
+    "fieldLabel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "containers",
+        "labels"
+      ],
+      "properties": {
+        "containers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/selector"
+          }
+        },
+        "labels": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/selector"
+          }
+        }
+      }
+    },
+    "avoid": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/selector"
+      }
+    }
+  },
+  "$defs": {
+    "key": {
+      "type": "string",
+      "pattern": "^[a-z][A-Za-z0-9]*$"
+    },
+    "selector": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    }
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/RoystonSanctis/viasocket-assistant/config-stable/schemas/mascot.schema.json",
+  "title": "Mascot look, wording and reactions",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "roam", "colors", "lines", "reactions"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "size": { "type": "number", "minimum": 24, "maximum": 96, "default": 44 },
+    "roam": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "speed": { "type": "number", "minimum": 0.002, "maximum": 0.2, "default": 0.015 },
+        "restSeconds": {
+          "type": "array",
+          "description": "[min, max] seconds to rest between moves.",
+          "prefixItems": [{ "type": "number", "minimum": 0 }, { "type": "number", "minimum": 0 }],
+          "items": false,
+          "minItems": 2
+        },
+        "sleepAfterSeconds": { "type": "number", "minimum": 0, "default": 45 }
+      }
+    },
+    "colors": {
+      "type": "object",
+      "description": "One colour per mood. Every mood is required.",
+      "additionalProperties": false,
+      "required": [
+        "idle", "listening", "thinking", "searching", "working", "suggest",
+        "confused", "celebrate", "sleeping", "waking", "happy", "curious"
+      ],
+      "properties": {
+        "idle": { "$ref": "#/$defs/color" },
+        "listening": { "$ref": "#/$defs/color" },
+        "thinking": { "$ref": "#/$defs/color" },
+        "searching": { "$ref": "#/$defs/color" },
+        "working": { "$ref": "#/$defs/color" },
+        "suggest": { "$ref": "#/$defs/color" },
+        "confused": { "$ref": "#/$defs/color" },
+        "celebrate": { "$ref": "#/$defs/color" },
+        "sleeping": { "$ref": "#/$defs/color" },
+        "waking": { "$ref": "#/$defs/color" },
+        "happy": { "$ref": "#/$defs/color" },
+        "curious": { "$ref": "#/$defs/color" }
+      }
+    },
+    "lines": {
+      "type": "object",
+      "description": "Fixed phrases the mascot says without asking the AI.",
+      "propertyNames": { "pattern": "^[a-z][A-Za-z0-9]*$" },
+      "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 200 }
+    },
+    "reactions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/reaction" }
+    },
+    "thinkingTextMaxChars": { "type": "number", "minimum": 10, "maximum": 200, "default": 60 }
+  },
+  "$defs": {
+    "mood": {
+      "enum": [
+        "idle", "listening", "thinking", "searching", "working", "suggest",
+        "confused", "celebrate", "sleeping", "waking", "happy", "curious"
+      ]
+    },
+    "color": { "type": "string", "pattern": "^#(?:[0-9A-Fa-f]{3}|[0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$" },
+    "reaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["on", "mood"],
+      "properties": {
+        "on": {
+          "enum": [
+            "flow-loaded", "step-saved", "step-created", "step-deleted", "step-tested", "trigger-saved",
+            "flow-published", "flow-discarded", "dh-saved", "dh-dry-run", "api-error", "unknown-mutation"
+          ]
+        },
+        "when": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ok": { "type": "boolean" },
+            "byAssistant": { "type": "boolean" }
+          }
+        },
+        "mood": { "$ref": "#/$defs/mood" },
+        "say": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "highlight": {
+          "type": "string",
+          "description": "'step' highlights the step the event was about; anything else must be a key in selectors.json (flow or devHub)."
+        },
+        "offerExplain": { "type": "boolean", "description": "Show an Explain button (costs one AI request when clicked)." },
+        "minLevel": { "enum": ["quiet", "helpful", "proactive"], "default": "helpful" },
+        "cooldownSeconds": { "type": "number", "minimum": 0, "default": 20 }
+      }
+    }
+  }
+}

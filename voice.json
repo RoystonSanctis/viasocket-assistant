@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "stt": {
+    "defaultEngine": "whisper-local",
+    "defaultModel": "onnx-community/whisper-base",
+    "models": [
+      { "id": "onnx-community/whisper-tiny.en", "label": "Whisper tiny (English, fastest)", "approxSizeMb": 40, "multilingual": false },
+      { "id": "onnx-community/whisper-base", "label": "Whisper base (multilingual, recommended)", "approxSizeMb": 80, "multilingual": true, "note": "Handles Hindi and Hinglish reasonably well" },
+      { "id": "onnx-community/whisper-small", "label": "Whisper small (multilingual, most accurate)", "approxSizeMb": 250, "multilingual": true, "note": "Needs WebGPU to feel responsive" },
+      { "id": "onnx-community/moonshine-base-ONNX", "label": "Moonshine base (English, fast on slow laptops)", "approxSizeMb": 65, "multilingual": false }
+    ],
+    "vocabulary": [
+      "viaSocket", "Gmail", "Google Sheets", "Google Drive", "Slack", "Notion", "Airtable", "HubSpot", "Salesforce",
+      "Zoho", "Trello", "Asana", "Jira", "ClickUp", "Shopify", "Stripe", "Razorpay", "WhatsApp", "Telegram",
+      "Discord", "Instagram", "Facebook", "LinkedIn", "Twitter", "Calendly", "Typeform", "Webflow", "Mailchimp",
+      "OpenAI", "Google Calendar", "Google Forms", "Outlook", "Microsoft Teams", "Pipedrive", "Freshdesk", "Zendesk",
+      "Intercom", "GitHub", "Dropbox", "Developer Hub", "webhook", "cron", "trigger", "plug", "JSON", "API"
+    ]
+  },
+  "tts": {
+    "enabled": true,
+    "rate": 1.05,
+    "pitch": 1.1,
+    "maxChars": 160
+  },
+  "hotkey": {
+    "holdMs": 180
+  }
+}
