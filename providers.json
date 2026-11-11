@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "providers": [
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "adapter": "openai",
+      "keyPattern": "^sk-or-v1-[A-Za-z0-9]+$",
+      "keyPageUrl": "https://openrouter.ai/settings/keys",
+      "validatePath": "/key",
+      "modelsPath": "/models",
+      "badges": ["Free tier"],
+      "setupTip": "Free models allow 20 requests a minute and 50 a day. A one-time $10 top-up raises that to 1,000 a day, and free models don't use the credits. Pick a model that supports tools.",
+      "recommendedModels": [],
+      "requires": ["tools"],
+      "extraHeaders": {
+        "HTTP-Referer": "https://github.com/RoystonSanctis/viasocket-assistant",
+        "X-Title": "viaSocket Assistant"
+      },
+      "enabled": true
+    },
+    {
+      "id": "groq",
+      "name": "Groq",
+      "adapter": "openai",
+      "keyPattern": "^gsk_[A-Za-z0-9]+$",
+      "keyPageUrl": "https://console.groq.com/keys",
+      "modelsPath": "/models",
+      "badges": ["Free tier", "Fast"],
+      "requires": ["tools"],
+      "enabled": true
+    },
+    {
+      "id": "gemini",
+      "name": "Google Gemini",
+      "adapter": "openai",
+      "keyPageUrl": "https://aistudio.google.com/apikey",
+      "modelsPath": "/models",
+      "badges": ["Free tier"],
+      "setupTip": "Prompts sent on Google's free tier may be used to improve Google products.",
+      "requires": ["tools"],
+      "enabled": true
+    },
+    {
+      "id": "mistral",
+      "name": "Mistral",
+      "adapter": "openai",
+      "keyPageUrl": "https://console.mistral.ai/api-keys",
+      "modelsPath": "/models",
+      "requires": ["tools"],
+      "enabled": true
+    },
+    {
+      "id": "openai",
+      "name": "OpenAI",
+      "adapter": "openai",
+      "keyPattern": "^sk-[A-Za-z0-9_-]+$",
+      "keyPageUrl": "https://platform.openai.com/api-keys",
+      "modelsPath": "/models",
+      "requires": ["tools"],
+      "enabled": true
+    },
+    {
+      "id": "anthropic",
+      "name": "Anthropic",
+      "adapter": "anthropic",
+      "keyPattern": "^sk-ant-[A-Za-z0-9_-]+$",
+      "keyPageUrl": "https://console.anthropic.com/settings/keys",
+      "modelsPath": "/models",
+      "requires": ["tools"],
+      "enabled": true
+    },
+    {
+      "id": "deepseek",
+      "name": "DeepSeek",
+      "adapter": "openai",
+      "keyPageUrl": "https://platform.deepseek.com/api_keys",
+      "modelsPath": "/models",
+      "requires": ["tools"],
+      "enabled": true
+    },
+    {
+      "id": "ollama",
+      "name": "Ollama (on this computer)",
+      "adapter": "openai",
+      "noKey": true,
+      "modelsPath": "/models",
+      "badges": ["Free", "Private"],
+      "setupTip": "Start Ollama with OLLAMA_ORIGINS=chrome-extension://* so the extension can reach it.",
+      "requires": ["tools"],
+      "enabled": true
+    },
+    {
+      "id": "lmstudio",
+      "name": "LM Studio (on this computer)",
+      "adapter": "openai",
+      "noKey": true,
+      "modelsPath": "/models",
+      "badges": ["Free", "Private"],
+      "setupTip": "Turn on the local server in LM Studio (Developer tab).",
+      "requires": ["tools"],
+      "enabled": true
+    }
+  ]
+}

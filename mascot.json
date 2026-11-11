@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "size": 44,
+  "roam": {
+    "enabled": true,
+    "speed": 0.015,
+    "restSeconds": [4, 12],
+    "sleepAfterSeconds": 45
+  },
+  "colors": {
+    "idle": "#5DCAA5",
+    "waking": "#5DCAA5",
+    "happy": "#5DCAA5",
+    "curious": "#EF9F27",
+    "listening": "#F0997B",
+    "thinking": "#AFA9EC",
+    "searching": "#AFA9EC",
+    "working": "#85B7EB",
+    "suggest": "#EF9F27",
+    "confused": "#F09595",
+    "celebrate": "#97C459",
+    "sleeping": "#B4B2A9"
+  },
+  "lines": {
+    "greeting": "Hi! Hold Ctrl + Option (Ctrl + Alt on Windows) and tell me what to build.",
+    "greetingDevHub": "Building a plug? Tell me which app and I'll help.",
+    "noKey": "I need an AI key to think. Open settings to add one.",
+    "noMic": "I can't hear you yet. Allow the microphone in settings.",
+    "listening": "Listening…",
+    "transcribing": "Got it, one sec…",
+    "loadingModel": "Learning to listen… (one-time download)",
+    "rateLimited": "Catching my breath… retrying in a moment.",
+    "authFailed": "Your viaSocket session expired. Refresh the page and sign in again.",
+    "cancelled": "Okay, stopped.",
+    "done": "Done!",
+    "wakeUp": "I'm back."
+  },
+  "reactions": [
+    { "on": "step-tested", "when": { "ok": false }, "mood": "confused", "say": "That test failed. Want me to look at it?", "highlight": "step", "offerExplain": true, "minLevel": "quiet", "cooldownSeconds": 5 },
+    { "on": "step-tested", "when": { "ok": true, "byAssistant": false }, "mood": "celebrate", "say": "Test passed.", "minLevel": "helpful", "cooldownSeconds": 10 },
+    { "on": "step-created", "when": { "byAssistant": false }, "mood": "curious", "say": "New step! I can help fill it in.", "highlight": "step", "minLevel": "proactive", "cooldownSeconds": 30 },
+    { "on": "step-saved", "when": { "ok": true, "byAssistant": false }, "mood": "happy", "minLevel": "proactive", "cooldownSeconds": 30 },
+    { "on": "step-saved", "when": { "ok": false, "byAssistant": false }, "mood": "confused", "say": "That step didn't save. Want me to check why?", "highlight": "step", "offerExplain": true, "minLevel": "helpful", "cooldownSeconds": 10 },
+    { "on": "trigger-saved", "when": { "ok": true, "byAssistant": false }, "mood": "curious", "say": "Trigger set! Tell me what should happen next.", "minLevel": "proactive", "cooldownSeconds": 60 },
+    { "on": "flow-published", "when": { "ok": true }, "mood": "celebrate", "say": "Your flow is live.", "minLevel": "quiet", "cooldownSeconds": 5 },
+    { "on": "flow-published", "when": { "ok": false }, "mood": "confused", "say": "Publishing didn't go through. Want me to find out why?", "highlight": "publishButton", "offerExplain": true, "minLevel": "quiet", "cooldownSeconds": 5 },
+    { "on": "flow-discarded", "when": { "ok": true, "byAssistant": false }, "mood": "idle", "say": "Draft changes discarded.", "minLevel": "helpful", "cooldownSeconds": 10 },
+    { "on": "api-error", "mood": "confused", "say": "Something went wrong there.", "offerExplain": true, "minLevel": "helpful", "cooldownSeconds": 15 },
+    { "on": "dh-dry-run", "when": { "ok": false }, "mood": "confused", "say": "The dry run failed. Want me to check the code?", "offerExplain": true, "minLevel": "quiet", "cooldownSeconds": 5 },
+    { "on": "dh-dry-run", "when": { "ok": true }, "mood": "celebrate", "say": "Dry run passed.", "minLevel": "helpful", "cooldownSeconds": 10 },
+    { "on": "dh-saved", "when": { "ok": true, "byAssistant": false }, "mood": "happy", "minLevel": "proactive", "cooldownSeconds": 30 }
+  ],
+  "thinkingTextMaxChars": 60
+}
