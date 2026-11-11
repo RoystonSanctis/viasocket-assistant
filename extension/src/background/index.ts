@@ -330,8 +330,39 @@ chrome.commands.onCommand.addListener((command, tab) => {
   })().catch(warn('voice command failed'))
 })
 
-chrome.action.onClicked.addListener(() => {
-  chrome.runtime.openOptionsPage().catch(warn('could not open settings'))
+chrome.action.onClicked.addListener(async (tab) => {
+  if (!tab?.id) {
+    chrome.runtime.openOptionsPage().catch(warn('could not open settings'))
+    return
+  }
+  const url = tab.url || ''
+  const isVs = url.includes('viasocket.com') || url.includes('sokt.io')
+  if (isVs) {
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ['page-hook.js'], world: 'MAIN', injectImmediately: true })
+      await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ['content.js'] })
+    } catch {
+      // script already present or frame restricted
+    }
+    const session = getSession(tab.id)
+    if (session) {
+      session.send({ type: 'toggle-panel' })
+    } else {
+      chrome.tabs.sendMessage(tab.id, { type: 'toggle-panel' }).catch(() => {})
+    }
+  } else {
+    chrome.runtime.openOptionsPage().catch(warn('could not open settings'))
+  }
+})
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'complete' && tab.url && !tab.discarded) {
+    const isVs = tab.url.includes('viasocket.com') || tab.url.includes('sokt.io')
+    if (isVs) {
+      chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['page-hook.js'], world: 'MAIN', injectImmediately: true }).catch(() => {})
+      chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['content.js'] }).catch(() => {})
+    }
+  }
 })
 
 async function ensureConfigAlarm(): Promise<void> {
@@ -349,7 +380,7 @@ async function injectIntoOpenTabs(): Promise<void> {
   await Promise.all(
     tabs.map(async (tab) => {
       if (tab.id === undefined || tab.discarded) return
-      const target = { tabId: tab.id }
+      const target = { tabId: tab.id, allFrames: true }
       try {
         await chrome.scripting.executeScript({ target, files: ['page-hook.js'], world: 'MAIN', injectImmediately: true })
         await chrome.scripting.executeScript({ target, files: ['content.js'] })
@@ -372,6 +403,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 })
 
 chrome.runtime.onStartup.addListener(() => {
+  injectIntoOpenTabs().catch(warn('could not start the assistant in open tabs'))
   ensureConfigAlarm().catch(warn('could not schedule config refresh'))
 })
 

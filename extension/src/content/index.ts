@@ -558,6 +558,9 @@ async function main(): Promise<void> {
       case 'reload-page':
         location.reload()
         break
+      case 'toggle-panel':
+        mascot.togglePanel()
+        break
       case 'confirm-request':
         pendingConfirmId = msg.request.id
         pendingConfirmLabel = msg.request.confirmLabel

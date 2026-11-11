@@ -91,6 +91,7 @@ export type BackgroundToContent =
   | { type: 'busy'; busy: boolean }
   | { type: 'status'; llmReady: boolean; reason?: string }
   | { type: 'tts-state'; speaking: boolean }
+  | { type: 'toggle-panel' }
 
 export type VoiceState = 'off' | 'loading-model' | 'ready' | 'listening' | 'transcribing' | 'error' | 'needs-permission'
 

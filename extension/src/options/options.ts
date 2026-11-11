@@ -135,8 +135,49 @@ function initNavigation(): void {
   })
 }
 
+function initSiteAccess(): void {
+  const banner = document.getElementById('site-access-banner') as HTMLDivElement | null
+  const grantBtn = document.getElementById('site-access-grant-button') as HTMLButtonElement | null
+  if (!banner || !grantBtn) return
+
+  const check = async () => {
+    try {
+      const granted = await chrome.permissions.contains({ origins: ['https://*.viasocket.com/*'] })
+      banner.hidden = granted
+    } catch {
+      banner.hidden = true
+    }
+  }
+
+  grantBtn.addEventListener('click', async () => {
+    grantBtn.disabled = true
+    try {
+      const granted = await chrome.permissions.request({
+        origins: [
+          'https://*.viasocket.com/*',
+          'https://viasocket.com/*',
+          'https://flow-api.viasocket.com/*',
+          'https://dev-api.viasocket.com/*',
+          'https://flow.sokt.io/*',
+          'https://dev.sokt.io/*',
+        ],
+      })
+      banner.hidden = granted
+    } catch (e) {
+      console.warn('[viaSocket Assistant] site access request failed:', e)
+    } finally {
+      grantBtn.disabled = false
+    }
+  })
+
+  chrome.permissions.onAdded.addListener(() => void check())
+  chrome.permissions.onRemoved.addListener(() => void check())
+  void check()
+}
+
 async function main(): Promise<void> {
   try {
+    initSiteAccess()
     initAbout()
     initPrivacy()
     initProvider()
