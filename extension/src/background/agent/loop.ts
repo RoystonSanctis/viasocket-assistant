@@ -24,6 +24,7 @@ import { normalizeFlow, summarizeFlow } from '../tools/flow/flow-api'
 import type { FlowTarget } from '../tools/flow/types'
 import { asRecord, sleep } from '../tools/flow/util'
 import type { PageContext } from '../../shared/page'
+import type { DomPageStatus } from '../../shared/messages'
 import type { ViaSocketClient } from '../tools/viasocket-client'
 
 export async function fetchLiveFlowSummary(target: { page: PageContext; vs: ViaSocketClient }, signal?: AbortSignal): Promise<Record<string, unknown> | null> {
@@ -47,6 +48,40 @@ export async function fetchLiveFlowSummary(target: { page: PageContext; vs: ViaS
   } catch {
     return null
   }
+}
+
+export function enrichFlowWithDomStatus(liveFlow: Record<string, unknown>, dom: DomPageStatus): void {
+  if (!dom.panelOpen) return
+  const steps = Array.isArray(liveFlow.steps) ? (liveFlow.steps as Record<string, unknown>[]) : []
+  const visit = (list: Record<string, unknown>[]) => {
+    for (const step of list) {
+      const matches = Boolean(
+        (typeof step.id === 'string' && dom.stepId && step.id === dom.stepId) ||
+        (typeof step.slug === 'string' && dom.slugName && step.slug === dom.slugName) ||
+        (typeof step.slug === 'string' && dom.stepTitle && step.slug.toLowerCase().replace(/[_-]+/g, ' ').includes(dom.stepTitle.toLowerCase().replace(/[_-]+/g, ' ')))
+      )
+      if (matches) {
+        if (dom.connection || dom.authId) {
+          step.connected = true
+          step.connectionName = dom.connection
+          step.connection = { id: dom.authId, name: dom.connection }
+        }
+        const existing = (step.configuredValues && typeof step.configuredValues === 'object' ? step.configuredValues : {}) as Record<string, unknown>
+        step.configuredValues = { ...existing, ...(dom.selectedFields || {}), ...(dom.draftInputData || {}) }
+        if (dom.fieldErrors && Object.keys(dom.fieldErrors).length > 0) step.fieldErrors = dom.fieldErrors
+        if (dom.emptyRequiredFields && dom.emptyRequiredFields.length > 0) step.emptyRequiredFields = dom.emptyRequiredFields
+        if (dom.testedInUi) {
+          step.tested = true
+          step.testedInUi = true
+        }
+        step.draftInUi = true
+        step.hasUnsavedChanges = dom.hasUnsavedChanges
+      }
+      if (Array.isArray(step.steps)) visit(step.steps as Record<string, unknown>[])
+      if (Array.isArray(step.branches)) visit(step.branches as Record<string, unknown>[])
+    }
+  }
+  visit(steps)
 }
 
 const STOP_WORDS = /^(stop|cancel|stop it|never ?mind)[.!]*$/i
@@ -252,6 +287,9 @@ async function agentLoop(run: RunContext): Promise<void> {
       fetchLiveFlowSummary(target, signal),
       session.getDomStatus().catch(() => null),
     ])
+    if (liveFlow && domStatus?.panelOpen) {
+      enrichFlowWithDomStatus(liveFlow, domStatus)
+    }
     if (plan && (liveFlow || domStatus)) {
       const reconciled = reconcilePlanWithFlow(plan, liveFlow, undefined, domStatus)
       if (reconciled.changed) {

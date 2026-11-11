@@ -45,6 +45,9 @@ export function createUiBridge(session: Session): UiBridge {
     fillField(fieldLabel, value, clickSave) {
       return session.fillField(fieldLabel, value, clickSave)
     },
+    getDomStatus() {
+      return session.domStatus
+    },
     say(text) {
       postLine(session, 'assistant', text)
       speakReply(text).catch(() => undefined)

@@ -4,6 +4,7 @@
 import type { JsonSchema } from '../llm/types'
 import type { HighlightTarget, MascotMode, PlanChange, PlanUpdate, Suggestion } from '../../shared/mascot'
 import type { PageContext, PageKind } from '../../shared/page'
+import type { DomPageStatus } from '../../shared/messages'
 import type { ViaSocketClient } from './viasocket-client'
 
 export type ToolDanger =
@@ -22,10 +23,18 @@ export interface UiBridge {
   /** App-internal path or same-host URL. replace: change the current history entry (panels, refetch stamps). */
   navigate(url: string, opts?: { replace?: boolean }): void
   /** Invalidate step data in the editor's Redux store so that open or subsequent slider views render fresh draft state */
-  refreshStep(step: { scriptId: string; stepId?: string; slugName?: string }): void
+  refreshStep(step: {
+    scriptId: string
+    stepId?: string
+    slugName?: string
+    flowJson?: Record<string, unknown>
+    stepRow?: Record<string, unknown>
+  }): void
   reloadPage(reason: string): void
   /** Fill or map a field in the open step panel and optionally click Save */
   fillField(fieldLabel: string, value: string, clickSave?: boolean): Promise<{ success: boolean; error?: string }>
+  /** Return the current in-memory DOM / draft status of the active page if available */
+  getDomStatus?(): DomPageStatus | null
   /** Resolves true only if the user clicks the confirm button */
   confirm(title: string, detail: string, danger: boolean, confirmLabel?: string): Promise<boolean>
   say(text: string): void

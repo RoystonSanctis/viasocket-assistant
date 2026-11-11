@@ -76,7 +76,14 @@ export type BackgroundToContent =
   /** replace: update the current history entry (opening/closing panels, refetch stamps) instead of adding one */
   | { type: 'navigate'; url: string; replace?: boolean }
   /** Invalidate/refresh step configuration in the editor's Redux store so open or subsequent slider views reflect live draft changes */
-  | { type: 'refresh-step'; scriptId?: string; stepId?: string; slugName?: string }
+  | {
+      type: 'refresh-step'
+      scriptId?: string
+      stepId?: string
+      slugName?: string
+      flowJson?: Record<string, unknown>
+      stepRow?: Record<string, unknown>
+    }
   | { type: 'reload-page'; reason: string }
   | { type: 'confirm-request'; request: ConfirmRequest }
   /** The request timed out or its run ended: remove the card (a late click would be ignored anyway) */

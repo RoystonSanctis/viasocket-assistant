@@ -50,12 +50,16 @@ export async function putStep(
     ctx.vs.request({ method: 'PUT', path: `/scripts/${t.scriptId}/stepv2/${encodeURIComponent(slug)}`, body, live, signal: ctx.signal }),
   )
   const stepId = typeof body.id === 'string' ? body.id : typeof body.stepId === 'string' ? body.stepId : undefined
+  const root = isRecord(res) ? res : {}
+  const script = isRecord(root.script) ? (root.script as Record<string, unknown>) : undefined
+  const flowJson = isRecord(script?.json_script) ? (script.json_script as Record<string, unknown>) : undefined
+  const stepRow = isRecord(root.data) ? (root.data as Record<string, unknown>) : undefined
   try {
-    ctx.ui.refreshStep({ scriptId: t.scriptId, stepId, slugName: slug })
+    ctx.ui.refreshStep({ scriptId: t.scriptId, stepId, slugName: slug, flowJson, stepRow })
   } catch {
     // non-fatal
   }
-  return isRecord(res) ? res : {}
+  return root
 }
 
 export function functionBody(

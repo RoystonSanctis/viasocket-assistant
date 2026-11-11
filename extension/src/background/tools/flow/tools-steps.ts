@@ -1433,7 +1433,19 @@ async function buildUpdateBody(
       const pd = pluginDataOf(block, fn)
       if (!pd) throw new ToolError('This app step has no app definition. Delete it and add it again.')
       const holdKey = stepKey(ctx, t, c.stepId)
-      const saved: SavedState = { inputData: asRecord(pd.selectedValues?.inputData), authId: str(pd.selectedValues?.authData?.id) }
+      const dom = ctx.ui.getDomStatus?.()
+      const isThisStepOpen = Boolean(
+        dom?.panelOpen && (
+          dom.stepId === c.stepId ||
+          dom.slugName === slug ||
+          (dom.stepTitle && slug.toLowerCase().replace(/[_-]+/g, ' ').includes(dom.stepTitle.toLowerCase().replace(/[_-]+/g, ' ')))
+        )
+      )
+      const baseInputData = isThisStepOpen && dom?.draftInputData
+        ? { ...(dom.draftInputData as Record<string, unknown>), ...asRecord(pd.selectedValues?.inputData) }
+        : asRecord(pd.selectedValues?.inputData)
+      const baseAuthId = str(pd.selectedValues?.authData?.id) || (isThisStepOpen ? dom?.authId : undefined)
+      const saved: SavedState = { inputData: baseInputData, authId: baseAuthId }
       // Convenience fields (delay, agent, message, flow to run) under the tool's real field keys; inputData wins.
       const stepKind = kindFromStep(block, pd)
       const extra = specialValues(stepKind === 'delay' ? 'delay' : undefined, normalizeInputJson(pd.inputJson), pd, a)
@@ -1452,6 +1464,13 @@ async function buildUpdateBody(
         authData = await resolveConnection(ctx, connectionId, serviceId, lookup, t)
       } else if (pd.authType === 'NoAuth') authData = NO_AUTH
       else if (pd.selectedValues?.authData?.id) authData = pd.selectedValues.authData
+      else if (isThisStepOpen && dom?.authId) {
+        const serviceId = str(pd.serviceId) ?? ''
+        const lookup = str(pd.authIdLookup) ?? ''
+        if (ROW_ID_RE.test(serviceId) && ROW_ID_RE.test(lookup)) {
+          authData = await resolveConnection(ctx, dom.authId, serviceId, lookup, t).catch(() => undefined)
+        }
+      }
       let cfg: Configured
       try {
         cfg = await configure(ctx, t, {

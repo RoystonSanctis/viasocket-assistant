@@ -151,15 +151,26 @@ const getFieldOptions = defineTool<FieldOptionsArgs>({
       drafted = block.status === 'DRAFTED'
     }
     if (!pd) throw new ToolError('This step has no app definition. Delete it and add it again.')
+    const dom = ctx.ui.getDomStatus?.()
+    const isThisStepOpen = Boolean(
+      dom?.panelOpen && (
+        dom.slugName === a.slugName ||
+        (dom.stepTitle && a.slugName.toLowerCase().replace(/[_-]+/g, ' ').includes(dom.stepTitle.toLowerCase().replace(/[_-]+/g, ' ')))
+      )
+    )
+    const baseInputData = isThisStepOpen && dom?.draftInputData
+      ? { ...(dom.draftInputData as Record<string, unknown>), ...asRecord(pd.selectedValues?.inputData) }
+      : (isTrigger && drafted ? {} : asRecord(pd.selectedValues?.inputData))
+    const baseAuthId = (isTrigger && drafted ? undefined : str(pd.selectedValues?.authData?.id)) || (isThisStepOpen ? dom?.authId : undefined)
     const saved: SavedState = getData?.saved ?? {
-      inputData: isTrigger && drafted ? {} : asRecord(pd.selectedValues?.inputData),
-      authId: isTrigger && drafted ? undefined : str(pd.selectedValues?.authData?.id),
+      inputData: baseInputData,
+      authId: baseAuthId,
     }
     const merged = mergePending(holdKey, a.values, saved)
 
     const serviceId = str(pd.serviceId) ?? ''
     const lookup = str(pd.authIdLookup) ?? ''
-    const connectionId = a.connectionId ?? merged.connectionId
+    const connectionId = a.connectionId ?? merged.connectionId ?? (isThisStepOpen ? dom?.authId : undefined)
     let authData: AuthData | undefined
     if (pd.authType === 'NoAuth' || pd.selectedValues?.authData?.id === 'NoAuth') authData = NO_AUTH
     else if (noConnection) authData = asRecord(pd.selectedValues?.authData) as AuthData

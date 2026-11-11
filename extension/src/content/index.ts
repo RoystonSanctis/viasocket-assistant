@@ -452,6 +452,24 @@ async function main(): Promise<void> {
             return
           }
 
+          if (!msg.fieldLabel && msg.clickSave) {
+            const saveBtn = Array.from(slider.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+              /^(save|save & continue)$/i.test(b.textContent?.trim() || '')
+            )
+            if (saveBtn && !saveBtn.disabled) {
+              saveBtn.click()
+              port.send({ type: 'fill-field-response', requestId: msg.requestId, success: true })
+            } else {
+              port.send({
+                type: 'fill-field-response',
+                requestId: msg.requestId,
+                success: false,
+                error: 'Save button is disabled or not found in the open panel.',
+              })
+            }
+            return
+          }
+
           const allFieldRows = Array.from(
             slider.querySelectorAll<HTMLElement>(
               '[data-testid^="plugin-field-"]:not([data-testid^="plugin-field-label-"]), .plugin-field-row, [data-testid="custom-field-box"]'
@@ -553,7 +571,10 @@ async function main(): Promise<void> {
         }
         break
       case 'refresh-step':
-        bridge.refreshStep(msg.scriptId, msg.stepId, msg.slugName)
+        bridge.refreshStep(msg.scriptId, msg.stepId, msg.slugName, {
+          flowJson: msg.flowJson,
+          stepRow: msg.stepRow,
+        })
         break
       case 'reload-page':
         location.reload()

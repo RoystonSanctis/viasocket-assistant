@@ -225,6 +225,11 @@ function install(): void {
         stepRow.script_id === scriptId &&
         new URLSearchParams(location.search).get('stepId') === stepId
       ) {
+        const urlData = {
+          sectionIdOrScriptId: resolvedScriptId || scriptId || extractScriptId(location.pathname),
+          versionIdOrStepId: stepId,
+          tabName: 'draft',
+        }
         if (isPreProcess) {
           store.dispatch({
             type: 'stepsDataV3/setFunctionJson/fulfilled',
@@ -236,7 +241,7 @@ function install(): void {
               subfunctions: stepRow.subfunctions,
             },
           })
-          store.dispatch({ type: 'stepsDataV3/setKeyValueInstance', payload: { title: slugName, hasUnsavedCode: false } })
+          store.dispatch({ type: 'stepsDataV3/setKeyValueInstance', urlData, payload: { title: slugName, hasUnsavedCode: false } })
           return
         }
 
@@ -271,8 +276,8 @@ function install(): void {
             subfunctions: draftBlock.subfunctions,
           },
         })
-        store.dispatch({ type: 'stepsDataV3/setKeyValueInstance', payload: { title: slugName, hasUnsavedCode: false } })
-        if (Object.keys(pending).length) store.dispatch({ type: 'stepsDataV3/setKeyValueInstance', payload: pending })
+        store.dispatch({ type: 'stepsDataV3/setKeyValueInstance', urlData, payload: { title: slugName, hasUnsavedCode: false } })
+        if (Object.keys(pending).length) store.dispatch({ type: 'stepsDataV3/setKeyValueInstance', urlData, payload: pending })
         return
       }
 
@@ -290,13 +295,14 @@ function install(): void {
 
       // The reducer drops the step from the flow in the URL, so only touch the open flow; never the whole flow's
       // step data (that wipes every step's unsaved draft) and never a step the user has unsaved edits in.
-      const urlFlow = extractScriptId(location.pathname)
-      if (!urlFlow || (scriptId && scriptId !== urlFlow)) return
-      const stepsOfUrlFlow = isObj(state.stepsDataV3) ? state.stepsDataV3[urlFlow] : undefined
+      const urlFlow = resolvedScriptId || scriptId || extractScriptId(location.pathname)
+      if (!urlFlow) return
       const drop = (id: string) => {
-        const entry = isObj(stepsOfUrlFlow) ? stepsOfUrlFlow[id] : undefined
-        if (isObj(entry) && entry.hasUnsavedCode === true) return
-        store.dispatch({ type: 'stepsDataV3/deleteStepFromStepData', payload: { stepId: id } })
+        store.dispatch({
+          type: 'stepsDataV3/deleteStepFromStepData',
+          urlData: { sectionIdOrScriptId: urlFlow },
+          payload: { stepId: id },
+        })
       }
 
       const urlParams = new URLSearchParams(location.search)
@@ -494,25 +500,62 @@ function install(): void {
       )
       if (!slider) return { success: false, error: 'Side panel is not open.' }
 
+      if (!fieldLabel && clickSave) {
+        const saveBtn = Array.from(slider.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+          /^(save|save & continue)$/i.test(b.textContent?.trim() || '')
+        )
+        if (saveBtn && !saveBtn.disabled) {
+          saveBtn.click()
+          return { success: true }
+        }
+        return { success: false, error: 'Save button is disabled or not found in the open panel.' }
+      }
+
       const allFieldRows = Array.from(
         slider.querySelectorAll<HTMLElement>(
           '[data-testid^="plugin-field-"]:not([data-testid^="plugin-field-label-"]), .plugin-field-row, [data-testid="custom-field-box"]'
         )
       )
-      const targetRow = allFieldRows.find((row) => {
+      const norm = fieldLabel.replace(/[*:[\]"']/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
+
+      // 1. Exact match on testId, id, or clean label
+      let targetRow = allFieldRows.find((row) => {
+        const testId = (row.getAttribute('data-testid') || '').toLowerCase().replace(/[*:[\]"']/g, '')
+        const id = (row.id || '').toLowerCase().replace(/[*:[\]"']/g, '')
+        if (testId === `plugin-field-${norm}` || id === `scroll-${norm}`) return true
         const lbl = (row.querySelector('[data-testid^="plugin-field-label-"], label')?.textContent || '')
-          .replace(/[*:]/g, '')
+          .replace(/[*:[\]"']/g, '')
           .replace(/\s+/g, ' ')
           .trim()
           .toLowerCase()
-        const norm = fieldLabel.replace(/[*:]/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
-        return lbl === norm || lbl.includes(norm) || norm.includes(lbl)
+        return lbl === norm
       })
+
+      // 2. Prefix or suffix match on testid/id
+      if (!targetRow) {
+        targetRow = allFieldRows.find((row) => {
+          const testId = (row.getAttribute('data-testid') || '').toLowerCase().replace(/[*:[\]"']/g, '')
+          const id = (row.id || '').toLowerCase().replace(/[*:[\]"']/g, '')
+          return testId.endsWith(`-${norm}`) || testId.startsWith(`plugin-field-${norm}`) || id.endsWith(`-${norm}`)
+        })
+      }
+
+      // 3. Fallback: contains match on label
+      if (!targetRow) {
+        targetRow = allFieldRows.find((row) => {
+          const lbl = (row.querySelector('[data-testid^="plugin-field-label-"], label')?.textContent || '')
+            .replace(/[*:[\]"']/g, '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .toLowerCase()
+          return lbl.includes(norm) || norm.includes(lbl)
+        })
+      }
 
       if (!targetRow) return { success: false, error: `Field "${fieldLabel}" was not found in the open panel.` }
 
       // 1. Fiber getHtmlAndValue (CustomAutoSuggest / React Mentions)
-      const autosuggest = targetRow.querySelector<HTMLElement>('[data-testid^="custom-autosuggest-"]')
+      const autosuggest = targetRow.querySelector<HTMLElement>('[data-testid*="custom-autosuggest-"], [data-testid*="mentions-input"]')
       if (autosuggest) {
         const key = Object.keys(autosuggest).find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'))
         if (key) {
@@ -540,11 +583,23 @@ function install(): void {
         input.dispatchEvent(new Event('blur', { bubbles: true, composed: true }))
       }
 
-      // 3. Clear localNotification error if present in Redux store
+      // 3. Mark hasUnsavedCode: true and clear localNotification error in Redux store
       try {
         const store = findReduxStore()
         if (store) {
           const state = store.getState()
+          const scriptId =
+            extractScriptId(location.pathname) ||
+            (isObj(state.appInfo) && typeof state.appInfo.currentScriptId === 'string' ? state.appInfo.currentScriptId : undefined)
+          const urlParams = new URLSearchParams(location.search)
+          const stepId = urlParams.get('stepId')
+          if (scriptId && stepId) {
+            store.dispatch({
+              type: 'stepsDataV3/setKeyValueInstance',
+              urlData: { sectionIdOrScriptId: scriptId, versionIdOrStepId: stepId, tabName: 'draft' },
+              payload: { hasUnsavedCode: true },
+            })
+          }
           const notifs =
             isObj(state.notification) && isObj((state.notification as Record<string, unknown>).localNotification)
               ? ((state.notification as Record<string, unknown>).localNotification as Record<string, unknown>)
@@ -568,7 +623,7 @@ function install(): void {
             /^(save|save & continue)$/i.test(b.textContent?.trim() || '')
           )
           if (saveBtn && !saveBtn.disabled) saveBtn.click()
-        }, 150)
+        }, 200)
       }
 
       syncDraftToDom()
