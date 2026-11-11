@@ -139,13 +139,12 @@ export function extractDomPageStatus(): DomPageStatus {
 
   const allFieldRows = Array.from(
     slider.querySelectorAll<HTMLElement>(
-      '[data-testid^="plugin-field-"], [data-testid="plugin-form-container"] > div, .plugin-field-row, [data-testid="custom-field-box"]'
+      '[data-testid^="plugin-field-"]:not([data-testid^="plugin-field-label-"]), .plugin-field-row, [data-testid="custom-field-box"]'
     )
   )
-  // Prefer leaf field rows (rows that do not contain other plugin-field elements)
+  // Leaf field rows: rows that do not contain other matching field rows
   const leafRows = allFieldRows.filter((row) => {
-    const nested = row.querySelectorAll('[data-testid^="plugin-field-"]')
-    return nested.length === 0
+    return !allFieldRows.some((other) => other !== row && row.contains(other))
   })
   const fieldRows = leafRows.length > 0 ? leafRows : allFieldRows
 
@@ -177,8 +176,9 @@ export function extractDomPageStatus(): DomPageStatus {
       const vals = Array.from(chips)
         .map((c) => c.textContent?.trim())
         .filter((t): t is string => Boolean(t && t !== '×' && !/^(add title|choose)$/i.test(t)))
-      if (vals.length > 0) {
-        value = vals.join(', ')
+      const uniqueVals = Array.from(new Set(vals))
+      if (uniqueVals.length > 0) {
+        value = uniqueVals.join(', ')
       }
     }
 
@@ -258,7 +258,6 @@ export function extractDomPageStatus(): DomPageStatus {
 
     const isMappingField = Boolean(
       row.querySelector('textarea, .customAutoSuggestForPlugin, [data-testid="custom-autosuggest"]') ||
-      row.closest('[data-testid*="column"], [data-testid*="record"], [data-testid*="input-group"]') ||
       row.querySelector('textarea[placeholder*="Map data"], input[placeholder*="Map data"]')
     )
     if (isMappingField) {
@@ -308,6 +307,33 @@ export function extractDomPageStatus(): DomPageStatus {
   )
   const canSave = Boolean(saveBtn && !saveBtn.disabled && !saveBtn.getAttribute('aria-disabled'))
 
+  // 8. In-memory Redux draft step data (synced by main-world hook into data-vs-draft-step attribute)
+  let draftInputData: Record<string, unknown> | undefined
+  let reduxStepId: string | undefined
+  let reduxSlugName: string | undefined
+  let serviceId: string | undefined
+  let selectedCreate: string | undefined
+  let actionVersionId: string | undefined
+
+  try {
+    const rawAttr = document.documentElement.getAttribute('data-vs-draft-step')
+    if (rawAttr) {
+      const parsed = JSON.parse(rawAttr)
+      if (parsed && typeof parsed === 'object') {
+        if (parsed.inputData && typeof parsed.inputData === 'object') draftInputData = parsed.inputData
+        if (typeof parsed.stepId === 'string') reduxStepId = parsed.stepId
+        if (typeof parsed.slugName === 'string') reduxSlugName = parsed.slugName
+        if (typeof parsed.serviceId === 'string') serviceId = parsed.serviceId
+        if (typeof parsed.selectedCreate === 'string') selectedCreate = parsed.selectedCreate
+        if (typeof parsed.actionVersionId === 'string') actionVersionId = parsed.actionVersionId
+        if (!connection && typeof parsed.connectionLabel === 'string') connection = parsed.connectionLabel
+        if (!authId && typeof parsed.authId === 'string') authId = parsed.authId
+      }
+    }
+  } catch {
+    // ignore parse error
+  }
+
   return {
     panelOpen: true,
     stepTitle,
@@ -317,6 +343,12 @@ export function extractDomPageStatus(): DomPageStatus {
     authId,
     selectedFields,
     draftMappings: Object.keys(draftMappings).length > 0 ? draftMappings : undefined,
+    draftInputData,
+    stepId: reduxStepId,
+    slugName: reduxSlugName,
+    serviceId,
+    selectedCreate,
+    actionVersionId,
     fieldErrors: Object.keys(fieldErrors).length > 0 ? fieldErrors : undefined,
     emptyRequiredFields: emptyRequiredFields.length > 0 ? emptyRequiredFields : undefined,
     sliderErrors: sliderErrors.length > 0 ? sliderErrors : undefined,

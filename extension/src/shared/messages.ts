@@ -31,6 +31,7 @@ export type ContentToBackground =
   | { type: 'open-options'; section?: string }
   | { type: 'dom-status'; status: DomPageStatus }
   | { type: 'dom-status-response'; requestId: string; status: DomPageStatus }
+  | { type: 'fill-field-response'; requestId: string; success: boolean; error?: string }
 
 export interface DomPageStatus {
   panelOpen: boolean
@@ -41,6 +42,12 @@ export interface DomPageStatus {
   authId?: string
   selectedFields: Record<string, string>
   draftMappings?: Record<string, string>
+  draftInputData?: Record<string, unknown>
+  stepId?: string
+  slugName?: string
+  serviceId?: string
+  selectedCreate?: string
+  actionVersionId?: string
   fieldErrors?: Record<string, string>
   emptyRequiredFields?: string[]
   sliderErrors?: string[]
@@ -57,6 +64,7 @@ export type BackgroundToContent =
   | { type: 'thinking-text'; text: string }
   | { type: 'chat'; line: ChatLine }
   | { type: 'get-dom-status'; requestId: string }
+  | { type: 'fill-field'; requestId: string; fieldLabel: string; value: string; clickSave?: boolean }
   | { type: 'history'; lines: ChatLine[] }
   /** The conversation's workflow plan (checklist card); null hides it. Sent after every 'history' and on each change */
   | { type: 'plan'; plan: WorkflowPlan | null }
@@ -183,6 +191,7 @@ export type PageToContentMsg =
   | { type: 'navigate-busy' }
   | { type: 'step-context-response'; requestId: string; data: StepContextData | null }
   | { type: 'editor-action-response'; requestId: string; result: EditorActionResult }
+  | { type: 'field-value-response'; requestId: string; success: boolean; error?: string }
 
 export type ContentToPageMsg =
   /** First message; the hook adopts this nonce and ignores any other init until that nonce is released */
@@ -204,6 +213,8 @@ export type ContentToPageMsg =
     }
   /** Read the open JS step for the subfunctions panel; answered with step-context-response */
   | { type: 'get-step-context'; requestId: string; scriptId?: string; stepId?: string; slugName?: string }
+  /** Set a field value in the open step panel via React fiber/Redux */
+  | { type: 'set-field-value'; requestId: string; fieldLabel: string; value: string; clickSave?: boolean }
   /** The Beautify button: check or format the Monaco editor marked with EDITOR_ID_ATTR; answered with editor-action-response */
   | { type: 'editor-action'; requestId: string; editorId: string; action: EditorAction }
   /** The content script was orphaned (extension updated or reloaded): the hook pairs with the next init instead */

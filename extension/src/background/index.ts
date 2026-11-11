@@ -182,6 +182,11 @@ async function handlePortMessage(session: Session, raw: unknown): Promise<void> 
         session.resolveDomStatus(msg.requestId, msg.status)
       }
       return
+    case 'fill-field-response':
+      if (typeof msg.requestId === 'string') {
+        session.resolveFillField(msg.requestId, msg.success === true, msg.error)
+      }
+      return
     case 'suggestion-response':
       if (typeof msg.id === 'string' && (msg.action === 'apply' || msg.action === 'dismiss')) {
         await session.pageUpdate

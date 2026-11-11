@@ -24,6 +24,8 @@ export interface UiBridge {
   /** Invalidate step data in the editor's Redux store so that open or subsequent slider views render fresh draft state */
   refreshStep(step: { scriptId: string; stepId?: string; slugName?: string }): void
   reloadPage(reason: string): void
+  /** Fill or map a field in the open step panel and optionally click Save */
+  fillField(fieldLabel: string, value: string, clickSave?: boolean): Promise<{ success: boolean; error?: string }>
   /** Resolves true only if the user clicks the confirm button */
   confirm(title: string, detail: string, danger: boolean, confirmLabel?: string): Promise<boolean>
   say(text: string): void

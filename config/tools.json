@@ -8,6 +8,8 @@
     "ui_refresh_page": { "enabled": true },
     "ui_navigate": { "enabled": true },
     "ui_plan": { "enabled": true },
+    "ui_fill_field": { "enabled": true },
+    "ui_save_step": { "enabled": true },
 
     "vs_list_workspaces": { "enabled": true },
     "vs_list_projects": { "enabled": true },

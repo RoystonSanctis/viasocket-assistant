@@ -50,6 +50,12 @@ function cleanDomStatus(v: unknown): DomPageStatus | null {
     authId: text(v.authId, 64),
     selectedFields: (maskVariables(fields) ?? {}) as Record<string, string>,
     draftMappings: Object.keys(mappings).length ? (maskVariables(mappings) ?? {}) as Record<string, string> : undefined,
+    draftInputData: isRecord(v.draftInputData) ? v.draftInputData : undefined,
+    stepId: text(v.stepId, 64),
+    slugName: text(v.slugName, 64),
+    serviceId: text(v.serviceId, 64),
+    selectedCreate: text(v.selectedCreate, 64),
+    actionVersionId: text(v.actionVersionId, 64),
     fieldErrors: Object.keys(errors).length ? errors : undefined,
     emptyRequiredFields: emptyReq && emptyReq.length ? emptyReq : undefined,
     sliderErrors: sliderErrors && sliderErrors.length ? sliderErrors : undefined,
@@ -270,6 +276,8 @@ export class Session {
     this.clearIdleTimer()
     this.pendingSuggestions.clear()
     for (const wake of this.idleWaiters.splice(0)) wake()
+    for (const resolver of this.pendingFillField.values()) resolver({ success: false, error: 'Session closed' })
+    this.pendingFillField.clear()
   }
 
   private rejectConfirms(): void {
@@ -321,6 +329,32 @@ export class Session {
         resolve(status)
       })
       this.send({ type: 'get-dom-status', requestId })
+    })
+  }
+
+  private pendingFillField = new Map<string, (res: { success: boolean; error?: string }) => void>()
+
+  resolveFillField(requestId: string, success: boolean, error?: string): void {
+    const resolver = this.pendingFillField.get(requestId)
+    if (resolver) {
+      this.pendingFillField.delete(requestId)
+      resolver({ success, error })
+    }
+  }
+
+  async fillField(fieldLabel: string, value: string, clickSave?: boolean, timeoutMs = 6000): Promise<{ success: boolean; error?: string }> {
+    if (this.closed) return { success: false, error: 'Session closed' }
+    const requestId = crypto.randomUUID()
+    return new Promise<{ success: boolean; error?: string }>((resolve) => {
+      const timer = setTimeout(() => {
+        this.pendingFillField.delete(requestId)
+        resolve({ success: false, error: 'Timeout waiting for field fill' })
+      }, timeoutMs)
+      this.pendingFillField.set(requestId, (res) => {
+        clearTimeout(timer)
+        resolve(res)
+      })
+      this.send({ type: 'fill-field', requestId, fieldLabel, value, clickSave })
     })
   }
 

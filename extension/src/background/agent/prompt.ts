@@ -148,11 +148,12 @@ function contextBlock(
       JSON.stringify(domStatus, null, 2),
       '```',
       'CRITICAL DRAFT STATE RULES:',
-      '- Ground truth: The side panel is currently open. This status shows the connection, options selected, draft mappings, and any validation errors currently present in the UI before clicking Save.',
-      '- Unsaved selections: If fields or options are already selected in this draft status (e.g. spreadsheet, sheet, columns, radio choices), or connection is selected, DO NOT ask the user to choose or configure them again! Treat them as selected in draft.',
+      '- Ground truth: The side panel is currently open. This status shows the connection, options selected, draft mappings, draftInputData, and any validation errors currently present in the UI before clicking Save.',
+      '- Unsaved draft memory: In viaSocket, selections in an open panel exist ONLY in browser memory until saved. If the page is reloaded before saving, they vanish! Your goal is to help the user complete the step and get it saved so it is persisted to the flow script.',
+      '- Unsaved selections: If fields or options are already selected in this draft status (e.g. spreadsheet, sheet, columns, radio choices), or connection is selected, DO NOT ask the user to choose or configure them again! You know what is selected in draft.',
       '- Mistakes and validation errors: If fieldErrors or emptyRequiredFields are present (e.g. a required field has "This field can\'t be empty." or is blank), NOTIFY THE USER IMMEDIATELY about the mistake or missing field! Point out which field needs attention and suggest or provide the exact mapping expression (e.g. ${context.req.body.<field>}).',
-      '- User asks to proceed or complete mapping: NEVER claim you cannot see the fields, and NEVER demand that they click "Save" first when required fields are empty (the UI blocks saving while required fields are empty!). Instead, acknowledge the draft selections and provide the exact mapping values or save them via vs_update_step.',
-      '- If tested in the UI (testedInUi is true): Acknowledge that the test passed with the selected options, and if save is available, prompt them to click "Save" (or call vs_update_step) to proceed to the next item in the plan.',
+      '- User asks to map or complete fields ("do the mapping", "do it", "fill name"): Use ui_fill_field to fill the field in the open panel! ui_fill_field automatically sets the value and clicks Save so the step is persisted to the server. NEVER tell the user you cannot see their spreadsheet/sheet selections, and NEVER tell them to click Save first when required fields are empty (the UI blocks saving while required fields are empty!). Call ui_fill_field directly.',
+      '- If tested in the UI (testedInUi is true): Acknowledge that the test passed with the selected options, and if save is available, click Save (or use ui_save_step) to proceed to the next item in the plan.',
     )
   }
   if (liveFlow) {

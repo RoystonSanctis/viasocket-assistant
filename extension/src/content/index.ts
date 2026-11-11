@@ -13,7 +13,7 @@ import { initFlowMenu } from './flow-menu'
 import { createHotkey } from './hotkey'
 import { createMascot } from './mascot'
 import type { MascotCallbacks, MascotController } from './mascot/api'
-import { createPageBridge } from './page-bridge'
+import { createPageBridge, type PageBridge } from './page-bridge'
 import { watchPage } from './page-watch'
 import { watchDomStatus } from './dom-status'
 import { connectPort } from './port'
@@ -380,6 +380,15 @@ async function main(): Promise<void> {
     port.send({ type: 'dom-status', status })
   })
 
+  // ---------- MAIN-world hook ----------
+
+  const bridge = createPageBridge({
+    apiHosts: [new URL(env.apiBase).host],
+    onObserved: (event) => port.send({ type: 'observed', event }),
+    onNavigated: () => pageWatch.poke(),
+    onNavigateBusy: () => mascot.addChat(systemNote(NAV_BUSY)),
+  })
+
   function applyEnabled(): void {
     mascot.setSttEngine(settings.sttEngine)
     mascot.setVoiceEnabled(settings.voiceEnabled)
@@ -423,6 +432,87 @@ async function main(): Promise<void> {
       case 'get-dom-status':
         port.send({ type: 'dom-status-response', requestId: msg.requestId, status: domWatcher.getStatus() })
         break
+      case 'fill-field': {
+        const executeFill = async () => {
+          // 1. Try pageBridge (Main-world hook with React fiber access)
+          if (bridge.ready) {
+            const hookRes = await bridge.setFieldValue(msg.fieldLabel, msg.value, msg.clickSave)
+            if (hookRes.success) {
+              port.send({ type: 'fill-field-response', requestId: msg.requestId, success: true })
+              return
+            }
+          }
+
+          // 2. DOM-level fallback in content script
+          const slider = document.querySelector<HTMLElement>(
+            '[data-testid="step-config-slider"], [data-slider-container="true"], .custom_slider'
+          )
+          if (!slider) {
+            port.send({ type: 'fill-field-response', requestId: msg.requestId, success: false, error: 'Side panel is not open.' })
+            return
+          }
+
+          const allFieldRows = Array.from(
+            slider.querySelectorAll<HTMLElement>(
+              '[data-testid^="plugin-field-"]:not([data-testid^="plugin-field-label-"]), .plugin-field-row, [data-testid="custom-field-box"]'
+            )
+          )
+          const targetRow = allFieldRows.find((row) => {
+            const lbl = (row.querySelector('[data-testid^="plugin-field-label-"], label')?.textContent || '')
+              .replace(/[*:]/g, '')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .toLowerCase()
+            const norm = msg.fieldLabel.replace(/[*:]/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
+            return lbl === norm || lbl.includes(norm) || norm.includes(lbl)
+          })
+
+          if (!targetRow) {
+            port.send({
+              type: 'fill-field-response',
+              requestId: msg.requestId,
+              success: false,
+              error: `Field "${msg.fieldLabel}" was not found in the open panel.`,
+            })
+            return
+          }
+
+          const input = targetRow.querySelector<HTMLInputElement | HTMLTextAreaElement>('textarea, input:not([type="hidden"])')
+          if (!input) {
+            port.send({
+              type: 'fill-field-response',
+              requestId: msg.requestId,
+              success: false,
+              error: `No editable input found for field "${msg.fieldLabel}".`,
+            })
+            return
+          }
+
+          const proto = Object.getPrototypeOf(input)
+          const nativeSet = Object.getOwnPropertyDescriptor(proto, 'value')?.set
+          if (nativeSet) nativeSet.call(input, msg.value)
+          else input.value = msg.value
+
+          input.dispatchEvent(new Event('input', { bubbles: true, composed: true }))
+          input.dispatchEvent(new Event('change', { bubbles: true, composed: true }))
+          input.dispatchEvent(new Event('blur', { bubbles: true, composed: true }))
+
+          if (msg.clickSave) {
+            setTimeout(() => {
+              const saveBtn = Array.from(slider.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+                /^(save|save & continue)$/i.test(b.textContent?.trim() || '')
+              )
+              if (saveBtn && !saveBtn.disabled) saveBtn.click()
+            }, 150)
+          }
+
+          port.send({ type: 'fill-field-response', requestId: msg.requestId, success: true })
+        }
+        executeFill().catch((err) => {
+          port.send({ type: 'fill-field-response', requestId: msg.requestId, success: false, error: String(err) })
+        })
+        break
+      }
       case 'config':
         config = msg.config
         mascot.setConfig(msg.config)
@@ -547,15 +637,6 @@ async function main(): Promise<void> {
       }
     }
   }
-
-  // ---------- MAIN-world hook ----------
-
-  const bridge = createPageBridge({
-    apiHosts: [new URL(env.apiBase).host],
-    onObserved: (event) => port.send({ type: 'observed', event }),
-    onNavigated: () => pageWatch.poke(),
-    onNavigateBusy: () => mascot.addChat(systemNote(NAV_BUSY)),
-  })
 
   // ---------- hotkey ----------
 

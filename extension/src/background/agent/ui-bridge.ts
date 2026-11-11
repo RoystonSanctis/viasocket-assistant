@@ -42,6 +42,9 @@ export function createUiBridge(session: Session): UiBridge {
       if (session.busy) session.pendingReload = reason
       else session.send({ type: 'reload-page', reason })
     },
+    fillField(fieldLabel, value, clickSave) {
+      return session.fillField(fieldLabel, value, clickSave)
+    },
     say(text) {
       postLine(session, 'assistant', text)
       speakReply(text).catch(() => undefined)

@@ -50,6 +50,8 @@ export interface PageBridge {
   getStepContext(scriptId?: string, stepId?: string, slugName?: string): Promise<StepContextData | null>
   /** Checks or beautifies the Monaco editor marked with EDITOR_ID_ATTR = editorId; null when the hook does not answer */
   editorAction(editorId: string, action: EditorAction): Promise<EditorActionResult | null>
+  /** Set a field value in the open step panel via React fiber/Redux */
+  setFieldValue(fieldLabel: string, value: string, clickSave?: boolean): Promise<{ success: boolean; error?: string }>
   /** The MAIN-world hook answered (it is missing in tabs that were open before an extension update) */
   readonly ready: boolean
   destroy(): void
@@ -180,6 +182,7 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
 
   const pendingContext = new Map<string, (data: StepContextData | null) => void>()
   const pendingEditor = new Map<string, (result: EditorActionResult | null) => void>()
+  const pendingField = new Map<string, (res: { success: boolean; error?: string }) => void>()
 
   function onMessage(ev: MessageEvent): void {
     if (ev.source !== window || ev.origin !== location.origin) return
@@ -213,6 +216,11 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
         const handler = typeof inner.requestId === 'string' ? pendingEditor.get(inner.requestId) : undefined
         const known = (EDITOR_ACTION_RESULTS as readonly unknown[]).includes(inner.result)
         if (handler) handler(known ? (inner.result as EditorActionResult) : null)
+        break
+      }
+      case 'field-value-response': {
+        const handler = typeof inner.requestId === 'string' ? pendingField.get(inner.requestId) : undefined
+        if (handler) handler({ success: inner.success === true, error: typeof inner.error === 'string' ? inner.error : undefined })
         break
       }
       default:
@@ -272,6 +280,20 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
         post({ type: 'editor-action', requestId, editorId, action })
       })
     },
+    setFieldValue(fieldLabel, value, clickSave) {
+      if (!hookReady) return Promise.resolve({ success: false, error: 'Main-world hook not ready' })
+      const requestId = makeNonce()
+      return new Promise<{ success: boolean; error?: string }>((resolve) => {
+        const finish = (res: { success: boolean; error?: string }) => {
+          clearTimeout(timer)
+          pendingField.delete(requestId)
+          resolve(res)
+        }
+        const timer = setTimeout(() => finish({ success: false, error: 'Timeout waiting for field update' }), 5000)
+        pendingField.set(requestId, finish)
+        post({ type: 'set-field-value', requestId, fieldLabel, value, clickSave })
+      })
+    },
     get ready() {
       return hookReady
     },
@@ -281,6 +303,7 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
       window.removeEventListener('message', onMessage)
       for (const finish of [...pendingContext.values()]) finish(null)
       for (const finish of [...pendingEditor.values()]) finish(null)
+      for (const finish of [...pendingField.values()]) finish({ success: false, error: 'Bridge destroyed' })
       // Called when this copy is orphaned. The page hook stays installed and only answers its first partner, so
       // without this the copy injected after an extension update would never get hook-ready.
       if (hookReady) post({ type: 'release' })

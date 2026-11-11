@@ -379,4 +379,56 @@ function planSummary(p: WorkflowPlan | null): Record<string, unknown> {
   return out
 }
 
-export const UI_TOOLS: Tool<any>[] = [openStep, closePanel, highlight, suggest, refreshPage, navigate, plan]
+interface FillFieldArgs {
+  fieldLabel: string
+  value: string
+  clickSave?: boolean
+}
+
+const fillFieldTool = defineTool<FillFieldArgs>({
+  name: 'ui_fill_field',
+  description:
+    'Fill or map a field in the open step panel in the flow editor (e.g. "name", "email", "Spreadsheet", etc.), and optionally click Save. Use this when the user asks to map values, complete fields, or do the mapping in an open panel before saving.',
+  parameters: params(
+    {
+      fieldLabel: S.str('Visible label or key of the field in the open step panel, e.g. "name", "email", "Spreadsheet".', { minLength: 1, maxLength: 80 }),
+      value: S.str('The value or mapping expression to enter, e.g. "${context.req.query.name}" or "Sheet1".', { maxLength: 2000 }),
+      clickSave: S.bool('Whether to click the Save button immediately after filling the field (default: true).'),
+    },
+    ['fieldLabel', 'value']
+  ),
+  danger: 'safe',
+  describe: (a) => `Setting "${a.fieldLabel}" to ${a.value}`,
+  async run(a, ctx) {
+    requireEditor(ctx)
+    const result = await ctx.ui.fillField(a.fieldLabel, a.value, a.clickSave !== false)
+    if (!result.success) {
+      throw new ToolError(result.error || `Could not fill field "${a.fieldLabel}" in the open panel.`)
+    }
+    return {
+      success: true,
+      field: a.fieldLabel,
+      value: a.value,
+      saved: a.clickSave !== false,
+      note: a.clickSave !== false ? 'Field filled and Save clicked in the panel.' : 'Field filled in the panel.',
+    }
+  },
+})
+
+const saveStepTool = defineTool<Record<string, never>>({
+  name: 'ui_save_step',
+  description: 'Click the Save button in the open step panel in the flow editor to persist draft selections to the flow script.',
+  parameters: params({}),
+  danger: 'safe',
+  describe: () => 'Saving the open step',
+  async run(_a, ctx) {
+    requireEditor(ctx)
+    const result = await ctx.ui.fillField('', '', true)
+    if (!result.success) {
+      throw new ToolError(result.error || 'Could not click Save in the open panel.')
+    }
+    return { success: true, saved: true, note: 'Save button clicked in the open panel.' }
+  },
+})
+
+export const UI_TOOLS: Tool<any>[] = [openStep, closePanel, highlight, suggest, refreshPage, navigate, plan, fillFieldTool, saveStepTool]

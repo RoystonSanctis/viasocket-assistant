@@ -436,6 +436,148 @@ function install(): void {
     }
   }
 
+  function syncDraftToDom(): void {
+    try {
+      const store = findReduxStore()
+      if (!store) return
+      const state = store.getState()
+      const scriptId =
+        extractScriptId(location.pathname) ||
+        (isObj(state.appInfo) && typeof state.appInfo.currentScriptId === 'string' ? state.appInfo.currentScriptId : undefined)
+      if (!scriptId) return
+      const urlParams = new URLSearchParams(location.search)
+      const stepId = urlParams.get('stepId')
+      const slugName = urlParams.get('slugName')
+      if (!stepId) {
+        if (document.documentElement.hasAttribute('data-vs-draft-step')) {
+          document.documentElement.removeAttribute('data-vs-draft-step')
+        }
+        return
+      }
+      const stepsData = isObj(state.stepsDataV3) ? (state.stepsDataV3 as Record<string, unknown>)[scriptId] : undefined
+      const stepEntry = isObj(stepsData) ? (stepsData as Record<string, unknown>)[stepId] : undefined
+      const draft = isObj(stepEntry) ? ((stepEntry as Record<string, unknown>).draft || stepEntry) : undefined
+      if (!isObj(draft)) return
+      const pluginData = isObj(draft.pluginData) ? draft.pluginData : undefined
+      const selectedValues = isObj(pluginData?.selectedValues)
+        ? pluginData.selectedValues
+        : isObj(draft.selectedValues)
+          ? draft.selectedValues
+          : {}
+      const authData = isObj(selectedValues.authData) ? selectedValues.authData : undefined
+      const inputData = isObj(selectedValues.inputData) ? selectedValues.inputData : undefined
+
+      const info = {
+        scriptId,
+        stepId,
+        slugName: slugName || undefined,
+        serviceId: typeof draft.serviceId === 'string' ? draft.serviceId : typeof pluginData?.serviceId === 'string' ? pluginData.serviceId : undefined,
+        selectedCreate: typeof draft.selectedCreate === 'string' ? draft.selectedCreate : typeof pluginData?.selectedCreate === 'string' ? pluginData.selectedCreate : undefined,
+        actionVersionId: typeof draft.actionVersionId === 'string' ? draft.actionVersionId : typeof pluginData?.actionVersionId === 'string' ? pluginData.actionVersionId : undefined,
+        authId: typeof authData?.id === 'string' ? authData.id : undefined,
+        connectionLabel: typeof authData?.connection_label === 'string' ? authData.connection_label : undefined,
+        inputData,
+      }
+      const serialized = JSON.stringify(info)
+      if (document.documentElement.getAttribute('data-vs-draft-step') !== serialized) {
+        document.documentElement.setAttribute('data-vs-draft-step', serialized)
+      }
+    } catch {
+      // never disturb the page
+    }
+  }
+
+  function setFieldValue(fieldLabel: string, value: string, clickSave?: boolean): { success: boolean; error?: string } {
+    try {
+      const slider = document.querySelector<HTMLElement>(
+        '[data-testid="step-config-slider"], [data-slider-container="true"], .custom_slider'
+      )
+      if (!slider) return { success: false, error: 'Side panel is not open.' }
+
+      const allFieldRows = Array.from(
+        slider.querySelectorAll<HTMLElement>(
+          '[data-testid^="plugin-field-"]:not([data-testid^="plugin-field-label-"]), .plugin-field-row, [data-testid="custom-field-box"]'
+        )
+      )
+      const targetRow = allFieldRows.find((row) => {
+        const lbl = (row.querySelector('[data-testid^="plugin-field-label-"], label')?.textContent || '')
+          .replace(/[*:]/g, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .toLowerCase()
+        const norm = fieldLabel.replace(/[*:]/g, '').replace(/\s+/g, ' ').trim().toLowerCase()
+        return lbl === norm || lbl.includes(norm) || norm.includes(lbl)
+      })
+
+      if (!targetRow) return { success: false, error: `Field "${fieldLabel}" was not found in the open panel.` }
+
+      // 1. Fiber getHtmlAndValue (CustomAutoSuggest / React Mentions)
+      const autosuggest = targetRow.querySelector<HTMLElement>('[data-testid^="custom-autosuggest-"]')
+      if (autosuggest) {
+        const key = Object.keys(autosuggest).find((k) => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'))
+        if (key) {
+          let f = (autosuggest as unknown as Record<string, unknown>)[key] as { memoizedProps?: Record<string, unknown>; return?: unknown } | undefined
+          while (f && !f.memoizedProps?.getHtmlAndValue) f = f.return as typeof f
+          if (f && typeof f.memoizedProps?.getHtmlAndValue === 'function') {
+            try {
+              (f.memoizedProps.getHtmlAndValue as (raw: string, html: string) => void)(value, value)
+            } catch {
+              // fallback to native input
+            }
+          }
+        }
+      }
+
+      // 2. Native input setter & event dispatch
+      const input = targetRow.querySelector<HTMLInputElement | HTMLTextAreaElement>('textarea, input:not([type="hidden"])')
+      if (input) {
+        const proto = Object.getPrototypeOf(input)
+        const nativeSet = Object.getOwnPropertyDescriptor(proto, 'value')?.set
+        if (nativeSet) nativeSet.call(input, value)
+        else input.value = value
+        input.dispatchEvent(new Event('input', { bubbles: true, composed: true }))
+        input.dispatchEvent(new Event('change', { bubbles: true, composed: true }))
+        input.dispatchEvent(new Event('blur', { bubbles: true, composed: true }))
+      }
+
+      // 3. Clear localNotification error if present in Redux store
+      try {
+        const store = findReduxStore()
+        if (store) {
+          const state = store.getState()
+          const notifs =
+            isObj(state.notification) && isObj((state.notification as Record<string, unknown>).localNotification)
+              ? ((state.notification as Record<string, unknown>).localNotification as Record<string, unknown>)
+              : undefined
+          if (notifs) {
+            const cleanKey = fieldLabel.replace(/[*:]/g, '').trim().toLowerCase()
+            for (const key of Object.keys(notifs)) {
+              if (key.toLowerCase().includes(cleanKey)) {
+                delete notifs[key]
+              }
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      if (clickSave) {
+        setTimeout(() => {
+          const saveBtn = Array.from(slider.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+            /^(save|save & continue)$/i.test(b.textContent?.trim() || '')
+          )
+          if (saveBtn && !saveBtn.disabled) saveBtn.click()
+        }, 150)
+      }
+
+      syncDraftToDom()
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
+  }
+
   function unwrap(data: unknown): InboundMsg | null {
     if (!isObj(data)) return null
     const inner = data[PAGE_KEY]
@@ -473,6 +615,21 @@ function install(): void {
     ) {
       return { type: 'editor-action', requestId: inner.requestId.slice(0, 64), editorId: inner.editorId, action: inner.action, nonce: inner.nonce }
     }
+    if (
+      inner.type === 'set-field-value' &&
+      typeof inner.requestId === 'string' &&
+      typeof inner.fieldLabel === 'string' &&
+      typeof inner.value === 'string'
+    ) {
+      return {
+        type: 'set-field-value',
+        requestId: inner.requestId.slice(0, 64),
+        fieldLabel: inner.fieldLabel,
+        value: inner.value,
+        clickSave: inner.clickSave === true,
+        nonce: inner.nonce,
+      }
+    }
     if (inner.type === 'release') return { type: 'release', nonce: inner.nonce }
     return null
   }
@@ -508,6 +665,11 @@ function install(): void {
       }
       if (msg.type === 'editor-action') {
         post({ type: 'editor-action-response', requestId: msg.requestId, result: editorAction(msg.editorId, msg.action) })
+        return
+      }
+      if (msg.type === 'set-field-value') {
+        const res = setFieldValue(msg.fieldLabel, msg.value, msg.clickSave)
+        post({ type: 'field-value-response', requestId: msg.requestId, success: res.success, error: res.error })
         return
       }
       requestNavigate(msg.url, msg.replace === true)
@@ -818,6 +980,26 @@ function install(): void {
       // leave that API untouched
     }
   }
+
+  // Synchronize draft step state from Redux
+  let storeSubscribed = false
+  function ensureStoreSubscription(): void {
+    if (storeSubscribed) return
+    const store = findReduxStore()
+    if (store && typeof (store as unknown as Record<string, unknown>).subscribe === 'function') {
+      try {
+        ;(store as unknown as { subscribe: (fn: () => void) => void }).subscribe(syncDraftToDom)
+        storeSubscribed = true
+      } catch {
+        // ignore
+      }
+    }
+  }
+  ensureStoreSubscription()
+  setInterval(() => {
+    ensureStoreSubscription()
+    syncDraftToDom()
+  }, 1000)
 }
 
 function alreadyInstalled(): boolean {
