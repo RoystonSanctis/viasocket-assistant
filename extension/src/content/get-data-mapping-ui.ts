@@ -50,12 +50,6 @@ const ADD_ICON_SVG = `
 </svg>
 `
 
-const CODE_VAR_ICON_SVG = `
-<svg class="MuiSvgIcon-root" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="width: 15px; height: 15px; display: block;">
-  <path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z" fill="currentColor"></path>
-</svg>
-`
-
 const CHEVRON_RIGHT_SVG = `
 <svg class="MuiSvgIcon-root vs-menu-chevron" focusable="false" aria-hidden="true" viewBox="0 0 24 24">
   <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" fill="currentColor"></path>
@@ -63,8 +57,123 @@ const CHEVRON_RIGHT_SVG = `
 `
 
 const WEBHOOK_ICON_URL = 'https://stuff.thingsofbrand.com/viasocket.com/images/imge_Webhook-bg.svg'
+const VARIABLE_ICON_URL = 'https://stuff.thingsofbrand.com/viasocket.com/images/imge_variables.svg'
 
 const CSS = `
+:root {
+  --vs-m-bg: #ffffff;
+  --vs-m-text: #1a1b19;
+  --vs-m-text-sec: #5f5e5b;
+  --vs-m-border: rgba(0, 0, 0, 0.12);
+  --vs-m-shadow: 0px 4px 18px rgba(0, 0, 0, 0.12);
+  --vs-m-hover: rgba(0, 0, 0, 0.04);
+  --vs-m-divider: rgba(0, 0, 0, 0.08);
+  --vs-m-icon-bg: #f9fafb;
+  --vs-m-icon-border: rgba(0, 0, 0, 0.08);
+  --vs-m-link: #1a4fa0;
+  --vs-m-link-hover: rgba(26, 79, 160, 0.08);
+  --vs-m-input-bg: #f2f2ef;
+  --vs-m-input-border: rgba(0, 0, 0, 0.2);
+  --vs-m-input-text: #1a1b19;
+  --vs-m-btn-bg: #2e2d29;
+  --vs-m-btn-text: #faf9f6;
+  --vs-m-btn-hover: #1a1b19;
+  --vs-m-chip-bg: rgba(0, 0, 0, 0.06);
+  --vs-m-chip-border: rgba(0, 0, 0, 0.12);
+  --vs-m-chip-text: #1a1b19;
+  --vs-m-chip-hover: rgba(0, 0, 0, 0.1);
+  --vs-m-val-bool: #d97706;
+  --vs-m-val-num: #2563eb;
+  --vs-m-val-str: #5f5e5b;
+  --vs-m-val-nil: #6b7280;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --vs-m-bg: #1c2128;
+    --vs-m-text: #f0f6fc;
+    --vs-m-text-sec: #d5dbe3;
+    --vs-m-border: #30363d;
+    --vs-m-shadow: 0px 4px 18px rgba(0, 0, 0, 0.45);
+    --vs-m-hover: rgba(255, 255, 255, 0.08);
+    --vs-m-divider: #30363d;
+    --vs-m-icon-bg: rgba(255, 255, 255, 0.04);
+    --vs-m-icon-border: rgba(255, 255, 255, 0.1);
+    --vs-m-link: #6ea8fe;
+    --vs-m-link-hover: rgba(110, 168, 254, 0.12);
+    --vs-m-input-bg: #0d1117;
+    --vs-m-input-border: #30363d;
+    --vs-m-input-text: #f0f6fc;
+    --vs-m-btn-bg: #f0f6fc;
+    --vs-m-btn-text: #0d1117;
+    --vs-m-btn-hover: #ffffff;
+    --vs-m-chip-bg: rgba(255, 255, 255, 0.08);
+    --vs-m-chip-border: rgba(255, 255, 255, 0.12);
+    --vs-m-chip-text: #f0f6fc;
+    --vs-m-chip-hover: rgba(255, 255, 255, 0.14);
+    --vs-m-val-bool: #f59e0b;
+    --vs-m-val-num: #60a5fa;
+    --vs-m-val-str: #d5dbe3;
+    --vs-m-val-nil: #8b949e;
+  }
+}
+
+html[data-theme='dark'], body[data-theme='dark'], html.dark, body.dark {
+  --vs-m-bg: #1c2128;
+  --vs-m-text: #f0f6fc;
+  --vs-m-text-sec: #d5dbe3;
+  --vs-m-border: #30363d;
+  --vs-m-shadow: 0px 4px 18px rgba(0, 0, 0, 0.45);
+  --vs-m-hover: rgba(255, 255, 255, 0.08);
+  --vs-m-divider: #30363d;
+  --vs-m-icon-bg: rgba(255, 255, 255, 0.04);
+  --vs-m-icon-border: rgba(255, 255, 255, 0.1);
+  --vs-m-link: #6ea8fe;
+  --vs-m-link-hover: rgba(110, 168, 254, 0.12);
+  --vs-m-input-bg: #0d1117;
+  --vs-m-input-border: #30363d;
+  --vs-m-input-text: #f0f6fc;
+  --vs-m-btn-bg: #f0f6fc;
+  --vs-m-btn-text: #0d1117;
+  --vs-m-btn-hover: #ffffff;
+  --vs-m-chip-bg: rgba(255, 255, 255, 0.08);
+  --vs-m-chip-border: rgba(255, 255, 255, 0.12);
+  --vs-m-chip-text: #f0f6fc;
+  --vs-m-chip-hover: rgba(255, 255, 255, 0.14);
+  --vs-m-val-bool: #f59e0b;
+  --vs-m-val-num: #60a5fa;
+  --vs-m-val-str: #d5dbe3;
+  --vs-m-val-nil: #8b949e;
+}
+
+html[data-theme='light'], body[data-theme='light'], html.light, body.light {
+  --vs-m-bg: #ffffff;
+  --vs-m-text: #1a1b19;
+  --vs-m-text-sec: #5f5e5b;
+  --vs-m-border: rgba(0, 0, 0, 0.12);
+  --vs-m-shadow: 0px 4px 18px rgba(0, 0, 0, 0.12);
+  --vs-m-hover: rgba(0, 0, 0, 0.04);
+  --vs-m-divider: rgba(0, 0, 0, 0.08);
+  --vs-m-icon-bg: #f9fafb;
+  --vs-m-icon-border: rgba(0, 0, 0, 0.08);
+  --vs-m-link: #1a4fa0;
+  --vs-m-link-hover: rgba(26, 79, 160, 0.08);
+  --vs-m-input-bg: #f2f2ef;
+  --vs-m-input-border: rgba(0, 0, 0, 0.2);
+  --vs-m-input-text: #1a1b19;
+  --vs-m-btn-bg: #2e2d29;
+  --vs-m-btn-text: #faf9f6;
+  --vs-m-btn-hover: #1a1b19;
+  --vs-m-chip-bg: rgba(0, 0, 0, 0.06);
+  --vs-m-chip-border: rgba(0, 0, 0, 0.12);
+  --vs-m-chip-text: #1a1b19;
+  --vs-m-chip-hover: rgba(0, 0, 0, 0.1);
+  --vs-m-val-bool: #d97706;
+  --vs-m-val-num: #2563eb;
+  --vs-m-val-str: #5f5e5b;
+  --vs-m-val-nil: #6b7280;
+}
+
 .${BTN_CLASS} {
   position: absolute;
   right: 4px;
@@ -86,15 +195,15 @@ const CSS = `
   transition: color 0.12s ease, background-color 0.12s ease;
 }
 .${BTN_CLASS}:hover {
-  color: var(--col-primary, #3b82f6);
-  background-color: rgba(59, 130, 246, 0.08);
+  color: var(--col-link, var(--vs-m-link));
+  background-color: var(--col-action-hover, var(--vs-m-hover));
 }
 .${BTN_CLASS}.active {
-  color: var(--col-primary, #3b82f6);
-  background-color: rgba(59, 130, 246, 0.14);
+  color: var(--col-link, var(--vs-m-link));
+  background-color: var(--vs-m-link-hover);
 }
 .${BTN_CLASS}:focus-visible {
-  outline: 2px solid var(--col-primary, #3b82f6);
+  outline: 2px solid var(--col-link, var(--vs-m-link));
   outline-offset: 1px;
 }
 
@@ -104,9 +213,9 @@ const CSS = `
   justify-content: center;
   height: 24px;
   padding: 0 10px 0 6px;
-  background-color: var(--col-chip, rgba(255, 255, 255, 0.08));
-  color: var(--col-text-primary, #ffffff);
-  border: 1px solid var(--col-border, rgba(255, 255, 255, 0.12));
+  background-color: var(--col-chip, var(--vs-m-chip-bg));
+  color: var(--col-text-primary, var(--vs-m-chip-text));
+  border: 1px solid var(--col-border, var(--vs-m-chip-border));
   border-radius: 12px;
   cursor: pointer;
   user-select: none;
@@ -119,14 +228,13 @@ const CSS = `
 }
 
 .${DATA_CHIP_CLASS}:hover {
-  background-color: var(--col-action-hover, rgba(255, 255, 255, 0.14));
-  border-color: rgba(255, 255, 255, 0.24);
+  background-color: var(--col-action-hover, var(--vs-m-chip-hover));
 }
 
 .${DATA_CHIP_CLASS}.active {
-  background-color: rgba(59, 130, 246, 0.2);
-  border-color: var(--col-primary, #3b82f6);
-  color: var(--col-primary, #3b82f6);
+  background-color: var(--vs-m-link-hover);
+  border-color: var(--col-link, var(--vs-m-link));
+  color: var(--col-link, var(--vs-m-link));
 }
 
 .vs-viasocket-menu-card {
@@ -137,11 +245,11 @@ const CSS = `
   max-height: 380px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background-color: var(--col-surface-raised, #181a1f);
-  color: var(--col-text-primary, #ffffff);
-  border: 1px solid var(--col-border, rgba(255, 255, 255, 0.12));
+  background-color: var(--col-surface-raised, var(--vs-m-bg));
+  color: var(--col-text-primary, var(--vs-m-text));
+  border: 1px solid var(--col-border, var(--vs-m-border));
   border-radius: 6px;
-  box-shadow: 0px 4px 16px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--vs-m-shadow);
   font-family: var(--font-family-ui, 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
   padding: 4px 0;
   user-select: none;
@@ -151,7 +259,7 @@ const CSS = `
   width: 6px;
 }
 .vs-viasocket-menu-card::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--col-border, rgba(128, 128, 128, 0.3));
   border-radius: 3px;
 }
 
@@ -159,13 +267,13 @@ const CSS = `
   padding: 6px 12px 2px 12px;
   font-size: 11px;
   font-weight: 500;
-  color: var(--col-text-secondary, #9e9e9e);
+  color: var(--col-text-secondary, var(--vs-m-text-sec));
   letter-spacing: 0.2px;
 }
 
 .vs-menu-divider {
   height: 1px;
-  background-color: var(--col-border, rgba(255, 255, 255, 0.12));
+  background-color: var(--col-divider, var(--vs-m-divider));
   margin: 4px 0;
 }
 
@@ -182,7 +290,7 @@ const CSS = `
   gap: 5px;
   background: transparent;
   border: none;
-  color: var(--col-primary, #3b82f6);
+  color: var(--col-link, var(--vs-m-link));
   font-family: inherit;
   font-size: 12px;
   font-weight: 500;
@@ -193,7 +301,7 @@ const CSS = `
 }
 
 .vs-menu-add-var-btn:hover {
-  background-color: rgba(59, 130, 246, 0.08);
+  background-color: var(--vs-m-link-hover);
 }
 
 .vs-menu-add-var-btn svg {
@@ -214,36 +322,44 @@ const CSS = `
   min-width: 0;
   height: 28px;
   padding: 0 8px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--col-border, rgba(255, 255, 255, 0.2));
+  background: var(--col-surface-sunken, var(--vs-m-input-bg));
+  border: 1px solid var(--col-border, var(--vs-m-input-border));
   border-radius: 4px;
-  color: #ffffff;
+  color: var(--col-text-primary, var(--vs-m-input-text));
   font-family: inherit;
-  font-size: 12.5px;
+  font-size: 12px;
   outline: none;
   box-sizing: border-box;
 }
 
+.vs-menu-add-var-input::placeholder {
+  color: var(--col-text-disabled, var(--vs-m-val-nil));
+}
+
 .vs-menu-add-var-input:focus {
-  border-color: var(--col-primary, #3b82f6);
+  border-color: var(--col-primary-button, var(--vs-m-btn-bg));
 }
 
 .vs-menu-add-var-submit {
   height: 28px;
-  padding: 0 10px;
-  background-color: var(--col-primary, #3b82f6);
+  padding: 0 12px;
+  background-color: var(--col-primary-button, var(--vs-m-btn-bg));
+  color: var(--col-primary-button-contrast, var(--vs-m-btn-text));
   border: none;
   border-radius: 4px;
-  color: #ffffff;
   font-family: inherit;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.12s ease;
+  transition: background-color 0.12s ease, opacity 0.12s ease;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .vs-menu-add-var-submit:hover {
-  opacity: 0.9;
+  background-color: var(--col-primary-button-hover, var(--vs-m-btn-hover));
 }
 
 .vs-menu-item-row {
@@ -260,7 +376,7 @@ const CSS = `
 
 .vs-menu-item-row:hover,
 .vs-menu-item-row.active {
-  background-color: var(--col-action-hover, rgba(255, 255, 255, 0.08));
+  background-color: var(--col-action-hover, var(--vs-m-hover));
 }
 
 /* Invisible hover bridge to eliminate seam/gap when gliding cursor towards flyout */
@@ -292,20 +408,21 @@ const CSS = `
   width: 24px;
   height: 24px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--vs-m-icon-border);
+  background-color: var(--vs-m-icon-bg);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
-  color: var(--col-text-secondary, #9e9e9e);
+  color: var(--col-text-secondary, var(--vs-m-text-sec));
 }
 
 .vs-menu-avatar-icon img {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  display: block;
 }
 
 .vs-menu-text-wrap {
@@ -318,7 +435,7 @@ const CSS = `
 .vs-menu-primary-text {
   font-size: 13.5px;
   font-weight: 400;
-  color: var(--col-text-primary, #ffffff);
+  color: var(--col-text-primary, var(--vs-m-text));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -327,7 +444,7 @@ const CSS = `
 
 .vs-menu-secondary-text {
   font-size: 11.5px;
-  color: var(--col-text-secondary, #9e9e9e);
+  color: var(--col-text-secondary, var(--vs-m-text-sec));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -337,29 +454,29 @@ const CSS = `
 
 /* Data type syntax colors */
 .vs-menu-secondary-text.vs-val-boolean {
-  color: #f59e0b !important;
+  color: var(--vs-m-val-bool) !important;
   font-weight: 500;
 }
 
 .vs-menu-secondary-text.vs-val-number {
-  color: #3b82f6 !important;
+  color: var(--vs-m-val-num) !important;
   font-weight: 500;
 }
 
 .vs-menu-secondary-text.vs-val-string {
-  color: var(--col-text-secondary, #9e9e9e) !important;
+  color: var(--vs-m-val-str) !important;
 }
 
 .vs-menu-secondary-text.vs-val-null,
 .vs-menu-secondary-text.vs-val-undefined {
-  color: #8b949e !important;
+  color: var(--vs-m-val-nil) !important;
   font-style: italic;
 }
 
 .vs-menu-chevron {
   width: 18px;
   height: 18px;
-  color: var(--col-text-secondary, #9e9e9e);
+  color: var(--col-text-secondary, var(--vs-m-text-sec));
   margin-left: auto;
   flex-shrink: 0;
 }
@@ -846,8 +963,9 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     if (iconUrl) {
       const avatar = document.createElement('div')
       avatar.className = 'vs-menu-avatar-icon'
-      if (iconUrl.startsWith('<svg')) {
-        avatar.innerHTML = iconUrl
+      const trimmed = iconUrl.trim()
+      if (trimmed.startsWith('<svg') || trimmed.includes('<svg')) {
+        avatar.innerHTML = trimmed
       } else {
         const img = document.createElement('img')
         img.src = iconUrl
@@ -1001,7 +1119,7 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
           varName,
           varVal ? classifyValue(varVal) : undefined,
           false,
-          CODE_VAR_ICON_SVG,
+          VARIABLE_ICON_URL,
           () => {
             insertVariable(target, varName, isCodeEditor)
             closeAllMenus()
