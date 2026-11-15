@@ -22,7 +22,7 @@ import {
 } from '../shared/messages'
 import type { ObservedEvent } from '../shared/observed'
 import { resolveEnv } from '../background/tools/env'
-import { editorAction, insertIntoEditor } from './editors'
+import { editorAction, getEditorValue, insertIntoEditor } from './editors'
 import {
   classify, dryRunFailed, isObj, isPageMutation, MAX_PARSE_CHARS, outcomeInBody, parseCapped, shortErrorText, SLUG_MAX,
 } from '../shared/classify'
@@ -910,6 +910,11 @@ function install(): void {
       if (msg.type === 'editor-insert') {
         const success = insertIntoEditor(msg.editorId, msg.text, findReduxStore)
         post({ type: 'editor-insert-response', requestId: msg.requestId, success })
+        return
+      }
+      if (msg.type === 'get-editor-text') {
+        const text = getEditorValue(msg.editorId)
+        post({ type: 'editor-text-response', requestId: msg.requestId, text })
         return
       }
       if (msg.type === 'add-dynamic-variable') {

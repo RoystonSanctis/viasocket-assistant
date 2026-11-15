@@ -202,6 +202,7 @@ export type PageToContentMsg =
   | { type: 'editor-insert-response'; requestId: string; success: boolean }
   | { type: 'add-dynamic-variable-response'; requestId: string; success: boolean }
   | { type: 'field-value-response'; requestId: string; success: boolean; error?: string }
+  | { type: 'editor-text-response'; requestId: string; text: string | null }
 
 export type ContentToPageMsg =
   /** First message; the hook adopts this nonce and ignores any other init until that nonce is released */
@@ -231,6 +232,8 @@ export type ContentToPageMsg =
   | { type: 'editor-insert'; requestId: string; editorId: string; text: string }
   /** Add a dynamic variable to the current step draft in Redux */
   | { type: 'add-dynamic-variable'; requestId: string; name: string }
+  /** Get text content of a Monaco editor or response viewer marked with EDITOR_ID_ATTR */
+  | { type: 'get-editor-text'; requestId: string; editorId: string }
   /** The content script was orphaned (extension updated or reloaded): the hook pairs with the next init instead */
   | { type: 'release' }
 

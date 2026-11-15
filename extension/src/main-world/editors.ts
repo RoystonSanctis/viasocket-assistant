@@ -209,3 +209,42 @@ export function insertIntoEditor(
     return false
   }
 }
+
+/** Reads the full text of a Monaco editor or response viewer */
+export function getEditorValue(editorId: string): string | null {
+  try {
+    if (!EDITOR_ID_RE.test(editorId)) return null
+    const el = document.querySelector(`.monaco-editor[${EDITOR_ID_ATTR}="${editorId}"]`)
+    if (!el) return null
+    const editor = findEditor(el)
+    const val = editor?.getModel()?.getValue()
+    if (typeof val === 'string' && val.length > 0) return val
+
+    // React fiber fallback for read-only viewers where findEditor might not have hooked
+    let container: Element | null = el.parentElement
+    while (container) {
+      const fiberKey = Object.keys(container).find((k) => k.startsWith('__reactFiber$'))
+      if (fiberKey) {
+        let fiber = (container as unknown as Record<string, unknown>)[fiberKey]
+        for (let hops = 0; isObj(fiber) && hops < MAX_FIBER_HOPS; hops++) {
+          const props = own(fiber as Record<string, unknown>, 'memoizedProps') as Record<string, unknown> | undefined
+          if (props && typeof props.value === 'string' && props.value) {
+            return props.value
+          }
+          if (props && 'data' in props && props.data !== undefined) {
+            try {
+              return JSON.stringify(props.data, null, 2)
+            } catch {
+              return String(props.data)
+            }
+          }
+          fiber = own(fiber as Record<string, unknown>, 'return')
+        }
+      }
+      container = container.parentElement
+    }
+    return null
+  } catch {
+    return null
+  }
+}

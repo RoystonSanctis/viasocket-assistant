@@ -50,6 +50,8 @@ export interface PageBridge {
   getStepContext(scriptId?: string, stepId?: string, slugName?: string): Promise<StepContextData | null>
   /** Checks or beautifies the Monaco editor marked with EDITOR_ID_ATTR = editorId; null when the hook does not answer */
   editorAction(editorId: string, action: EditorAction): Promise<EditorActionResult | null>
+  /** Gets full text from a Monaco editor or response viewer marked with EDITOR_ID_ATTR */
+  getEditorText(editorId: string): Promise<string | null>
   /** Inserts text at cursor into the Monaco editor marked with EDITOR_ID_ATTR = editorId */
   editorInsert(editorId: string, text: string): Promise<boolean>
   /** Adds a dynamic variable to the current step draft in Redux */
@@ -186,6 +188,7 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
 
   const pendingContext = new Map<string, (data: StepContextData | null) => void>()
   const pendingEditor = new Map<string, (result: EditorActionResult | null) => void>()
+  const pendingEditorText = new Map<string, (text: string | null) => void>()
   const pendingEditorInsert = new Map<string, (success: boolean) => void>()
   const pendingDynamicVar = new Map<string, (success: boolean) => void>()
   const pendingField = new Map<string, (res: { success: boolean; error?: string }) => void>()
@@ -222,6 +225,11 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
         const handler = typeof inner.requestId === 'string' ? pendingEditor.get(inner.requestId) : undefined
         const known = (EDITOR_ACTION_RESULTS as readonly unknown[]).includes(inner.result)
         if (handler) handler(known ? (inner.result as EditorActionResult) : null)
+        break
+      }
+      case 'editor-text-response': {
+        const handler = typeof inner.requestId === 'string' ? pendingEditorText.get(inner.requestId) : undefined
+        if (handler) handler(typeof inner.text === 'string' ? inner.text : null)
         break
       }
       case 'editor-insert-response': {
@@ -296,6 +304,20 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
         post({ type: 'editor-action', requestId, editorId, action })
       })
     },
+    getEditorText(editorId) {
+      if (!hookReady) return Promise.resolve(null)
+      const requestId = makeNonce()
+      return new Promise<string | null>((resolve) => {
+        const finish = (result: string | null) => {
+          clearTimeout(timer)
+          pendingEditorText.delete(requestId)
+          resolve(result)
+        }
+        const timer = setTimeout(() => finish(null), 3000)
+        pendingEditorText.set(requestId, finish)
+        post({ type: 'get-editor-text', requestId, editorId })
+      })
+    },
     editorInsert(editorId, text) {
       if (!hookReady) return Promise.resolve(false)
       const requestId = makeNonce()
@@ -347,6 +369,7 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
       window.removeEventListener('message', onMessage)
       for (const finish of [...pendingContext.values()]) finish(null)
       for (const finish of [...pendingEditor.values()]) finish(null)
+      for (const finish of [...pendingEditorText.values()]) finish(null)
       for (const finish of [...pendingField.values()]) finish({ success: false, error: 'Bridge destroyed' })
       // Called when this copy is orphaned. The page hook stays installed and only answers its first partner, so
       // without this the copy injected after an extension update would never get hook-ready.
