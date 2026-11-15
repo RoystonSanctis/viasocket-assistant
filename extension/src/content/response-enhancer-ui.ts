@@ -123,7 +123,6 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
 
 .${ARRAY_BADGE_CLASS} {
   position: absolute !important;
-  right: 12px !important;
   top: 1px !important;
   display: inline-flex !important;
   align-items: center;
@@ -140,6 +139,7 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
   border-radius: 9px;
   user-select: none;
   pointer-events: none;
+  white-space: nowrap;
   z-index: 5;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
@@ -521,58 +521,87 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     }
   }
 
+  let isApplyingBadges = false
   function applyArrayBadges(state: EditorState): void {
-    if (!state.lineMap || !state.monacoEl.isConnected) return
+    if (isApplyingBadges || !state.lineMap || !state.monacoEl.isConnected) return
+    isApplyingBadges = true
 
-    // Find all visible .view-line elements inside Monaco
-    const viewLines = state.monacoEl.querySelectorAll<HTMLElement>('.view-lines .view-line')
-    if (viewLines.length === 0) return
+    try {
+      // Find all visible .view-line elements inside Monaco
+      const viewLines = state.monacoEl.querySelectorAll<HTMLElement>('.view-lines .view-line')
+      if (viewLines.length === 0) return
 
-    // Build map of topPx -> line number from line-numbers gutter
-    const gutterNums = state.monacoEl.querySelectorAll<HTMLElement>('.margin-view-overlays .line-numbers')
-    const lineByTop = new Map<number, number>()
-    for (const g of gutterNums) {
-      const lineNum = parseInt(g.textContent?.trim() || '0', 10)
-      if (lineNum > 0 && g.style.top) {
-        const topPx = Math.round(parseFloat(g.style.top))
-        lineByTop.set(topPx, lineNum)
+      // Build map of topPx -> line number from line-numbers gutter
+      const gutterNums = state.monacoEl.querySelectorAll<HTMLElement>('.margin-view-overlays .line-numbers')
+      const lineByTop = new Map<number, number>()
+      for (const g of gutterNums) {
+        const lineNum = parseInt(g.textContent?.trim() || '0', 10)
+        if (lineNum > 0 && g.style.top) {
+          const topPx = Math.round(parseFloat(g.style.top))
+          lineByTop.set(topPx, lineNum)
+        }
       }
-    }
 
-    for (const vl of viewLines) {
-      const vlTop = Math.round(parseFloat(vl.style.top || '0'))
-      let lineNum = lineByTop.get(vlTop)
+      for (const vl of viewLines) {
+        const vlTop = Math.round(parseFloat(vl.style.top || '0'))
+        let lineNum = lineByTop.get(vlTop)
 
-      // Fallback matching by line key if gutter didn't map
-      if (!lineNum && state.lineMap) {
-        const lineText = vl.textContent || ''
-        for (const [n, info] of state.lineMap) {
-          if (info.isArray && info.key && lineText.includes(`"${info.key}":`)) {
-            lineNum = n
-            break
+        // Fallback matching by line key if gutter didn't map
+        if (!lineNum && state.lineMap) {
+          const lineText = vl.textContent || ''
+          for (const [n, info] of state.lineMap) {
+            if (info.isArray && info.key && lineText.includes(`"${info.key}":`)) {
+              lineNum = n
+              break
+            }
           }
         }
-      }
 
-      if (!lineNum || lineNum <= 0) continue
+        if (!lineNum || lineNum <= 0) continue
 
-      const info = state.lineMap.get(lineNum)
-      const existingBadge = vl.querySelector(`.${ARRAY_BADGE_CLASS}`)
+        const info = state.lineMap.get(lineNum)
+        const existingBadge = vl.querySelector<HTMLElement>(`.${ARRAY_BADGE_CLASS}`)
 
-      if (info && info.isArray && typeof info.arrayCount === 'number') {
-        const text = `${info.arrayCount} ${info.arrayCount === 1 ? 'item' : 'items'}`
-        if (existingBadge) {
-          if (existingBadge.textContent !== text) existingBadge.textContent = text
-        } else {
-          const badge = document.createElement('span')
-          badge.className = ARRAY_BADGE_CLASS
-          badge.textContent = text
-          badge.title = `${info.arrayCount} items in array`
-          vl.appendChild(badge)
+        if (info && info.isArray && typeof info.arrayCount === 'number') {
+          const text = `${info.arrayCount} ${info.arrayCount === 1 ? 'item' : 'items'}`
+
+          // Calculate exact horizontal position right after the text of this line
+          const vlRect = vl.getBoundingClientRect()
+          let rightmost = 0
+          const tokenSpans = vl.querySelectorAll('span:not(.' + ARRAY_BADGE_CLASS + ')')
+          for (const t of tokenSpans) {
+            const r = t.getBoundingClientRect()
+            if (r.right > rightmost) rightmost = r.right
+          }
+
+          let leftPx = rightmost > vlRect.left ? Math.round(rightmost - vlRect.left + 8) : 0
+          if (leftPx === 0) {
+            const textSpan = vl.querySelector<HTMLElement>(':scope > span')
+            if (textSpan && textSpan.offsetWidth > 0) {
+              leftPx = textSpan.offsetLeft + textSpan.offsetWidth + 8
+            } else {
+              const lineText = vl.textContent || ''
+              leftPx = Math.max(90, Math.round(lineText.length * 8.2 + 8))
+            }
+          }
+
+          if (existingBadge) {
+            if (existingBadge.textContent !== text) existingBadge.textContent = text
+            if (leftPx > 0) existingBadge.style.left = `${leftPx}px`
+          } else {
+            const badge = document.createElement('span')
+            badge.className = ARRAY_BADGE_CLASS
+            badge.textContent = text
+            badge.title = `${info.arrayCount} items in array`
+            if (leftPx > 0) badge.style.left = `${leftPx}px`
+            vl.appendChild(badge)
+          }
+        } else if (existingBadge) {
+          existingBadge.remove()
         }
-      } else if (existingBadge) {
-        existingBadge.remove()
       }
+    } finally {
+      isApplyingBadges = false
     }
   }
 
@@ -783,7 +812,12 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       scheduleCloseHoverPill()
     })
 
-    // 2. Scroll listener to keep array badges positioned
+    // 2. Click listener on editor (e.g. folding/unfolding arrays) to reposition badges
+    monacoEl.addEventListener('click', () => {
+      requestAnimationFrame(() => applyArrayBadges(state))
+    })
+
+    // 3. Scroll listener to keep array badges positioned
     const scrollContainer = monacoEl.querySelector<HTMLElement>('.monaco-scrollable-element')
     if (scrollContainer) {
       scrollContainer.addEventListener('scroll', () => {
@@ -791,13 +825,13 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       }, { passive: true })
     }
 
-    // 3. MutationObserver on .view-lines to ensure array count badges ALWAYS stay visible
+    // 4. MutationObserver on .view-lines to ensure array count badges ALWAYS stay visible
     const viewLinesEl = monacoEl.querySelector('.view-lines')
     if (viewLinesEl) {
       const mo = new MutationObserver(() => {
         applyArrayBadges(state)
       })
-      mo.observe(viewLinesEl, { childList: true, subtree: false })
+      mo.observe(viewLinesEl, { childList: true, subtree: true })
       state.observer = mo
     }
   }
