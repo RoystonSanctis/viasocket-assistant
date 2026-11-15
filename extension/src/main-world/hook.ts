@@ -870,6 +870,18 @@ function install(): void {
         nonce: inner.nonce,
       }
     }
+    if (
+      inner.type === 'get-editor-text' &&
+      typeof inner.requestId === 'string' &&
+      typeof inner.editorId === 'string'
+    ) {
+      return {
+        type: 'get-editor-text',
+        requestId: inner.requestId.slice(0, 64),
+        editorId: inner.editorId,
+        nonce: inner.nonce,
+      }
+    }
     if (inner.type === 'release') return { type: 'release', nonce: inner.nonce }
     return null
   }

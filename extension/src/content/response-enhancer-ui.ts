@@ -14,7 +14,7 @@ const COPY_BTN_CLASS = 'vs-response-copy-btn'
 const ARRAY_BADGE_CLASS = 'vs-response-array-badge'
 const HOVER_PILL_ID = 'vs-response-hover-pill'
 const SCAN_DELAY_MS = 250
-const HOVER_HIDE_DELAY_MS = 280
+const HOVER_HIDE_DELAY_MS = 320
 
 // Static SVG Icons
 const COPY_ICON_SVG = `
@@ -43,10 +43,10 @@ const CSS = `
   --vs-res-text-sec: #5f5e5b;
   --vs-res-border: rgba(0, 0, 0, 0.12);
   --vs-res-hover: rgba(0, 0, 0, 0.05);
-  --vs-res-shadow: 0px 4px 14px rgba(0, 0, 0, 0.12);
+  --vs-res-shadow: 0px 4px 16px rgba(0, 0, 0, 0.14);
   --vs-res-badge-bg: rgba(37, 99, 235, 0.08);
   --vs-res-badge-text: #2563eb;
-  --vs-res-badge-border: rgba(37, 99, 235, 0.2);
+  --vs-res-badge-border: rgba(37, 99, 235, 0.22);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -56,10 +56,10 @@ const CSS = `
     --vs-res-text-sec: #8b949e;
     --vs-res-border: #30363d;
     --vs-res-hover: rgba(255, 255, 255, 0.08);
-    --vs-res-shadow: 0px 4px 14px rgba(0, 0, 0, 0.45);
-    --vs-res-badge-bg: rgba(59, 130, 246, 0.15);
+    --vs-res-shadow: 0px 4px 16px rgba(0, 0, 0, 0.45);
+    --vs-res-badge-bg: rgba(59, 130, 246, 0.16);
     --vs-res-badge-text: #60a5fa;
-    --vs-res-badge-border: rgba(59, 130, 246, 0.3);
+    --vs-res-badge-border: rgba(59, 130, 246, 0.35);
   }
 }
 
@@ -69,10 +69,10 @@ html[data-theme='dark'], body[data-theme='dark'], html.dark, body.dark {
   --vs-res-text-sec: #8b949e;
   --vs-res-border: #30363d;
   --vs-res-hover: rgba(255, 255, 255, 0.08);
-  --vs-res-shadow: 0px 4px 14px rgba(0, 0, 0, 0.45);
-  --vs-res-badge-bg: rgba(59, 130, 246, 0.15);
+  --vs-res-shadow: 0px 4px 16px rgba(0, 0, 0, 0.45);
+  --vs-res-badge-bg: rgba(59, 130, 246, 0.16);
   --vs-res-badge-text: #60a5fa;
-  --vs-res-badge-border: rgba(59, 130, 246, 0.3);
+  --vs-res-badge-border: rgba(59, 130, 246, 0.35);
 }
 
 html[data-theme='light'], body[data-theme='light'], html.light, body.light {
@@ -81,10 +81,10 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
   --vs-res-text-sec: #5f5e5b;
   --vs-res-border: rgba(0, 0, 0, 0.12);
   --vs-res-hover: rgba(0, 0, 0, 0.05);
-  --vs-res-shadow: 0px 4px 14px rgba(0, 0, 0, 0.12);
+  --vs-res-shadow: 0px 4px 16px rgba(0, 0, 0, 0.14);
   --vs-res-badge-bg: rgba(37, 99, 235, 0.08);
   --vs-res-badge-text: #2563eb;
-  --vs-res-badge-border: rgba(37, 99, 235, 0.2);
+  --vs-res-badge-border: rgba(37, 99, 235, 0.22);
 }
 
 .${COPY_BTN_CLASS} {
@@ -94,7 +94,7 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
   height: 22px;
   padding: 0 8px;
   margin: 0;
-  font-family: var(--font-family-ui, 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
+  font-family: var(--font-family-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
   font-size: 11.5px;
   font-weight: 500;
   line-height: 1;
@@ -104,7 +104,7 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
   border-radius: 4px;
   cursor: pointer;
   user-select: none;
-  transition: all 0.12s ease;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
 }
 
@@ -115,28 +115,31 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
 }
 
 .${COPY_BTN_CLASS}.copied {
-  color: #10b981;
-  border-color: rgba(16, 185, 129, 0.4);
-  background: rgba(16, 185, 129, 0.08);
+  color: #10b981 !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+  transform: scale(1.02);
 }
 
 .${ARRAY_BADGE_CLASS} {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   margin-left: 8px;
   padding: 0 6px;
-  height: 16px;
-  font-family: var(--font-family-ui, 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
+  height: 17px;
+  font-family: var(--font-family-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
   font-size: 10.5px;
   font-weight: 600;
   line-height: 1;
   color: var(--vs-res-badge-text);
   background: var(--vs-res-badge-bg);
   border: 1px solid var(--vs-res-badge-border);
-  border-radius: 10px;
+  border-radius: 9px;
   user-select: none;
   pointer-events: none;
   vertical-align: middle;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 #${HOVER_PILL_ID} {
@@ -145,9 +148,9 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 6px;
-  font-family: var(--font-family-ui, 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
-  font-size: 11px;
+  padding: 3px 7px;
+  font-family: var(--font-family-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-size: 11.5px;
   line-height: 1;
   background: var(--col-surface-raised, var(--vs-res-bg));
   color: var(--col-text-primary, var(--vs-res-text));
@@ -156,12 +159,13 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
   box-shadow: var(--vs-res-shadow);
   pointer-events: auto;
   user-select: none;
-  animation: vsResPillFade 0.1s ease-out;
+  animation: vsResPillFade 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(8px);
 }
 
 @keyframes vsResPillFade {
-  from { opacity: 0; transform: translateY(-2px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(-3px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .vs-res-pill-path {
@@ -181,11 +185,12 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
 
 .vs-res-pill-count {
   font-size: 10px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--vs-res-badge-text);
-  padding: 1px 4px;
+  padding: 1.5px 5px;
   border-radius: 4px;
   background: var(--vs-res-badge-bg);
+  border: 1px solid var(--vs-res-badge-border);
 }
 
 .vs-res-pill-btn {
@@ -193,7 +198,7 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
   align-items: center;
   gap: 4px;
   height: 20px;
-  padding: 0 6px;
+  padding: 0 7px;
   font-size: 11px;
   font-weight: 500;
   color: var(--col-text-secondary, var(--vs-res-text-sec));
@@ -202,7 +207,7 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
   border-radius: 4px;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.1s ease;
+  transition: all 0.12s ease;
 }
 
 .vs-res-pill-btn:hover {
@@ -212,9 +217,9 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
 }
 
 .vs-res-pill-btn.copied {
-  color: #10b981;
-  border-color: rgba(16, 185, 129, 0.4);
-  background: rgba(16, 185, 129, 0.08);
+  color: #10b981 !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  background: rgba(16, 185, 129, 0.12) !important;
 }
 `
 
@@ -236,10 +241,40 @@ interface EditorState {
   rawJson?: string
   lineMap?: Map<number, LineInfo>
   loading?: boolean
+  observer?: MutationObserver
 }
 
 function makeId(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/** Robust cross-platform clipboard copy */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // fallback
+  }
+
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.top = '-9999px'
+    ta.style.left = '-9999px'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.focus()
+    ta.select()
+    const ok = document.execCommand('copy')
+    ta.remove()
+    return ok
+  } catch {
+    return false
+  }
 }
 
 /** Parses standard formatted JSON into a line-by-line map of paths, values, and array counts */
@@ -251,7 +286,7 @@ export function parseJsonLines(jsonStr: string): Map<number, LineInfo> {
     return new Map()
   }
 
-  const lines = jsonStr.split('\n')
+  const lines = jsonStr.split(/\r?\n/)
   const lineMap = new Map<number, LineInfo>()
 
   const stack: Array<{ type: 'object' | 'array'; path: string; index: number }> = [
@@ -311,31 +346,34 @@ export function parseJsonLines(jsonStr: string): Map<number, LineInfo> {
       const fullPath = cur.path ? `${cur.path}.${key}` : key
       const val = resolveValue(fullPath)
 
-      if (valPart === '[') {
-        const count = Array.isArray(val) ? val.length : 0
+      if (Array.isArray(val)) {
         lineMap.set(lineIdx + 1, {
           path: fullPath,
           key,
           value: val,
           isArray: true,
-          arrayCount: count,
+          arrayCount: val.length,
         })
-        stack.push({
-          type: 'array',
-          path: fullPath,
-          index: 0,
-        })
-      } else if (valPart === '{') {
+        if (valPart === '[') {
+          stack.push({
+            type: 'array',
+            path: fullPath,
+            index: 0,
+          })
+        }
+      } else if (val !== null && typeof val === 'object') {
         lineMap.set(lineIdx + 1, {
           path: fullPath,
           key,
           value: val,
         })
-        stack.push({
-          type: 'object',
-          path: fullPath,
-          index: 0,
-        })
+        if (valPart === '{') {
+          stack.push({
+            type: 'object',
+            path: fullPath,
+            index: 0,
+          })
+        }
       } else {
         lineMap.set(lineIdx + 1, {
           path: fullPath,
@@ -375,6 +413,22 @@ export function parseJsonLines(jsonStr: string): Map<number, LineInfo> {
   return lineMap
 }
 
+/** Fallback extractor: joins lines currently visible or contained in Monaco */
+function extractRawTextFromMonaco(monacoEl: HTMLElement): string | null {
+  const viewLines = monacoEl.querySelectorAll<HTMLElement>('.view-lines .view-line')
+  if (viewLines.length > 0) {
+    const lines: string[] = []
+    for (const vl of viewLines) {
+      lines.push(vl.textContent || '')
+    }
+    const joined = lines.join('\n').trim()
+    if (joined.startsWith('{') || joined.startsWith('[')) {
+      return joined
+    }
+  }
+  return null
+}
+
 export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerController {
   const editors = new Map<HTMLElement, EditorState>()
   let scanTimer: number | undefined
@@ -399,7 +453,7 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       return true
     }
     const textarea = el.querySelector('textarea')
-    if (textarea?.getAttribute('aria-readonly') === 'true') {
+    if (textarea?.getAttribute('aria-readonly') === 'true' || textarea?.hasAttribute('readonly')) {
       return true
     }
     return false
@@ -409,7 +463,10 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     if ((state.rawJson && !force) || state.loading || dead) return
     state.loading = true
     try {
-      const text = await bridge.getEditorText(state.editorId)
+      let text = await bridge.getEditorText(state.editorId)
+      if (!text) {
+        text = extractRawTextFromMonaco(state.monacoEl)
+      }
       if (typeof text === 'string' && text.length > 0) {
         state.rawJson = text
         state.lineMap = parseJsonLines(text)
@@ -429,17 +486,31 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
 
     // Build map of topPx -> line number from line-numbers gutter
     const gutterNums = state.monacoEl.querySelectorAll<HTMLElement>('.margin-view-overlays .line-numbers')
-    const lineByTop = new Map<string, number>()
+    const lineByTop = new Map<number, number>()
     for (const g of gutterNums) {
       const lineNum = parseInt(g.textContent?.trim() || '0', 10)
       if (lineNum > 0 && g.style.top) {
-        lineByTop.set(g.style.top, lineNum)
+        const topPx = Math.round(parseFloat(g.style.top))
+        lineByTop.set(topPx, lineNum)
       }
     }
 
     for (const vl of viewLines) {
-      const lineNum = lineByTop.get(vl.style.top) ?? (vl.style.top ? Math.round(parseFloat(vl.style.top) / 18) + 1 : 0)
-      if (lineNum <= 0) continue
+      const vlTop = Math.round(parseFloat(vl.style.top || '0'))
+      let lineNum = lineByTop.get(vlTop)
+
+      // Fallback matching by line key if gutter didn't map
+      if (!lineNum && state.lineMap) {
+        const lineText = vl.textContent || ''
+        for (const [n, info] of state.lineMap) {
+          if (info.isArray && info.key && lineText.includes(`"${info.key}":`)) {
+            lineNum = n
+            break
+          }
+        }
+      }
+
+      if (!lineNum || lineNum <= 0) continue
 
       const info = state.lineMap.get(lineNum)
       const existingBadge = vl.querySelector(`.${ARRAY_BADGE_CLASS}`)
@@ -452,6 +523,7 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
           const badge = document.createElement('span')
           badge.className = ARRAY_BADGE_CLASS
           badge.textContent = text
+          badge.title = `${info.arrayCount} items in array`
           vl.appendChild(badge)
         }
       } else if (existingBadge) {
@@ -477,7 +549,8 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     state: EditorState,
     lineNum: number,
     info: LineInfo,
-    viewLine: HTMLElement
+    viewLine: HTMLElement,
+    e: MouseEvent
   ): void {
     if (hidePillTimer !== undefined) {
       clearTimeout(hidePillTimer)
@@ -497,11 +570,12 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     // Path preview badge
     const pathSpan = document.createElement('span')
     pathSpan.className = 'vs-res-pill-path'
-    pathSpan.innerHTML = `${KEY_ICON_SVG}<span>${info.path || info.key}</span>`
-    pathSpan.title = info.path || info.key
+    const displayPath = info.path || info.key
+    pathSpan.innerHTML = `${KEY_ICON_SVG}<span>${displayPath}</span>`
+    pathSpan.title = displayPath
     pill.appendChild(pathSpan)
 
-    // Array count indicator
+    // Array count indicator inside pill
     if (info.isArray && typeof info.arrayCount === 'number') {
       const countSpan = document.createElement('span')
       countSpan.className = 'vs-res-pill-count'
@@ -513,26 +587,22 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     const copyPathBtn = document.createElement('button')
     copyPathBtn.type = 'button'
     copyPathBtn.className = 'vs-res-pill-btn'
-    copyPathBtn.title = `Copy path: ${info.path || info.key}`
+    copyPathBtn.title = `Copy path: ${displayPath}`
     copyPathBtn.innerHTML = `${COPY_ICON_SVG}<span>Copy Path</span>`
 
-    copyPathBtn.addEventListener('click', async (e) => {
-      e.preventDefault()
-      e.stopPropagation()
+    copyPathBtn.addEventListener('click', async (ev) => {
+      ev.preventDefault()
+      ev.stopPropagation()
       const pathToCopy = info.path || info.key
-      try {
-        await navigator.clipboard.writeText(pathToCopy)
-        copyPathBtn.classList.add('copied')
-        copyPathBtn.innerHTML = `${CHECK_ICON_SVG}<span>Path Copied!</span>`
-        setTimeout(() => {
-          if (copyPathBtn.isConnected) {
-            copyPathBtn.classList.remove('copied')
-            copyPathBtn.innerHTML = `${COPY_ICON_SVG}<span>Copy Path</span>`
-          }
-        }, 1500)
-      } catch {
-        // clipboard access failure fallback
-      }
+      await copyText(pathToCopy)
+      copyPathBtn.classList.add('copied')
+      copyPathBtn.innerHTML = `${CHECK_ICON_SVG}<span>Path Copied!</span>`
+      setTimeout(() => {
+        if (copyPathBtn.isConnected) {
+          copyPathBtn.classList.remove('copied')
+          copyPathBtn.innerHTML = `${COPY_ICON_SVG}<span>Copy Path</span>`
+        }
+      }, 1500)
     })
     pill.appendChild(copyPathBtn)
 
@@ -543,9 +613,9 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     copyValBtn.title = 'Copy value'
     copyValBtn.innerHTML = `${COPY_ICON_SVG}<span>Copy Value</span>`
 
-    copyValBtn.addEventListener('click', async (e) => {
-      e.preventDefault()
-      e.stopPropagation()
+    copyValBtn.addEventListener('click', async (ev) => {
+      ev.preventDefault()
+      ev.stopPropagation()
       let valStr: string
       if (typeof info.value === 'string') {
         valStr = info.value
@@ -561,28 +631,37 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
         valStr = String(info.value)
       }
 
-      try {
-        await navigator.clipboard.writeText(valStr)
-        copyValBtn.classList.add('copied')
-        copyValBtn.innerHTML = `${CHECK_ICON_SVG}<span>Value Copied!</span>`
-        setTimeout(() => {
-          if (copyValBtn.isConnected) {
-            copyValBtn.classList.remove('copied')
-            copyValBtn.innerHTML = `${COPY_ICON_SVG}<span>Copy Value</span>`
-          }
-        }, 1500)
-      } catch {
-        // clipboard fallback
-      }
+      await copyText(valStr)
+      copyValBtn.classList.add('copied')
+      copyValBtn.innerHTML = `${CHECK_ICON_SVG}<span>Value Copied!</span>`
+      setTimeout(() => {
+        if (copyValBtn.isConnected) {
+          copyValBtn.classList.remove('copied')
+          copyValBtn.innerHTML = `${COPY_ICON_SVG}<span>Copy Value</span>`
+        }
+      }, 1500)
     })
     pill.appendChild(copyValBtn)
 
-    // Position pill right at the line
+    // Position pill right above or below the line near cursor
     const vlRect = viewLine.getBoundingClientRect()
     const monacoRect = state.monacoEl.getBoundingClientRect()
 
-    pill.style.top = `${Math.max(4, vlRect.top - 2)}px`
-    pill.style.right = `${window.innerWidth - monacoRect.right + 12}px`
+    let top = vlRect.top - 28
+    if (top < monacoRect.top + 4) {
+      top = vlRect.bottom + 4
+    }
+
+    let left = e.clientX - 15
+    if (left + 260 > monacoRect.right - 8) {
+      left = monacoRect.right - 268
+    }
+    if (left < monacoRect.left + 8) {
+      left = monacoRect.left + 8
+    }
+
+    pill.style.top = `${Math.max(4, Math.round(top))}px`
+    pill.style.left = `${Math.round(left)}px`
 
     pill.addEventListener('mouseenter', () => {
       if (hidePillTimer !== undefined) {
@@ -606,7 +685,10 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     monacoEl.addEventListener('mousemove', (e: MouseEvent) => {
       const target = e.target as HTMLElement | null
       const viewLine = target?.closest<HTMLElement>('.view-line')
-      if (!viewLine) return
+      if (!viewLine) {
+        scheduleCloseHoverPill()
+        return
+      }
 
       if (!state.lineMap) {
         void loadEditorData(state)
@@ -615,21 +697,32 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
 
       // Resolve line number from gutter
       const gutterNums = monacoEl.querySelectorAll<HTMLElement>('.margin-view-overlays .line-numbers')
+      const vlTop = Math.round(parseFloat(viewLine.style.top || '0'))
       let lineNum = 0
       for (const g of gutterNums) {
-        if (g.style.top === viewLine.style.top) {
+        if (Math.round(parseFloat(g.style.top || '0')) === vlTop) {
           lineNum = parseInt(g.textContent?.trim() || '0', 10)
           break
         }
       }
-      if (lineNum <= 0 && viewLine.style.top) {
-        lineNum = Math.round(parseFloat(viewLine.style.top) / 18) + 1
+
+      // Fallback: match by key from line text
+      if (lineNum <= 0 && state.lineMap) {
+        const lineText = viewLine.textContent || ''
+        for (const [n, info] of state.lineMap) {
+          if (info.key && lineText.includes(`"${info.key}"`)) {
+            lineNum = n
+            break
+          }
+        }
       }
 
       if (lineNum > 0) {
         const info = state.lineMap.get(lineNum)
         if (info && (info.key || info.path)) {
-          showHoverPill(state, lineNum, info, viewLine)
+          showHoverPill(state, lineNum, info, viewLine, e)
+        } else {
+          scheduleCloseHoverPill()
         }
       }
     })
@@ -644,6 +737,16 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       scrollContainer.addEventListener('scroll', () => {
         applyArrayBadges(state)
       }, { passive: true })
+    }
+
+    // 3. MutationObserver on .view-lines to ensure array count badges ALWAYS stay visible
+    const viewLinesEl = monacoEl.querySelector('.view-lines')
+    if (viewLinesEl) {
+      const mo = new MutationObserver(() => {
+        applyArrayBadges(state)
+      })
+      mo.observe(viewLinesEl, { childList: true, subtree: false })
+      state.observer = mo
     }
   }
 
@@ -669,25 +772,31 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       e.preventDefault()
       e.stopPropagation()
 
-      // Fetch fresh text if needed
-      await loadEditorData(state, true)
-      const textToCopy = state.rawJson
-
-      if (textToCopy) {
-        try {
-          await navigator.clipboard.writeText(textToCopy)
-          btn.classList.add('copied')
-          btn.innerHTML = `${CHECK_ICON_SVG}<span>Copied!</span>`
-          setTimeout(() => {
-            if (btn.isConnected) {
-              btn.classList.remove('copied')
-              btn.innerHTML = `${COPY_ICON_SVG}<span>Copy Response</span>`
-            }
-          }, 1800)
-        } catch {
-          // ignore
+      // 1. Fetch fresh text if needed
+      let textToCopy = state.rawJson
+      if (!textToCopy) {
+        textToCopy = (await bridge.getEditorText(state.editorId)) || extractRawTextFromMonaco(state.monacoEl) || undefined
+        if (textToCopy) {
+          state.rawJson = textToCopy
+          state.lineMap = parseJsonLines(textToCopy)
+          applyArrayBadges(state)
         }
       }
+
+      // 2. Perform clipboard copy
+      if (textToCopy) {
+        await copyText(textToCopy)
+      }
+
+      // 3. Play Copied animation
+      btn.classList.add('copied')
+      btn.innerHTML = `${CHECK_ICON_SVG}<span>Copied!</span>`
+      setTimeout(() => {
+        if (btn.isConnected) {
+          btn.classList.remove('copied')
+          btn.innerHTML = `${COPY_ICON_SVG}<span>Copy Response</span>`
+        }
+      }, 1800)
     })
 
     // Try finding the header row in JsonViewer
@@ -716,8 +825,11 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     if (dead) return
 
     // Clean up disconnected editors
-    for (const [el] of editors) {
-      if (!el.isConnected) editors.delete(el)
+    for (const [el, s] of editors) {
+      if (!el.isConnected) {
+        s.observer?.disconnect()
+        editors.delete(el)
+      }
     }
 
     // Query all Monaco editors across the document
@@ -769,7 +881,8 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       if (scanTimer !== undefined) clearTimeout(scanTimer)
       if (hidePillTimer !== undefined) clearTimeout(hidePillTimer)
       closeHoverPill()
-      for (const [el] of editors) {
+      for (const [el, s] of editors) {
+        s.observer?.disconnect()
         el.closest('.flex.flex-col')?.querySelector(`.${COPY_BTN_CLASS}`)?.remove()
         el.parentElement?.querySelector(`.${COPY_BTN_CLASS}`)?.remove()
         for (const badge of el.querySelectorAll(`.${ARRAY_BADGE_CLASS}`)) {

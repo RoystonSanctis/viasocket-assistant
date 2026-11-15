@@ -59,34 +59,40 @@ function own(obj: Record<string, unknown>, key: string): unknown {
 
 function isEditorOf(v: unknown, el: Element): v is CodeEditor {
   if (!isObj(v)) return false
-  for (const fn of ['getDomNode', 'getModel', 'getRawOptions', 'focus', 'pushUndoStop', 'executeEdits']) {
-    if (typeof v[fn] !== 'function') return false
+  const cand = v as unknown as CodeEditor
+  if (typeof cand.getModel !== 'function' || typeof cand.getDomNode !== 'function') return false
+  try {
+    const dom = cand.getDomNode()
+    return dom === el || (isObj(dom) && (dom.contains(el) || el.contains(dom as unknown as Node)))
+  } catch {
+    return false
   }
-  return (v as unknown as CodeEditor).getDomNode() === el
 }
 
 function findEditor(el: Element): CodeEditor | null {
   const known = editors.get(el)
   if (known) return known
-  const container = el.parentElement
-  if (!container) return null
-  const key = Object.keys(container).find((k) => k.startsWith('__reactFiber$'))
-  let fiber: unknown = key ? own(container as unknown as Record<string, unknown>, key) : undefined
-  for (let hops = 0; isObj(fiber) && hops < MAX_FIBER_HOPS; hops++) {
-    if (HOOK_FIBER_TAGS.has(own(fiber, 'tag') as number)) {
-      // A function component's hooks are a linked list; a useRef hook's state is { current }.
-      let hook = own(fiber, 'memoizedState')
-      for (let n = 0; isObj(hook) && n < MAX_HOOKS; n++) {
-        const state = own(hook, 'memoizedState')
-        const current = isObj(state) ? own(state, 'current') : undefined
-        if (isEditorOf(current, el)) {
-          editors.set(el, current)
-          return current
+  let cur: Element | null = el
+  while (cur && cur !== document.body) {
+    const key = Object.keys(cur).find((k) => k.startsWith('__reactFiber$'))
+    let fiber: unknown = key ? own(cur as unknown as Record<string, unknown>, key) : undefined
+    for (let hops = 0; isObj(fiber) && hops < 50; hops++) {
+      if (HOOK_FIBER_TAGS.has(own(fiber, 'tag') as number) || own(fiber, 'memoizedState') !== undefined) {
+        // A function component's hooks are a linked list; a useRef hook's state is { current }.
+        let hook = own(fiber, 'memoizedState')
+        for (let n = 0; isObj(hook) && n < MAX_HOOKS; n++) {
+          const state = own(hook, 'memoizedState')
+          const current = isObj(state) ? own(state, 'current') : undefined
+          if (isEditorOf(current, el)) {
+            editors.set(el, current)
+            return current
+          }
+          hook = own(hook, 'next')
         }
-        hook = own(hook, 'next')
       }
+      fiber = own(fiber, 'return')
     }
-    fiber = own(fiber, 'return')
+    cur = cur.parentElement
   }
   return null
 }
@@ -220,28 +226,30 @@ export function getEditorValue(editorId: string): string | null {
     const val = editor?.getModel()?.getValue()
     if (typeof val === 'string' && val.length > 0) return val
 
-    // React fiber fallback for read-only viewers where findEditor might not have hooked
-    let container: Element | null = el.parentElement
-    while (container) {
-      const fiberKey = Object.keys(container).find((k) => k.startsWith('__reactFiber$'))
+    // React fiber fallback for read-only viewers (ReadOnlyMonacoViewer, JsonViewer)
+    let cur: Element | null = el
+    while (cur && cur !== document.body) {
+      const fiberKey = Object.keys(cur).find((k) => k.startsWith('__reactFiber$'))
       if (fiberKey) {
-        let fiber = (container as unknown as Record<string, unknown>)[fiberKey]
-        for (let hops = 0; isObj(fiber) && hops < MAX_FIBER_HOPS; hops++) {
+        let fiber = (cur as unknown as Record<string, unknown>)[fiberKey]
+        for (let hops = 0; isObj(fiber) && hops < 50; hops++) {
           const props = own(fiber as Record<string, unknown>, 'memoizedProps') as Record<string, unknown> | undefined
-          if (props && typeof props.value === 'string' && props.value) {
-            return props.value
-          }
-          if (props && 'data' in props && props.data !== undefined) {
-            try {
-              return JSON.stringify(props.data, null, 2)
-            } catch {
-              return String(props.data)
+          if (props) {
+            if (typeof props.value === 'string' && props.value.trim().length > 0) {
+              return props.value
+            }
+            if ('data' in props && props.data !== undefined) {
+              try {
+                return typeof props.data === 'string' ? props.data : JSON.stringify(props.data, null, 2)
+              } catch {
+                return String(props.data)
+              }
             }
           }
           fiber = own(fiber as Record<string, unknown>, 'return')
         }
       }
-      container = container.parentElement
+      cur = cur.parentElement
     }
     return null
   } catch {
