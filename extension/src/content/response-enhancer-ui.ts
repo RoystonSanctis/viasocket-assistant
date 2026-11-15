@@ -536,19 +536,31 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       const lineByTop = new Map<number, number>()
       for (const g of gutterNums) {
         const lineNum = parseInt(g.textContent?.trim() || '0', 10)
-        if (lineNum > 0 && g.style.top) {
-          const topPx = Math.round(parseFloat(g.style.top))
+        const topStr = g.style.top || g.parentElement?.style.top || ''
+        if (lineNum > 0 && topStr) {
+          const topPx = Math.round(parseFloat(topStr))
           lineByTop.set(topPx, lineNum)
+          lineByTop.set(topPx - 1, lineNum)
+          lineByTop.set(topPx + 1, lineNum)
         }
       }
 
       for (const vl of viewLines) {
+        const lineText = vl.textContent || ''
+        const existingBadge = vl.querySelector<HTMLElement>(`.${ARRAY_BADGE_CLASS}`)
+
+        // Only lines that actually define an array can have an array count badge.
+        // Lines with null, primitives, objects, or closing braces are strictly excluded.
+        if (!lineText.includes('[') || lineText.includes('null') || lineText.includes('undefined')) {
+          if (existingBadge) existingBadge.remove()
+          continue
+        }
+
         const vlTop = Math.round(parseFloat(vl.style.top || '0'))
         let lineNum = lineByTop.get(vlTop)
 
-        // Fallback matching by line key if gutter didn't map
+        // Fallback matching by line key if gutter didn't map (only when line actually has [)
         if (!lineNum && state.lineMap) {
-          const lineText = vl.textContent || ''
           for (const [n, info] of state.lineMap) {
             if (info.isArray && info.key && lineText.includes(`"${info.key}":`)) {
               lineNum = n
@@ -557,12 +569,14 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
           }
         }
 
-        if (!lineNum || lineNum <= 0) continue
+        if (!lineNum || lineNum <= 0) {
+          if (existingBadge) existingBadge.remove()
+          continue
+        }
 
         const info = state.lineMap.get(lineNum)
-        const existingBadge = vl.querySelector<HTMLElement>(`.${ARRAY_BADGE_CLASS}`)
 
-        if (info && info.isArray && typeof info.arrayCount === 'number') {
+        if (info && info.isArray && Array.isArray(info.value) && typeof info.arrayCount === 'number') {
           const text = `${info.arrayCount} ${info.arrayCount === 1 ? 'item' : 'items'}`
 
           // Calculate exact horizontal position right after the text of this line
@@ -580,7 +594,6 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
             if (textSpan && textSpan.offsetWidth > 0) {
               leftPx = textSpan.offsetLeft + textSpan.offsetWidth + 8
             } else {
-              const lineText = vl.textContent || ''
               leftPx = Math.max(90, Math.round(lineText.length * 8.2 + 8))
             }
           }
@@ -658,7 +671,7 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     pill.appendChild(pathSpan)
 
     // Array count indicator inside pill
-    if (info.isArray && typeof info.arrayCount === 'number') {
+    if (info.isArray && Array.isArray(info.value) && typeof info.arrayCount === 'number') {
       const countSpan = document.createElement('span')
       countSpan.className = 'vs-res-pill-count'
       countSpan.textContent = `${info.arrayCount} ${info.arrayCount === 1 ? 'item' : 'items'}`
