@@ -1,14 +1,19 @@
 // Implements the native viaSocket cascading hover mapping menu for Get Data (CRON_PRE_PROCESS)
-// custom mapping field boxes, exactly matching the appearance and behavior in Actions (Image 2).
+// custom mapping field boxes, exactly matching the appearance and behavior in Actions.
 //
 // When the user clicks the [+] AddBoxTwoTone button:
 // 1. A root menu opens showing "Trigger" with sections: query, body, headers, attachment.
 // 2. Hovering over any item with children (e.g. query >) immediately flies out a submenu to the left,
-//    displaying primary (key) and secondary (sample value) labels.
-// 3. Hovering deeper nested objects flies out level 3 submenus.
-// 4. Clicking any item inserts the expression (e.g. ${context.req.query.name}) into the input
+//    displaying primary (key) and secondary (sample value) labels with 0 gap.
+// 3. Hover resilience (grace timers + invisible hover bridge) prevents vanishing on diagonal movements.
+// 4. Sample values are colored by data type:
+//    - Boolean: Warm amber/orange (#f59e0b)
+//    - Number: Blue (#3b82f6)
+//    - String: Normal secondary text color
+//    - Null / Undefined: Muted italic grey (#8b949e)
+// 5. Clicking any item inserts the expression (e.g. ${context.req.query.name}) into the input
 //    and updates React Fiber (getHtmlAndValue) and Redux draft state via page-bridge.
-// 5. Closes cleanly on outside click, Escape key, or scroll.
+// 6. Closes cleanly on outside click, Escape key, or window scroll.
 
 import type { PageBridge } from './page-bridge'
 
@@ -118,6 +123,31 @@ const CSS = `
   background-color: var(--col-action-hover, rgba(255, 255, 255, 0.08));
 }
 
+/* Invisible hover bridge to eliminate seam/gap when gliding cursor towards flyout */
+.vs-menu-item-row.active.flyout-left::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: -16px;
+  width: 20px;
+  background: transparent;
+  pointer-events: auto;
+  z-index: 10;
+}
+
+.vs-menu-item-row.active.flyout-right::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  right: -16px;
+  width: 20px;
+  background: transparent;
+  pointer-events: auto;
+  z-index: 10;
+}
+
 .vs-menu-avatar-icon {
   width: 24px;
   height: 24px;
@@ -164,6 +194,27 @@ const CSS = `
   margin-top: 1px;
 }
 
+/* Data type syntax colors */
+.vs-menu-secondary-text.vs-val-boolean {
+  color: #f59e0b !important;
+  font-weight: 500;
+}
+
+.vs-menu-secondary-text.vs-val-number {
+  color: #3b82f6 !important;
+  font-weight: 500;
+}
+
+.vs-menu-secondary-text.vs-val-string {
+  color: var(--col-text-secondary, #9e9e9e) !important;
+}
+
+.vs-menu-secondary-text.vs-val-null,
+.vs-menu-secondary-text.vs-val-undefined {
+  color: #8b949e !important;
+  font-style: italic;
+}
+
 .vs-menu-chevron {
   width: 18px;
   height: 18px;
@@ -173,6 +224,56 @@ const CSS = `
 }
 `
 
+export interface ValueClassification {
+  text: string
+  colorClass: string
+}
+
+export function classifyValue(val: unknown): ValueClassification {
+  if (val === null) {
+    return { text: 'null', colorClass: 'vs-val-null' }
+  }
+  if (val === undefined) {
+    return { text: 'undefined', colorClass: 'vs-val-undefined' }
+  }
+
+  // Boolean check: literal boolean or "true"/"false" string
+  if (typeof val === 'boolean') {
+    return { text: String(val), colorClass: 'vs-val-boolean' }
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim()
+    if (trimmed.toLowerCase() === 'true' || trimmed.toLowerCase() === 'false') {
+      return { text: trimmed, colorClass: 'vs-val-boolean' }
+    }
+    // Number check: numeric string (e.g. "919535420531", "100", "-5.2")
+    if (/^-?\d+(\.\d+)?$/.test(trimmed) && trimmed.length > 0) {
+      return { text: trimmed, colorClass: 'vs-val-number' }
+    }
+    if (trimmed.length === 0) {
+      return { text: '""', colorClass: 'vs-val-string' }
+    }
+    return { text: val, colorClass: 'vs-val-string' }
+  }
+
+  // Number literal
+  if (typeof val === 'number') {
+    if (Number.isNaN(val)) {
+      return { text: 'NaN', colorClass: 'vs-val-null' }
+    }
+    return { text: String(val), colorClass: 'vs-val-number' }
+  }
+
+  if (Array.isArray(val) && val.length === 0) {
+    return { text: '[]', colorClass: 'vs-val-string' }
+  }
+  if (typeof val === 'object' && Object.keys(val as object).length === 0) {
+    return { text: '{}', colorClass: 'vs-val-string' }
+  }
+
+  return { text: String(val), colorClass: 'vs-val-string' }
+}
+
 export interface GetDataMappingController {
   destroy(): void
 }
@@ -180,6 +281,10 @@ export interface GetDataMappingController {
 export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingController {
   let dead = false
   let scanTimer: number | undefined
+  let submenuOpenTimer: number | undefined
+  let submenuCloseTimer: number | undefined
+  const activeRowByLevel = new Map<number, HTMLElement>()
+
   let activeBtn: HTMLButtonElement | null = null
   let activeTargetContainer: HTMLElement | null = null
   let openMenus: HTMLElement[] = []
@@ -215,7 +320,24 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     return false
   }
 
+  function clearTimers(): void {
+    if (submenuOpenTimer !== undefined) {
+      clearTimeout(submenuOpenTimer)
+      submenuOpenTimer = undefined
+    }
+    if (submenuCloseTimer !== undefined) {
+      clearTimeout(submenuCloseTimer)
+      submenuCloseTimer = undefined
+    }
+  }
+
   function closeAllMenus(): void {
+    clearTimers()
+    for (const [, r] of activeRowByLevel.entries()) {
+      r.classList.remove('active', 'flyout-left', 'flyout-right')
+    }
+    activeRowByLevel.clear()
+
     if (activeBtn) {
       activeBtn.classList.remove('active')
       activeBtn = null
@@ -225,6 +347,62 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       menu.remove()
     }
     openMenus = []
+  }
+
+  function scheduleOpenSubmenu(
+    row: HTMLElement,
+    childData: unknown,
+    itemPath: string,
+    targetLevel: number
+  ): void {
+    clearTimers()
+
+    // If this row is already active and its submenu is currently open, keep it open
+    const currentActive = activeRowByLevel.get(targetLevel - 1)
+    if (currentActive === row && openMenus.length > targetLevel) {
+      return
+    }
+
+    // Small debounce (130ms) allows cursor to glide smoothly across rows without premature flyouts
+    submenuOpenTimer = window.setTimeout(() => {
+      if (!row.isConnected) return
+
+      // Un-highlight previous active row at this level
+      const prev = activeRowByLevel.get(targetLevel - 1)
+      if (prev && prev !== row) {
+        prev.classList.remove('active', 'flyout-left', 'flyout-right')
+      }
+
+      row.classList.add('active')
+      activeRowByLevel.set(targetLevel - 1, row)
+
+      openSubmenu(row, childData, itemPath, targetLevel)
+    }, 130)
+  }
+
+  function scheduleCloseSubmenusAbove(level: number): void {
+    if (submenuOpenTimer !== undefined) {
+      clearTimeout(submenuOpenTimer)
+      submenuOpenTimer = undefined
+    }
+    if (submenuCloseTimer !== undefined) {
+      clearTimeout(submenuCloseTimer)
+      submenuCloseTimer = undefined
+    }
+
+    // 180ms grace buffer before closing child submenus
+    submenuCloseTimer = window.setTimeout(() => {
+      while (openMenus.length > level + 1) {
+        const m = openMenus.pop()
+        m?.remove()
+      }
+      for (const [lvl, r] of activeRowByLevel.entries()) {
+        if (lvl > level) {
+          r.classList.remove('active', 'flyout-left', 'flyout-right')
+          activeRowByLevel.delete(lvl)
+        }
+      }
+    }, 180)
   }
 
   function getTriggerTreeData(): { title: string; iconUrl: string; data: Record<string, unknown> } {
@@ -337,44 +515,47 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     childData: unknown,
     parentPath: string,
     level: number
-  ): void {
-    // Close any submenus at this level or deeper
+  ): HTMLElement | null {
+    // Close any submenus already at this level or deeper
     while (openMenus.length > level) {
       const m = openMenus.pop()
       m?.remove()
     }
 
-    // Un-highlight sibling items in this parent menu
-    const parentCard = parentRow.closest('.vs-viasocket-menu-card')
-    if (parentCard) {
-      for (const row of parentCard.querySelectorAll('.vs-menu-item-row')) {
-        row.classList.remove('active')
-      }
-    }
-    parentRow.classList.add('active')
-
     if (!isNonEmptyObject(childData) && !isNonEmptyArray(childData)) {
-      return
+      return null
     }
+
+    const parentCard = (parentRow.closest('.vs-viasocket-menu-card') as HTMLElement) || parentRow
+    const parentCardRect = parentCard.getBoundingClientRect()
+    const rowRect = parentRow.getBoundingClientRect()
 
     const card = document.createElement('div')
     card.className = 'vs-viasocket-menu-card vs-submenu'
     card.setAttribute('data-level', String(level))
 
-    // Position submenu directly to the left of the parent row (matching Image 2)
-    const rowRect = parentRow.getBoundingClientRect()
-    const cardWidth = 240
-    let left = rowRect.left - cardWidth - 4
-    if (left < 10) {
-      // If no room on left, open to right
-      left = rowRect.right + 4
+    // Position submenu flush against parent card with 1px border overlap (Zero Gap)
+    const spaceOnLeft = parentCardRect.left
+    const spaceOnRight = window.innerWidth - parentCardRect.right
+    const openToLeft = spaceOnLeft >= 210 || spaceOnLeft > spaceOnRight
+
+    if (openToLeft) {
+      // Anchoring to 'right' guarantees that the submenu's right border
+      // is always flush against parentCardRect.left, regardless of the submenu's content width!
+      card.style.right = `${window.innerWidth - parentCardRect.left + 1}px`
+      card.style.left = 'auto'
+      parentRow.classList.add('flyout-left')
+      parentRow.classList.remove('flyout-right')
+    } else {
+      // Anchoring to 'left' guarantees that the submenu's left border
+      // is flush against parentCardRect.right with 1px overlap
+      card.style.left = `${parentCardRect.right - 1}px`
+      card.style.right = 'auto'
+      parentRow.classList.add('flyout-right')
+      parentRow.classList.remove('flyout-left')
     }
 
-    let top = rowRect.top - 6
-    if (top + 280 > window.innerHeight) {
-      top = Math.max(10, window.innerHeight - 290)
-    }
-    card.style.left = `${left}px`
+    let top = rowRect.top - 4
     card.style.top = `${top}px`
     card.style.zIndex = String(1000000 + level)
 
@@ -382,9 +563,10 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       childData.forEach((item, index) => {
         const itemPath = `${parentPath}[${index}]`
         const hasChildren = isNonEmptyObject(item) || isNonEmptyArray(item)
+        const secondaryInfo = hasChildren ? undefined : classifyValue(item)
         const row = createMenuItemRow(
           `[${index}]`,
-          hasChildren ? undefined : String(item ?? ''),
+          secondaryInfo,
           hasChildren,
           null,
           () => {
@@ -394,9 +576,10 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
             }
           },
           (r) => {
-            if (hasChildren) openSubmenu(r, item, itemPath, level + 1)
-            else {
-              while (openMenus.length > level) openMenus.pop()?.remove()
+            if (hasChildren) {
+              scheduleOpenSubmenu(r, item, itemPath, level + 1)
+            } else {
+              scheduleCloseSubmenusAbove(level)
             }
           }
         )
@@ -406,14 +589,10 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       for (const [key, val] of Object.entries(childData)) {
         const itemPath = formatPath(parentPath, key)
         const hasChildren = isNonEmptyObject(val) || isNonEmptyArray(val)
-        let displayVal: string | undefined
-        if (!hasChildren && val !== undefined && val !== null) {
-          displayVal = String(val)
-        }
-
+        const secondaryInfo = hasChildren ? undefined : classifyValue(val)
         const row = createMenuItemRow(
           key,
-          displayVal,
+          secondaryInfo,
           hasChildren,
           null,
           () => {
@@ -423,9 +602,10 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
             }
           },
           (r) => {
-            if (hasChildren) openSubmenu(r, val, itemPath, level + 1)
-            else {
-              while (openMenus.length > level) openMenus.pop()?.remove()
+            if (hasChildren) {
+              scheduleOpenSubmenu(r, val, itemPath, level + 1)
+            } else {
+              scheduleCloseSubmenusAbove(level)
             }
           }
         )
@@ -438,13 +618,39 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       card.addEventListener(evt, (e) => e.stopPropagation())
     }
 
+    // Keep submenu open when hovering into it
+    card.addEventListener('mouseenter', () => {
+      clearTimers()
+    })
+
+    // Grace period when moving mouse out of submenu
+    card.addEventListener('mouseleave', (e) => {
+      const related = e.relatedTarget as Node | null
+      if (related) {
+        if (parentCard.contains(related)) return
+        for (const m of openMenus) {
+          if (m.contains(related)) return
+        }
+      }
+      scheduleCloseSubmenusAbove(level - 1)
+    })
+
     document.body.appendChild(card)
     openMenus.push(card)
+
+    // Adjust vertical position if card overflows bottom of viewport
+    const cardRect = card.getBoundingClientRect()
+    if (cardRect.bottom > window.innerHeight - 10) {
+      const adjustedTop = Math.max(10, window.innerHeight - cardRect.height - 10)
+      card.style.top = `${adjustedTop}px`
+    }
+
+    return card
   }
 
   function createMenuItemRow(
     primary: string,
-    secondary: string | undefined,
+    secondaryInfo: ValueClassification | undefined,
     hasChildren: boolean,
     iconUrl: string | null,
     onClick: () => void,
@@ -471,10 +677,10 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     primarySpan.textContent = primary
     textWrap.appendChild(primarySpan)
 
-    if (secondary) {
+    if (secondaryInfo) {
       const secondarySpan = document.createElement('span')
-      secondarySpan.className = 'vs-menu-secondary-text'
-      secondarySpan.textContent = secondary
+      secondarySpan.className = `vs-menu-secondary-text ${secondaryInfo.colorClass}`
+      secondarySpan.textContent = secondaryInfo.text
       textWrap.appendChild(secondarySpan)
     }
 
@@ -560,14 +766,21 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
         },
         (r) => {
           if (hasChildren) {
-            openSubmenu(r, childData, secPath, 1)
+            scheduleOpenSubmenu(r, childData, secPath, 1)
           } else {
-            // Close any open submenus
-            while (openMenus.length > 1) openMenus.pop()?.remove()
-            for (const otherRow of rootCard.querySelectorAll('.vs-menu-item-row')) {
-              otherRow.classList.remove('active')
-            }
-            r.classList.add('active')
+            // Sibling without children hovered
+            scheduleCloseSubmenusAbove(0)
+            clearTimeout(submenuOpenTimer)
+            submenuOpenTimer = window.setTimeout(() => {
+              if (r.isConnected) {
+                const prev = activeRowByLevel.get(0)
+                if (prev && prev !== r) {
+                  prev.classList.remove('active', 'flyout-left', 'flyout-right')
+                }
+                r.classList.add('active')
+                activeRowByLevel.set(0, r)
+              }
+            }, 130)
           }
         }
       )
@@ -578,6 +791,21 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     for (const evt of ['click', 'mousedown', 'pointerdown'] as const) {
       rootCard.addEventListener(evt, (e) => e.stopPropagation())
     }
+
+    rootCard.addEventListener('mouseenter', () => {
+      clearTimers()
+    })
+
+    rootCard.addEventListener('mouseleave', (e) => {
+      const related = e.relatedTarget as Node | null
+      if (related) {
+        for (const m of openMenus) {
+          if (m.contains(related)) return
+        }
+        if (activeBtn?.contains(related)) return
+      }
+      scheduleCloseSubmenusAbove(0)
+    })
 
     document.body.appendChild(rootCard)
     openMenus.push(rootCard)
@@ -696,6 +924,7 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       dead = true
       observer.disconnect()
       clearTimeout(scanTimer)
+      clearTimers()
       document.removeEventListener('click', onGlobalClick, true)
       window.removeEventListener('keydown', onGlobalKeyDown, true)
       window.removeEventListener('scroll', onGlobalScroll, true)
