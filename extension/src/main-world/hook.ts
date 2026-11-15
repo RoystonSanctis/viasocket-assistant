@@ -500,6 +500,101 @@ function install(): void {
       if (document.documentElement.getAttribute('data-vs-draft-step') !== serialized) {
         document.documentElement.setAttribute('data-vs-draft-step', serialized)
       }
+
+      // Sync trigger variables to DOM for Get Data mapping UI
+      try {
+        const flowState = isObj(state.flowJsonV2) ? (state.flowJsonV2 as Record<string, unknown>)[scriptId] : undefined
+        const flowJson = isObj(flowState) ? (flowState as Record<string, unknown>).flowJson : undefined
+        const trigger = isObj(flowJson) ? (flowJson as Record<string, unknown>).trigger : undefined
+        const sample = isObj(trigger) ? (trigger as Record<string, unknown>).sampleData : undefined
+        const invocation = isObj(state.invocationV2) ? (state.invocationV2 as Record<string, unknown>)[scriptId] : undefined
+        const req = isObj(invocation)
+          ? ((invocation as Record<string, unknown>).context as Record<string, unknown>)?.req ||
+            ((invocation as Record<string, unknown>).invocationData as Record<string, unknown>)?.requestSnapshot
+          : undefined
+
+        const vars: Array<{ path: string; label: string; value?: string; group: string }> = []
+        const seen = new Set<string>()
+        const addVar = (path: string, label: string, val: unknown, group: string) => {
+          if (seen.has(path)) return
+          seen.add(path)
+          let displayVal: string | undefined
+          if (val !== undefined && val !== null) {
+            displayVal = typeof val === 'object' ? (Array.isArray(val) ? `[${val.length}]` : '{...}') : String(val)
+          }
+          vars.push({ path, label, value: displayVal, group })
+        }
+
+        const crawl = (objData: unknown, prefix: string, group: string, depth = 0) => {
+          if (!isObj(objData) || depth > 2) return
+          for (const [k, v] of Object.entries(objData as Record<string, unknown>)) {
+            const p = `${prefix}.${k}`
+            if (isObj(v) && !Array.isArray(v) && Object.keys(v).length > 0) {
+              crawl(v, p, group, depth + 1)
+            } else {
+              addVar(p, k, v, group)
+            }
+          }
+        }
+
+        const q =
+          isObj(req) && isObj((req as Record<string, unknown>).query)
+            ? (req as Record<string, unknown>).query
+            : isObj(sample)
+              ? (sample as Record<string, unknown>).query
+              : undefined
+        crawl(q, 'context.req.query', 'query')
+
+        const b =
+          isObj(req) && isObj((req as Record<string, unknown>).body)
+            ? (req as Record<string, unknown>).body
+            : isObj(sample) && isObj((sample as Record<string, unknown>).body)
+              ? (sample as Record<string, unknown>).body
+              : isObj(sample) && !q
+                ? sample
+                : undefined
+        crawl(b, 'context.req.body', 'body')
+
+        const h =
+          isObj(req) && isObj((req as Record<string, unknown>).headers)
+            ? (req as Record<string, unknown>).headers
+            : isObj(sample)
+              ? (sample as Record<string, unknown>).headers
+              : undefined
+        crawl(h, 'context.req.headers', 'headers')
+
+        const p =
+          isObj(req) && isObj((req as Record<string, unknown>).params)
+            ? (req as Record<string, unknown>).params
+            : isObj(sample)
+              ? (sample as Record<string, unknown>).params
+              : undefined
+        crawl(p, 'context.req.params', 'params')
+
+        if (vars.length === 0) {
+          addVar('context.req.query', 'query', undefined, 'query')
+          addVar('context.req.body', 'body', undefined, 'body')
+          addVar('context.req.headers', 'headers', undefined, 'headers')
+        }
+
+        const trigPayload = {
+          type:
+            isObj(trigger) && typeof (trigger as Record<string, unknown>).type === 'string'
+              ? (trigger as Record<string, unknown>).type
+              : 'webhook',
+          title:
+            isObj(trigger) && typeof (trigger as Record<string, unknown>).title === 'string'
+              ? (trigger as Record<string, unknown>).title
+              : 'Trigger (Webhook)',
+          vars,
+        }
+        const trigSerialized = JSON.stringify(trigPayload)
+        if (document.documentElement.getAttribute('data-vs-trigger-vars') !== trigSerialized) {
+          document.documentElement.setAttribute('data-vs-trigger-vars', trigSerialized)
+        }
+      } catch {
+        // never disturb the page
+      }
     } catch {
       // never disturb the page
     }

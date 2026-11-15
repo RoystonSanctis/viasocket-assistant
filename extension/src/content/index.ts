@@ -20,6 +20,7 @@ import { connectPort } from './port'
 import { initStepMenu } from './step-menu'
 import { initSubfunctionsUI } from './subfunctions-ui'
 import { initBeautify } from './beautify-ui'
+import { initGetDataMappingUI } from './get-data-mapping-ui'
 import { destroyToasts } from './toast'
 import { createWakeWordListener, type WakeWordListener } from './wake-word'
 
@@ -787,6 +788,7 @@ async function main(): Promise<void> {
   const flowMenu = initFlowMenu({ navigate: (url, replace) => bridge.navigate(url, replace) })
   const subfunctionsUI = initSubfunctionsUI(bridge)
   const beautify = initBeautify(bridge)
+  const getDataMapping = initGetDataMappingUI(bridge)
 
   const onRuntimeMessage = (
     raw: unknown,
@@ -997,6 +999,7 @@ async function main(): Promise<void> {
     safe(() => flowMenu.destroy())
     safe(() => subfunctionsUI.destroy())
     safe(() => beautify.destroy())
+    safe(() => getDataMapping.destroy())
     safe(() => destroyToasts())
     safe(() => {
       continuousVoice = false
