@@ -128,3 +128,74 @@ export function editorAction(editorId: string, action: EditorAction): EditorActi
     return 'failed'
   }
 }
+
+/** Inserts variable expression at cursor or replaces selection in the targeted Monaco editor */
+export function insertIntoEditor(editorId: string, text: string): boolean {
+  try {
+    const el =
+      (EDITOR_ID_RE.test(editorId) ? document.querySelector(`.monaco-editor[${EDITOR_ID_ATTR}="${editorId}"]`) : null) ||
+      document.querySelector('.monaco-editor')
+    const editor = el ? findEditor(el) : null
+    if (!editor?.getModel()) return false
+
+    const options = editor.getRawOptions()
+    if (options.readOnly === true || options.domReadOnly === true) return false
+
+    editor.focus()
+    const anyEditor = editor as unknown as {
+      getPosition?: () => Position | null
+      getSelection?: () => { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number; isEmpty?: () => boolean } | null
+      setPosition?: (pos: Position) => void
+    }
+
+    const pos = anyEditor.getPosition?.() || { lineNumber: 1, column: 1 }
+    const sel = anyEditor.getSelection?.()
+    const range: EditRange =
+      sel && typeof sel.isEmpty === 'function' && !sel.isEmpty()
+        ? sel
+        : {
+            startLineNumber: pos.lineNumber,
+            startColumn: pos.column,
+            endLineNumber: pos.lineNumber,
+            endColumn: pos.column,
+          }
+
+    editor.pushUndoStop()
+    const applied = editor.executeEdits('vs-assistant-variable-insert', [{ range, text }])
+    editor.pushUndoStop()
+
+    if (anyEditor.setPosition) {
+      anyEditor.setPosition({
+        lineNumber: pos.lineNumber,
+        column: pos.column + text.length,
+      })
+    }
+
+    // Inform Redux step draft if store is available
+    const model = editor.getModel()
+    if (model) {
+      const code = model.getValue()
+      try {
+        const store = (window as unknown as { store?: { dispatch?: (action: unknown) => void } }).store
+        if (store?.dispatch) {
+          const urlParams = new URLSearchParams(location.search)
+          const scriptId = urlParams.get('scriptId') || ''
+          const stepId = urlParams.get('stepId') || 'CRON_PRE_PROCESS'
+          const tabName = urlParams.get('tabName') || 'draft'
+          const slugName = urlParams.get('slugName') || 'CRON_PRE_PROCESS'
+          store.dispatch({
+            type: 'stepsDataV3/setKeyValueInstance',
+            urlData: { scriptId, stepId, tabName, slugName },
+            payload: { code, refreshDynamicVariables: true },
+          })
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return Boolean(applied)
+  } catch {
+    return false
+  }
+}

@@ -22,7 +22,7 @@ import {
 } from '../shared/messages'
 import type { ObservedEvent } from '../shared/observed'
 import { resolveEnv } from '../background/tools/env'
-import { editorAction } from './editors'
+import { editorAction, insertIntoEditor } from './editors'
 import {
   classify, dryRunFailed, isObj, isPageMutation, MAX_PARSE_CHARS, outcomeInBody, parseCapped, shortErrorText, SLUG_MAX,
 } from '../shared/classify'
@@ -829,6 +829,20 @@ function install(): void {
       return { type: 'editor-action', requestId: inner.requestId.slice(0, 64), editorId: inner.editorId, action: inner.action, nonce: inner.nonce }
     }
     if (
+      inner.type === 'editor-insert' &&
+      typeof inner.requestId === 'string' &&
+      typeof inner.editorId === 'string' &&
+      typeof inner.text === 'string'
+    ) {
+      return {
+        type: 'editor-insert',
+        requestId: inner.requestId.slice(0, 64),
+        editorId: inner.editorId,
+        text: inner.text,
+        nonce: inner.nonce,
+      }
+    }
+    if (
       inner.type === 'set-field-value' &&
       typeof inner.requestId === 'string' &&
       typeof inner.fieldLabel === 'string' &&
@@ -878,6 +892,11 @@ function install(): void {
       }
       if (msg.type === 'editor-action') {
         post({ type: 'editor-action-response', requestId: msg.requestId, result: editorAction(msg.editorId, msg.action) })
+        return
+      }
+      if (msg.type === 'editor-insert') {
+        const success = insertIntoEditor(msg.editorId, msg.text)
+        post({ type: 'editor-insert-response', requestId: msg.requestId, success })
         return
       }
       if (msg.type === 'set-field-value') {

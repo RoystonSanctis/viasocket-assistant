@@ -1,7 +1,8 @@
-// Implements the native viaSocket cascading hover mapping menu for Get Data (CRON_PRE_PROCESS)
-// custom mapping field boxes, exactly matching the appearance and behavior in Actions.
+// Implements the native viaSocket cascading hover mapping menu for Get Data (CRON_PRE_PROCESS):
+// 1. App Actions in Get Data: injects [+] AddBoxTwoTone button on custom mapping fields.
+// 2. JS Code in Get Data: injects (+) Data chip on Monaco code editor toolbar, exactly matching Action JS Code.
 //
-// When the user clicks the [+] AddBoxTwoTone button:
+// When the user clicks the [+] button or (+) Data chip:
 // 1. A root menu opens showing "Trigger" with sections: query, body, headers, attachment.
 // 2. Hovering over any item with children (e.g. query >) immediately flies out a submenu to the left,
 //    displaying primary (key) and secondary (sample value) labels with 0 gap.
@@ -11,22 +12,33 @@
 //    - Number: Blue (#3b82f6)
 //    - String: Normal secondary text color
 //    - Null / Undefined: Muted italic grey (#8b949e)
-// 5. Clicking any item inserts the expression (e.g. ${context.req.query.name}) into the input
-//    and updates React Fiber (getHtmlAndValue) and Redux draft state via page-bridge.
+// 5. Clicking any item inserts:
+//    - In App Action inputs: ${context.req.query.name}
+//    - In JS Code editors: context.req.query.name (valid JavaScript code)
+//    and updates React Fiber (getHtmlAndValue / Monaco) and Redux draft state via page-bridge.
 // 6. Closes cleanly on outside click, Escape key, or window scroll.
 
 import type { PageBridge } from './page-bridge'
 
 const STYLE_ID = 'vs-get-data-mapping-styles'
 const BTN_CLASS = 'vs-mapping-plus-btn'
+const DATA_CHIP_CLASS = 'vs-mapping-data-chip'
 const MENU_ROOT_ID = 'vs-mapping-root-menu'
 const SCAN_DELAY_MS = 200
+const EDITOR_ID_ATTR = 'data-vs-editor-id'
 
 // Exact SVG equivalent of Material-UI AddBoxTwoTone
 const ADD_BOX_TWO_TONE_SVG = `
 <svg class="MuiSvgIcon-root" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="width: 19px; height: 19px; display: block;">
   <path d="M5 19h14V5H5v14zm2-8h4V7h2v4h4v2h-4v4h-2v-4H7v-2z" opacity="0.3" fill="currentColor"></path>
   <path d="M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-8-2h2v-4h4v-2h-4V7h-2v4H7v2h4z" fill="currentColor"></path>
+</svg>
+`
+
+// Exact SVG equivalent of Material-UI AddCircle
+const ADD_CIRCLE_SVG = `
+<svg class="MuiSvgIcon-root" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="width: 17px; height: 17px; display: block; margin-right: 4px;" data-testid="AddCircleIcon">
+  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z" fill="currentColor"></path>
 </svg>
 `
 
@@ -70,6 +82,37 @@ const CSS = `
 .${BTN_CLASS}:focus-visible {
   outline: 2px solid var(--col-primary, #3b82f6);
   outline-offset: 1px;
+}
+
+.${DATA_CHIP_CLASS} {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 10px 0 6px;
+  background-color: var(--col-chip, rgba(255, 255, 255, 0.08));
+  color: var(--col-text-primary, #ffffff);
+  border: 1px solid var(--col-border, rgba(255, 255, 255, 0.12));
+  border-radius: 12px;
+  cursor: pointer;
+  user-select: none;
+  font-family: var(--font-family-ui, 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+  margin-top: 4px;
+  box-sizing: border-box;
+}
+
+.${DATA_CHIP_CLASS}:hover {
+  background-color: var(--col-action-hover, rgba(255, 255, 255, 0.14));
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.${DATA_CHIP_CLASS}.active {
+  background-color: rgba(59, 130, 246, 0.2);
+  border-color: var(--col-primary, #3b82f6);
+  color: var(--col-primary, #3b82f6);
 }
 
 .vs-viasocket-menu-card {
@@ -274,6 +317,11 @@ export function classifyValue(val: unknown): ValueClassification {
   return { text: String(val), colorClass: 'vs-val-string' }
 }
 
+function makeId(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 export interface GetDataMappingController {
   destroy(): void
 }
@@ -285,10 +333,12 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
   let submenuCloseTimer: number | undefined
   const activeRowByLevel = new Map<number, HTMLElement>()
 
-  let activeBtn: HTMLButtonElement | null = null
-  let activeTargetContainer: HTMLElement | null = null
+  let activeBtn: HTMLElement | null = null
+  let activeTarget: HTMLElement | null = null
+  let activeIsCodeEditor = false
   let openMenus: HTMLElement[] = []
   const attachedContainers = new Set<HTMLElement>()
+  const attachedChips = new Set<HTMLElement>()
 
   if (!document.getElementById(STYLE_ID)) {
     const style = document.createElement('style')
@@ -342,7 +392,8 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       activeBtn.classList.remove('active')
       activeBtn = null
     }
-    activeTargetContainer = null
+    activeTarget = null
+    activeIsCodeEditor = false
     for (const menu of openMenus) {
       menu.remove()
     }
@@ -434,8 +485,19 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     }
   }
 
-  function insertVariable(container: HTMLElement, varPath: string): void {
-    const input = container.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+  function insertVariable(target: HTMLElement, varPath: string, isCodeEditor: boolean): void {
+    if (isCodeEditor) {
+      // In JS Code, insert plain JavaScript expression (e.g. context.req.query.name)
+      let editorId = target.getAttribute(EDITOR_ID_ATTR)
+      if (!editorId) {
+        editorId = makeId()
+        target.setAttribute(EDITOR_ID_ATTR, editorId)
+      }
+      bridge.editorInsert(editorId, varPath).catch(() => undefined)
+      return
+    }
+
+    const input = target.querySelector<HTMLInputElement | HTMLTextAreaElement>(
       'textarea, input:not([type="hidden"])'
     )
     if (!input) return
@@ -472,7 +534,7 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     input.dispatchEvent(new Event('change', { bubbles: true, composed: true }))
 
     // 2. Resolve field label from row & notify React fiber/Redux through page-bridge
-    const fieldRow = container.closest<HTMLElement>(
+    const fieldRow = target.closest<HTMLElement>(
       '[data-testid^="plugin-field-"]:not([data-testid^="plugin-field-label-"]), .plugin-field-row, [data-testid="custom-field-box"]'
     )
     let fieldLabel = ''
@@ -485,8 +547,8 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
         .replace(/[*:[\]"']/g, '')
         .trim()
     }
-    if (!fieldLabel && container.id) {
-      fieldLabel = container.id.replace(/^scroll-/, '').replace(/-/g, ' ')
+    if (!fieldLabel && target.id) {
+      fieldLabel = target.id.replace(/^scroll-/, '').replace(/-/g, ' ')
     }
 
     if (fieldLabel) {
@@ -540,15 +602,11 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     const openToLeft = spaceOnLeft >= 210 || spaceOnLeft > spaceOnRight
 
     if (openToLeft) {
-      // Anchoring to 'right' guarantees that the submenu's right border
-      // is always flush against parentCardRect.left, regardless of the submenu's content width!
       card.style.right = `${window.innerWidth - parentCardRect.left + 1}px`
       card.style.left = 'auto'
       parentRow.classList.add('flyout-left')
       parentRow.classList.remove('flyout-right')
     } else {
-      // Anchoring to 'left' guarantees that the submenu's left border
-      // is flush against parentCardRect.right with 1px overlap
       card.style.left = `${parentCardRect.right - 1}px`
       card.style.right = 'auto'
       parentRow.classList.add('flyout-right')
@@ -570,8 +628,8 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
           hasChildren,
           null,
           () => {
-            if (activeTargetContainer) {
-              insertVariable(activeTargetContainer, itemPath)
+            if (activeTarget) {
+              insertVariable(activeTarget, itemPath, activeIsCodeEditor)
               closeAllMenus()
             }
           },
@@ -596,8 +654,8 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
           hasChildren,
           null,
           () => {
-            if (activeTargetContainer) {
-              insertVariable(activeTargetContainer, itemPath)
+            if (activeTarget) {
+              insertVariable(activeTarget, itemPath, activeIsCodeEditor)
               closeAllMenus()
             }
           },
@@ -702,7 +760,7 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     return row
   }
 
-  function showRootMenu(button: HTMLButtonElement, container: HTMLElement): void {
+  function showRootMenu(button: HTMLElement, target: HTMLElement, isCodeEditor: boolean): void {
     if (activeBtn === button) {
       closeAllMenus()
       return
@@ -710,7 +768,8 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     closeAllMenus()
 
     activeBtn = button
-    activeTargetContainer = container
+    activeTarget = target
+    activeIsCodeEditor = isCodeEditor
     button.classList.add('active')
 
     const tree = getTriggerTreeData()
@@ -719,21 +778,29 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     rootCard.id = MENU_ROOT_ID
     rootCard.className = 'vs-viasocket-menu-card'
 
-    // Position root menu right next to the [+] button
     const btnRect = button.getBoundingClientRect()
     const cardWidth = 230
-    let right = window.innerWidth - btnRect.left
+    let right = window.innerWidth - btnRect.right
     if (right + cardWidth > window.innerWidth - 10) {
       right = window.innerWidth - 10 - cardWidth
     }
 
-    let top = btnRect.bottom + 2
-    if (top + 260 > window.innerHeight) {
-      top = Math.max(10, btnRect.top - 260)
+    if (isCodeEditor || btnRect.bottom + 260 > window.innerHeight) {
+      // For Code editor chip at the bottom or near screen bottom: open UPWARDS directly above button
+      const bottom = window.innerHeight - btnRect.top + 4
+      rootCard.style.bottom = `${bottom}px`
+      rootCard.style.top = 'auto'
+    } else {
+      let top = btnRect.bottom + 2
+      if (top + 260 > window.innerHeight) {
+        top = Math.max(10, btnRect.top - 260)
+      }
+      rootCard.style.top = `${top}px`
+      rootCard.style.bottom = 'auto'
     }
 
-    rootCard.style.right = `${right}px`
-    rootCard.style.top = `${top}px`
+    rootCard.style.right = `${Math.max(10, right)}px`
+    rootCard.style.left = 'auto'
 
     // Section header: Trigger
     const sectionTitle = document.createElement('div')
@@ -760,8 +827,8 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
         hasChildren,
         tree.iconUrl,
         () => {
-          // If clicked and has no children (e.g. empty body/attachment), insert top-level path
-          insertVariable(container, secPath)
+          // If clicked and has no children, insert top-level path
+          insertVariable(target, secPath, isCodeEditor)
           closeAllMenus()
         },
         (r) => {
@@ -842,7 +909,7 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     button.addEventListener('click', (e) => {
       e.preventDefault()
       e.stopPropagation()
-      showRootMenu(button, container)
+      showRootMenu(button, container, false)
     })
 
     if (existingIconBox) {
@@ -852,6 +919,51 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     }
 
     attachedContainers.add(container)
+  }
+
+  function attachDataChip(monacoEl: HTMLElement): void {
+    // If chip already attached in this editor container, skip
+    const existing = monacoEl.closest('.flex.flex-col')?.querySelector<HTMLElement>(
+      `.${DATA_CHIP_CLASS}, [data-testid="add-variable-data-chip"]`
+    )
+    if (existing) return
+
+    // Locate or create the toolbar container right below the Monaco editor in CustomAceEditor
+    let toolbar = monacoEl.closest('.flex.flex-col')?.querySelector<HTMLElement>(
+      '.flex.justify-end, .justify-end'
+    )
+
+    if (!toolbar) {
+      toolbar = document.createElement('div')
+      toolbar.className = 'flex justify-end items-center w-full vs-code-toolbar'
+      toolbar.style.padding = '4px 0'
+      const parent = monacoEl.parentElement?.parentElement || monacoEl.parentElement
+      parent?.appendChild(toolbar)
+    }
+
+    const chip = document.createElement('div')
+    chip.className = DATA_CHIP_CLASS
+    chip.setAttribute('role', 'button')
+    chip.setAttribute('tabindex', '0')
+    chip.setAttribute('data-testid', 'add-variable-data-chip')
+    chip.setAttribute('aria-label', 'Field mapping')
+    chip.title = 'Click for Field Mapping'
+    chip.innerHTML = `${ADD_CIRCLE_SVG}<span>Data</span>`
+
+    chip.addEventListener('mousedown', (e) => {
+      // Prevent mousedown from taking focus away from Monaco editor
+      e.preventDefault()
+      e.stopPropagation()
+    })
+
+    chip.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      showRootMenu(chip, monacoEl, true)
+    })
+
+    toolbar.appendChild(chip)
+    attachedChips.add(chip)
   }
 
   function scan(): void {
@@ -868,19 +980,34 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
         container.querySelector(`.${BTN_CLASS}`)?.remove()
       }
       attachedContainers.clear()
+      for (const chip of attachedChips) {
+        chip.remove()
+      }
+      attachedChips.clear()
       return
     }
 
+    // Clean up disconnected containers
     for (const container of attachedContainers) {
       if (!container.isConnected) attachedContainers.delete(container)
     }
+    for (const chip of attachedChips) {
+      if (!chip.isConnected) attachedChips.delete(chip)
+    }
 
+    // 1. App Action custom field mapping inputs
     const containers = slider.querySelectorAll<HTMLElement>(
       '[data-testid="custom-autosuggest-input-container"], [data-testid="custom-autosuggest-wrapper"]'
     )
-
     for (const container of containers) {
       attachButton(container)
+    }
+
+    // 2. Monaco Code Editor (JS Code in Get Data)
+    const monacoEditors = slider.querySelectorAll<HTMLElement>('.monaco-editor')
+    for (const monacoEl of monacoEditors) {
+      if (monacoEl.parentElement?.closest('.monaco-editor') || monacoEl.closest('.monaco-diff-editor')) continue
+      attachDataChip(monacoEl)
     }
   }
 
@@ -933,6 +1060,10 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
         container.querySelector(`.${BTN_CLASS}`)?.remove()
       }
       attachedContainers.clear()
+      for (const chip of attachedChips) {
+        chip.remove()
+      }
+      attachedChips.clear()
       document.getElementById(STYLE_ID)?.remove()
     },
   }
