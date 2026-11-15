@@ -1278,6 +1278,9 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
   }
 
   function attachButton(container: HTMLElement): void {
+    if (container.getAttribute('data-testid') !== 'custom-autosuggest-input-container') {
+      return
+    }
     if (container.querySelector(`.${BTN_CLASS}, [data-testid="add-variable-button"]`)) {
       return
     }
@@ -1288,9 +1291,10 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     const input = container.querySelector<HTMLInputElement | HTMLTextAreaElement>(
       'textarea, input:not([type="hidden"])'
     )
-    if (input) {
-      input.style.paddingRight = '32px'
+    if (!input) {
+      return
     }
+    input.style.paddingRight = '32px'
 
     const existingIconBox = container.querySelector<HTMLElement>('.absolute.right-1, .right-1')
 
@@ -1417,9 +1421,16 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       return
     }
 
-    // Clean up disconnected containers and any chips inside response viewers
+    // Clean up disconnected containers and any misplaced buttons
     for (const container of attachedContainers) {
-      if (!container.isConnected) attachedContainers.delete(container)
+      if (
+        !container.isConnected ||
+        container.getAttribute('data-testid') !== 'custom-autosuggest-input-container' ||
+        !container.querySelector('textarea, input:not([type="hidden"])')
+      ) {
+        container.querySelector(`.${BTN_CLASS}`)?.remove()
+        attachedContainers.delete(container)
+      }
     }
     for (const chip of attachedChips) {
       if (!chip.isConnected || isResponseOrReadOnly(chip)) {
@@ -1429,6 +1440,15 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
           toolbar.remove()
         }
         attachedChips.delete(chip)
+      }
+    }
+
+    // Strip any rogue buttons outside valid custom-autosuggest-input-container elements
+    const allButtons = slider.querySelectorAll<HTMLElement>(`.${BTN_CLASS}`)
+    for (const btn of allButtons) {
+      const validContainer = btn.closest('[data-testid="custom-autosuggest-input-container"]')
+      if (!validContainer) {
+        btn.remove()
       }
     }
 
@@ -1444,11 +1464,18 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       }
     }
 
-    // 1. App Action custom field mapping inputs
+    // 1. App Action and Get Data custom field mapping inputs
     const containers = slider.querySelectorAll<HTMLElement>(
-      '[data-testid="custom-autosuggest-input-container"], [data-testid="custom-autosuggest-wrapper"]'
+      '[data-testid="custom-autosuggest-input-container"]'
     )
     for (const container of containers) {
+      // Deduplicate buttons if more than one exists in the container
+      const btns = container.querySelectorAll<HTMLElement>(`.${BTN_CLASS}`)
+      if (btns.length > 1) {
+        for (let i = 1; i < btns.length; i++) {
+          btns[i]?.remove()
+        }
+      }
       attachButton(container)
     }
 
