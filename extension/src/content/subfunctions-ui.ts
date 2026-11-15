@@ -862,6 +862,8 @@ export function initSubfunctionsUI(bridge: PageBridge): SubfunctionsUIController
       view = renderInputs({
         model,
         variables: d.ctx.variables,
+        dynamicVariables: d.ctx.dynamicVariables,
+        contextTree: d.ctx.contextTree,
         connectionReady: () => !detail.needsConnection || !!authId(),
         connectionKey: authId,
         loadOptions: (key, search) =>

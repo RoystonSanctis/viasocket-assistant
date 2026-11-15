@@ -6,6 +6,8 @@
 //
 // Dynamic text is only ever set with textContent; the static SVG constants are the only markup.
 
+import { isObj } from '../shared/classify'
+import type { StepContextData } from '../shared/messages'
 import { childName, InputsModel, kindOf, plainValues, type FieldValue } from '../shared/subfunction-inputs'
 import type { SubfnFieldSpec, SubfnGroupResult, SubfnOptionsResult } from '../shared/subfunctions'
 
@@ -23,6 +25,10 @@ const SVG = {
   check: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>`,
   plus: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>`,
   variable: `<svg width="16" height="16" viewBox="0 0 35 35" fill="none"><rect width="35" height="35" rx="6" fill="#F97316"/><path d="M13.8837 25.8141C13.4949 26.1951 12.8727 26.1951 12.4838 25.8141L4.7288 18.2142C4.3287 17.8221 4.3287 17.1779 4.7288 16.7858L12.4838 9.18592C12.8727 8.80488 13.4949 8.80487 13.8837 9.18592L14.6361 9.92328C15.0362 10.3154 15.0362 10.9596 14.6361 11.3517L9.05282 16.8233C8.65272 17.2154 8.65272 17.8596 9.05282 18.2517L14.5978 23.6858C14.9979 24.0779 14.9979 24.7221 14.5978 25.1142L13.8837 25.8141ZM22.5162 25.8141C22.1273 26.1951 21.5051 26.1951 21.1163 25.8141L20.3639 25.0767C19.9638 24.6846 19.9638 24.0404 20.3639 23.6483L25.9472 18.1767C26.3473 17.7846 26.3473 17.1404 25.9472 16.7483L20.4021 11.3142C20.002 10.9221 20.0021 10.2779 20.4021 9.88578L21.1163 9.18592C21.5051 8.80487 22.1273 8.80487 22.5162 9.18592L30.2712 16.7858C30.6713 17.1779 30.6713 17.8221 30.2712 18.2142L22.5162 25.8141Z" fill="white"/></svg>`,
+  webhook: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M18 16.98h-5.99c-1.1 0-1.95.94-2.48 1.9A4 4 0 0 1 2 17c.01-.7.2-1.4.57-2"></path><path d="m6 17 3.13-5.78c.53-.97.1-2.18-.5-3.1a4 4 0 1 1 6.89-4.06l3.19 5.74c.54.99 1.63 1.16 2.69 1.2"></path><circle cx="12" cy="12" r="3"></circle></svg>`,
+  step: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>`,
+  varCode: `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#f97316" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>`,
+  chevronRight: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="opacity:0.6; flex-shrink:0; margin-left:auto;"><polyline points="9 18 15 12 9 6"></polyline></svg>`,
 } as const
 
 export const FORM_CSS = `
@@ -69,6 +75,20 @@ export const FORM_CSS = `
 .vs-sf-kv { display: grid; grid-template-columns: minmax(80px, 35%) 1fr auto; gap: 6px; align-items: start; }
 .vs-sf-mini { background: none; border: none; padding: 0; font: inherit; font-size: 12px; color: var(--vs-link); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; }
 .vs-sf-mini:disabled { color: var(--vs-text-faint); cursor: default; }
+.vs-sf-pop { position: fixed !important; z-index: 2147483010 !important; width: 260px; background: var(--vs-bg-primary); border: 1px solid var(--vs-border-medium); border-radius: 8px; box-shadow: var(--vs-dropdown-shadow); display: flex; flex-direction: column; overflow: hidden; }
+.vs-sf-pop-search-box { padding: 6px; border-bottom: 1px solid var(--vs-border); }
+.vs-sf-pop-body { overflow-y: auto; max-height: 280px; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
+.vs-sf-pop-sec-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--vs-text-faint); padding: 6px 8px 3px; user-select: none; }
+.vs-sf-pop-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: none; border-radius: 4px; background: transparent; color: var(--vs-text-primary); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; position: relative; user-select: none; }
+.vs-sf-pop-row:hover, .vs-sf-pop-row.vs-sf-active { background: var(--vs-bg-hover); }
+.vs-sf-pop-row-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.vs-sf-pop-row-val { font-size: 11px; color: var(--vs-text-faint); max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vs-sf-pop-var-row { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: none; border-radius: 4px; background: transparent; color: var(--vs-text-primary); font: inherit; text-align: left; cursor: pointer; user-select: none; }
+.vs-sf-pop-var-row:hover { background: var(--vs-bg-hover); }
+.vs-sf-pop-var-col { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 1px; }
+.vs-sf-pop-var-name { font-size: 12.5px; font-weight: 500; color: var(--vs-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vs-sf-pop-var-sub { font-size: 11px; color: var(--vs-text-faint); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vs-sf-pop-submenu { position: fixed !important; z-index: 2147483015 !important; width: 240px; max-height: 260px; overflow-y: auto; background: var(--vs-bg-primary); border: 1px solid var(--vs-border-medium); border-radius: 8px; box-shadow: var(--vs-dropdown-shadow); padding: 4px; display: flex; flex-direction: column; gap: 2px; }
 `
 
 export type Child = Node | string | null | undefined | false
@@ -126,6 +146,31 @@ export function placePopover(pop: HTMLElement, anchor: HTMLElement, width?: numb
   }
 }
 
+export function placeSubmenu(sub: HTMLElement, anchorRow: HTMLElement, width = 240): void {
+  const r = anchorRow.getBoundingClientRect()
+  const w = Math.min(width, window.innerWidth - 16)
+
+  let left = r.right
+  if (left + w > window.innerWidth - 8) {
+    left = Math.max(8, r.left - w)
+  }
+
+  sub.style.position = 'fixed'
+  sub.style.width = `${w}px`
+  sub.style.left = `${left}px`
+  sub.style.zIndex = '2147483015'
+
+  const maxH = 260
+  sub.style.maxHeight = `${maxH}px`
+
+  let top = Math.max(8, r.top - 2)
+  if (top + maxH > window.innerHeight - 8) {
+    top = Math.max(8, window.innerHeight - maxH - 8)
+  }
+  sub.style.top = `${top}px`
+  sub.style.bottom = ''
+}
+
 export function errorText(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
@@ -144,6 +189,8 @@ export interface InputsHost {
   model: InputsModel
   /** Data the user can map, e.g. context.req.body.email */
   variables: string[]
+  dynamicVariables?: Record<string, string>
+  contextTree?: StepContextData['contextTree']
   /** A connection is chosen, or the action needs none: the panel shows inputs only then */
   connectionReady(): boolean
   /** Changes whenever the connection does (loaded choices belong to one connection) */
@@ -807,34 +854,357 @@ export function renderInputs(host: InputsHost): InputsView {
     const pop = el('div', 'vs-sf-pop')
     pop.hidden = true
     host.popovers.add(pop)
+
+    const searchBox = el('div', 'vs-sf-pop-search-box')
     const search = el('input', 'vs-sf-input')
-    search.placeholder = 'Search data (context.req.body…)'
+    search.placeholder = 'Search data or variables...'
     search.setAttribute('aria-label', 'Search data')
-    const list = el('div', 'vs-sf-pop-list')
-    pop.append(el('div', 'vs-sf-dd-search', search), list)
-    const render = () => {
-      const q = search.value.trim().toLowerCase()
-      const vars = host.variables.filter((v) => !q || v.toLowerCase().includes(q))
-      if (!vars.length) {
-        return list.replaceChildren(el('div', 'vs-sf-dd-note', host.variables.length ? 'No match.' : 'No data to map yet: test the trigger and earlier steps first.'))
+    searchBox.append(search)
+
+    const body = el('div', 'vs-sf-pop-body')
+    pop.append(searchBox, body)
+
+    const openSubmenus: Array<{ level: number; el: HTMLElement; rowEl: HTMLElement }> = []
+
+    const closeSubmenus = (fromLevel = 0) => {
+      while (openSubmenus.length > fromLevel) {
+        const item = openSubmenus.pop()
+        item?.el.remove()
+        item?.rowEl.classList.remove('vs-sf-active')
       }
-      list.replaceChildren(
-        ...vars.slice(0, 100).map((v) =>
-          btn('vs-sf-pop-item vs-sf-code', [v], () => {
-            const text = code ? v : `\${${v}}`
-            const start = input.selectionStart ?? input.value.length
-            const end = input.selectionEnd ?? start
-            input.value = input.value.slice(0, start) + text + input.value.slice(end)
-            pop.hidden = true
-            onChange()
-            autoGrow(input)
-            input.focus()
-            input.setSelectionRange(start + text.length, start + text.length)
-          }),
-        ),
-      )
     }
+
+    const closeAll = () => {
+      pop.hidden = true
+      closeSubmenus(0)
+    }
+
+    const observer = new MutationObserver(() => {
+      if (pop.hidden) closeSubmenus(0)
+    })
+    observer.observe(pop, { attributes: true, attributeFilter: ['hidden'] })
+
+    const insertText = (rawPath: string) => {
+      const text = code ? rawPath : `\${${rawPath}}`
+      const start = input.selectionStart ?? input.value.length
+      const end = input.selectionEnd ?? start
+      input.value = input.value.slice(0, start) + text + input.value.slice(end)
+      closeAll()
+      onChange()
+      autoGrow(input)
+      input.focus()
+      input.setSelectionRange(start + text.length, start + text.length)
+    }
+
+    const formatPreview = (val: unknown): string => {
+      if (val === undefined || val === null) return ''
+      if (typeof val === 'string') return val.length > 18 ? `${val.slice(0, 16)}…` : val
+      if (typeof val === 'number' || typeof val === 'boolean') return String(val)
+      try {
+        const s = JSON.stringify(val)
+        return s.length > 18 ? `${s.slice(0, 16)}…` : s
+      } catch {
+        return ''
+      }
+    }
+
+    interface MappingNode {
+      label: string
+      path: string
+      icon: string
+      valPreview?: string
+      children?: MappingNode[]
+      isVariable?: boolean
+      varExpr?: string
+    }
+
+    const getChildrenFromDataAndPaths = (prefix: string, data: unknown, allVars: string[]): MappingNode[] => {
+      const children: MappingNode[] = []
+      const seenKeys = new Set<string>()
+
+      if (isObj(data)) {
+        if (Array.isArray(data)) {
+          data.slice(0, 10).forEach((item, index) => {
+            const key = `[${index}]`
+            seenKeys.add(key)
+            const childPath = `${prefix}[${index}]`
+            const hasChildren = (isObj(item) && Object.keys(item).length > 0) || Array.isArray(item)
+            children.push({
+              label: key,
+              path: childPath,
+              icon: SVG.webhook,
+              valPreview: hasChildren ? undefined : formatPreview(item),
+              children: hasChildren ? getChildrenFromDataAndPaths(childPath, item, allVars) : undefined,
+            })
+          })
+        } else {
+          for (const [key, val] of Object.entries(data as Record<string, unknown>)) {
+            seenKeys.add(key)
+            const safeKey = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) ? `.${key}` : `[${JSON.stringify(key)}]`
+            const childPath = `${prefix}${safeKey}`
+            const hasChildren = (isObj(val) && Object.keys(val).length > 0) || Array.isArray(val)
+            children.push({
+              label: key,
+              path: childPath,
+              icon: SVG.webhook,
+              valPreview: hasChildren ? undefined : formatPreview(val),
+              children: hasChildren ? getChildrenFromDataAndPaths(childPath, val, allVars) : undefined,
+            })
+          }
+        }
+      }
+
+      const prefixDot = prefix + '.'
+      for (const v of allVars) {
+        if (v.startsWith(prefixDot)) {
+          const rest = v.slice(prefixDot.length)
+          const firstSegment = rest.split(/[.[]/)[0]
+          if (firstSegment && !seenKeys.has(firstSegment)) {
+            seenKeys.add(firstSegment)
+            const safeKey = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(firstSegment) ? `.${firstSegment}` : `[${JSON.stringify(firstSegment)}]`
+            const childPath = `${prefix}${safeKey}`
+            const subVars = allVars.filter((x) => x.startsWith(childPath + '.') || x.startsWith(childPath + '['))
+            const hasChildren = subVars.length > 0
+            children.push({
+              label: firstSegment,
+              path: childPath,
+              icon: SVG.webhook,
+              children: hasChildren ? getChildrenFromDataAndPaths(childPath, undefined, allVars) : undefined,
+            })
+          }
+        }
+      }
+
+      return children
+    }
+
+    const openSubmenuForNode = (node: MappingNode, rowEl: HTMLElement, level: number) => {
+      closeSubmenus(level)
+      if (!node.children || node.children.length === 0) return
+
+      rowEl.classList.add('vs-sf-active')
+      const subEl = el('div', 'vs-sf-pop-submenu')
+      subEl.addEventListener('click', (e) => e.stopPropagation())
+
+      for (const child of node.children) {
+        const childRow = renderRow(child, level + 1)
+        subEl.append(childRow)
+      }
+
+      document.body.append(subEl)
+      placeSubmenu(subEl, rowEl)
+      openSubmenus.push({ level, el: subEl, rowEl })
+    }
+
+    const renderRow = (node: MappingNode, level: number): HTMLElement => {
+      if (node.isVariable) {
+        const row = el('button', 'vs-sf-pop-var-row')
+        row.type = 'button'
+        const col = el('div', 'vs-sf-pop-var-col')
+        const nameEl = el('div', 'vs-sf-pop-var-name', node.label)
+        col.append(nameEl)
+        if (node.varExpr) {
+          const subEl = el('div', 'vs-sf-pop-var-sub', node.varExpr)
+          col.append(subEl)
+        }
+        row.append(icon(node.icon), col)
+        row.addEventListener('click', (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          insertText(node.path)
+        })
+        row.addEventListener('mouseenter', () => {
+          closeSubmenus(level)
+        })
+        return row
+      }
+
+      const hasChildren = !!(node.children && node.children.length > 0)
+      const row = el('button', 'vs-sf-pop-row')
+      row.type = 'button'
+      const labelSpan = el('span', 'vs-sf-pop-row-label', node.label)
+      const rowChildren: Child[] = [icon(node.icon), labelSpan]
+
+      if (node.valPreview) {
+        rowChildren.push(el('span', 'vs-sf-pop-row-val', node.valPreview))
+      }
+      if (hasChildren) {
+        rowChildren.push(icon(SVG.chevronRight))
+      }
+
+      row.append(...(rowChildren.filter(Boolean) as Node[]))
+
+      row.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        insertText(node.path)
+      })
+
+      row.addEventListener('mouseenter', () => {
+        if (hasChildren) {
+          openSubmenuForNode(node, row, level)
+        } else {
+          closeSubmenus(level)
+        }
+      })
+
+      return row
+    }
+
+    const render = () => {
+      closeSubmenus(0)
+      const q = search.value.trim().toLowerCase()
+      const allVars = host.variables || []
+      const dynVars = host.dynamicVariables ?? host.contextTree?.variables ?? {}
+
+      if (q) {
+        // Flat filtered view
+        const matches: Child[] = []
+        // Variables matching
+        for (const [varName, varVal] of Object.entries(dynVars)) {
+          if (varName.toLowerCase().includes(q) || varVal.toLowerCase().includes(q)) {
+            matches.push(renderRow({
+              label: varName,
+              path: varName,
+              icon: SVG.varCode,
+              isVariable: true,
+              varExpr: varVal ? (varVal.startsWith('${') ? varVal : `\${${varVal}}`) : '',
+            }, 0))
+          }
+        }
+        // Flat variables matching
+        for (const v of allVars) {
+          if (v.toLowerCase().includes(q) && !Object.prototype.hasOwnProperty.call(dynVars, v)) {
+            const isStep = v.startsWith('context.res.') || v.startsWith('context.vals.')
+            const isTrig = v.startsWith('context.req.')
+            matches.push(renderRow({
+              label: v,
+              path: v,
+              icon: isStep ? SVG.step : isTrig ? SVG.webhook : SVG.varCode,
+              isVariable: !isStep && !isTrig,
+            }, 0))
+          }
+        }
+        if (!matches.length) {
+          body.replaceChildren(el('div', 'vs-sf-dd-note', 'No match.'))
+        } else {
+          body.replaceChildren(...(matches.slice(0, 100) as Node[]))
+        }
+        return
+      }
+
+      // Hierarchical structure
+      const items: Child[] = []
+
+      // 1. Trigger section
+      items.push(el('div', 'vs-sf-pop-sec-title', 'Trigger'))
+      const triggerTree = host.contextTree?.trigger
+      const triggerParts: Array<{ key: 'query' | 'body' | 'headers' | 'attachment'; label: string }> = [
+        { key: 'query', label: 'query' },
+        { key: 'body', label: 'body' },
+        { key: 'headers', label: 'headers' },
+        { key: 'attachment', label: 'attachment' },
+      ]
+
+      for (const part of triggerParts) {
+        const partPath = `context.req.${part.key}`
+        const partData = triggerTree ? triggerTree[part.key] : undefined
+        const partChildren = getChildrenFromDataAndPaths(partPath, partData, allVars)
+        items.push(renderRow({
+          label: part.label,
+          path: partPath,
+          icon: SVG.webhook,
+          children: partChildren.length ? partChildren : undefined,
+        }, 0))
+      }
+
+      // 2. Steps section
+      const stepNodes: MappingNode[] = []
+      const seenSteps = new Set<string>()
+
+      if (host.contextTree?.steps) {
+        for (const [slug, stepInfo] of Object.entries(host.contextTree.steps)) {
+          seenSteps.add(slug)
+          const stepPath = `context.res.${slug}`
+          const stepChildren = getChildrenFromDataAndPaths(stepPath, stepInfo.data, allVars)
+          stepNodes.push({
+            label: stepInfo.label || slug,
+            path: stepPath,
+            icon: SVG.step,
+            children: stepChildren.length ? stepChildren : undefined,
+          })
+        }
+      }
+
+      for (const v of allVars) {
+        if (v.startsWith('context.res.') || v.startsWith('context.vals.')) {
+          const parts = v.split('.')
+          const slug = parts[2]
+          if (slug && !seenSteps.has(slug)) {
+            seenSteps.add(slug)
+            const stepPath = `${parts[0]}.${parts[1]}.${slug}`
+            const stepChildren = getChildrenFromDataAndPaths(stepPath, undefined, allVars)
+            stepNodes.push({
+              label: slug,
+              path: stepPath,
+              icon: SVG.step,
+              children: stepChildren.length ? stepChildren : undefined,
+            })
+          }
+        }
+      }
+
+      if (stepNodes.length > 0) {
+        items.push(el('div', 'vs-sf-pop-sec-title', 'Steps'))
+        for (const s of stepNodes) {
+          items.push(renderRow(s, 0))
+        }
+      }
+
+      // 3. Variables section
+      const varNodes: MappingNode[] = []
+      const seenVars = new Set<string>()
+
+      for (const [varName, varVal] of Object.entries(dynVars)) {
+        seenVars.add(varName)
+        const preview = varVal ? (varVal.startsWith('${') ? varVal : `\${${varVal}}`) : ''
+        varNodes.push({
+          label: varName,
+          path: varName,
+          icon: SVG.varCode,
+          isVariable: true,
+          varExpr: preview,
+        })
+      }
+
+      for (const v of allVars) {
+        if (!v.startsWith('context.') && /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(v) && !seenVars.has(v)) {
+          seenVars.add(v)
+          varNodes.push({
+            label: v,
+            path: v,
+            icon: SVG.varCode,
+            isVariable: true,
+            varExpr: '',
+          })
+        }
+      }
+
+      if (varNodes.length > 0) {
+        items.push(el('div', 'vs-sf-pop-sec-title', 'Variables'))
+        for (const vn of varNodes) {
+          items.push(renderRow(vn, 0))
+        }
+      }
+
+      body.replaceChildren(...(items.filter(Boolean) as Node[]))
+    }
+
     search.addEventListener('input', render)
+    search.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeAll()
+    })
+
     wrap.append(
       btn('vs-sf-map-btn', [icon(SVG.variable)], () => {
         const open = pop.hidden
@@ -842,10 +1212,12 @@ export function renderInputs(host: InputsHost): InputsView {
         pop.hidden = !open
         if (open) {
           render()
-          placePopover(pop, input, 340)
+          placePopover(pop, input, 260)
           setTimeout(() => search.focus(), 20)
+        } else {
+          closeSubmenus(0)
         }
-      }, 'Map data from the trigger or earlier steps'),
+      }, 'Map data from the trigger, earlier steps or variables'),
       pop,
     )
     return wrap

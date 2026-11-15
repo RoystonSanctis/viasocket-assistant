@@ -394,14 +394,36 @@ function install(): void {
         }
       }
 
-      // Mappable data: the trigger's sample, and the output of steps that run before this one (stepOrder is the
-      // editor's run order; without it every other step is offered).
+      // Mappable data: the trigger's sample, live invocation data, earlier steps, and Input Values (dynamicVariables)
       const variables: string[] = []
+      const invState = obj(obj(state.invocationV2)[scriptId])
+      const invCtxRaw = obj(invState.context)
+      const invCtx = obj(isObj(invCtxRaw.context) ? invCtxRaw.context : invCtxRaw)
+      const invReq = obj(invCtx.req)
+      const invRes = obj(invCtx.res)
       const sample = obj(obj(flowJson.trigger).sampleData)
-      for (const k of Object.keys(isObj(sample.body) ? sample.body : sample)) variables.push(`context.req.body.${k}`)
-      for (const k of Object.keys(isObj(sample.query) ? sample.query : {})) variables.push(`context.req.query.${k}`)
-      for (const k of Object.keys(isObj(sample.headers) ? sample.headers : {})) variables.push(`context.req.headers.${k}`)
 
+      const queryData = isObj(invReq.query) && Object.keys(invReq.query).length ? invReq.query : isObj(sample.query) ? sample.query : {}
+      const bodyData = isObj(invReq.body) && Object.keys(invReq.body).length ? invReq.body : isObj(sample.body) ? sample.body : sample
+      const headersData = isObj(invReq.headers) && Object.keys(invReq.headers).length ? invReq.headers : isObj(sample.headers) ? sample.headers : {}
+      const attachmentData = isObj(invReq.attachment) ? invReq.attachment : isObj(sample.attachment) ? sample.attachment : {}
+
+      function collectPaths(root: unknown, prefix: string, depth = 0): void {
+        if (depth > 4 || !isObj(root)) return
+        for (const [k, val] of Object.entries(root)) {
+          const path = `${prefix}.${k}`
+          variables.push(path)
+          if (isObj(val) && !Array.isArray(val)) {
+            collectPaths(val, path, depth + 1)
+          }
+        }
+      }
+
+      collectPaths(queryData, 'context.req.query')
+      collectPaths(bodyData, 'context.req.body')
+      collectPaths(headersData, 'context.req.headers')
+
+      const stepsData: Record<string, { label: string; type?: string; data: unknown }> = {}
       if (!isPreProcess) {
         const order = Array.isArray(flowState.stepOrder) ? flowState.stepOrder.filter((k): k is string => typeof k === 'string') : []
         const here = order.indexOf(slugName)
@@ -409,9 +431,41 @@ function install(): void {
         for (const slug of earlier) {
           const b = obj(blocks[slug])
           if (b.status === 'DELETE' || b.status === 'DRAFTED') continue
-          if (b.type === 'function' || b.type === 'api' || b.type === 'plugin') variables.push(`context.res.${slug}`)
-          else if (b.type === 'variable') variables.push(`context.vals.${slug}`)
+          const outData = isObj(invRes[slug]) ? invRes[slug] : b.sampleData ?? {}
+          stepsData[slug] = {
+            label: slug,
+            type: typeof b.type === 'string' ? b.type : 'function',
+            data: outData,
+          }
+          if (b.type === 'function' || b.type === 'api' || b.type === 'plugin') {
+            variables.push(`context.res.${slug}`)
+            collectPaths(outData, `context.res.${slug}`)
+          } else if (b.type === 'variable') {
+            variables.push(`context.vals.${slug}`)
+            collectPaths(outData, `context.vals.${slug}`)
+          }
         }
+      }
+
+      const dynVars = isObj(draft.dynamicVariables)
+        ? (draft.dynamicVariables as Record<string, string>)
+        : isObj(block.dynamicVariables)
+          ? (block.dynamicVariables as Record<string, string>)
+          : {}
+
+      for (const varName of Object.keys(dynVars)) {
+        variables.push(varName)
+      }
+
+      const contextTree: StepContextData['contextTree'] = {
+        trigger: {
+          query: queryData,
+          body: bodyData,
+          headers: headersData,
+          attachment: attachmentData,
+        },
+        steps: stepsData,
+        variables: dynVars,
       }
 
       const connectedApps: StepContextData['connectedApps'] = []
@@ -435,14 +489,11 @@ function install(): void {
           actionId: String(sf.actionId ?? ''),
           authId: String(sf.authId ?? ''),
         })),
-        dynamicVariables: isObj(draft.dynamicVariables)
-          ? (draft.dynamicVariables as Record<string, string>)
-          : isObj(block.dynamicVariables)
-            ? (block.dynamicVariables as Record<string, string>)
-            : undefined,
+        dynamicVariables: Object.keys(dynVars).length ? dynVars : undefined,
         otherSubfunctions,
         connectedApps,
         variables,
+        contextTree,
       }
     } catch {
       return null
@@ -867,6 +918,18 @@ function install(): void {
         fieldLabel: inner.fieldLabel,
         value: inner.value,
         clickSave: inner.clickSave === true,
+        nonce: inner.nonce,
+      }
+    }
+    if (
+      inner.type === 'get-editor-text' &&
+      typeof inner.requestId === 'string' &&
+      typeof inner.editorId === 'string'
+    ) {
+      return {
+        type: 'get-editor-text',
+        requestId: inner.requestId.slice(0, 64),
+        editorId: inner.editorId,
         nonce: inner.nonce,
       }
     }

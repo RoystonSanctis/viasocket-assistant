@@ -184,6 +184,17 @@ export interface StepContextData {
   connectedApps: Array<{ serviceId: string; name: string; iconUrl?: string }>
   /** Mappable references, e.g. context.req.body.email */
   variables: string[]
+  /** Full structured context tree for hierarchical data mapping popover */
+  contextTree?: {
+    trigger?: {
+      query?: unknown
+      body?: unknown
+      headers?: unknown
+      attachment?: unknown
+    }
+    steps?: Record<string, { label: string; type?: string; data: unknown }>
+    variables?: Record<string, string>
+  }
 }
 
 // ---------- page (MAIN world) <-> content script ----------

@@ -122,12 +122,14 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
 }
 
 .${ARRAY_BADGE_CLASS} {
-  display: inline-flex;
+  position: absolute !important;
+  right: 12px !important;
+  top: 1px !important;
+  display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  margin-left: 8px;
   padding: 0 6px;
-  height: 17px;
+  height: 16px;
   font-family: var(--font-family-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
   font-size: 10.5px;
   font-weight: 600;
@@ -138,7 +140,7 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
   border-radius: 9px;
   user-select: none;
   pointer-events: none;
-  vertical-align: middle;
+  z-index: 5;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
@@ -429,6 +431,48 @@ function extractRawTextFromMonaco(monacoEl: HTMLElement): string | null {
   return null
 }
 
+/**
+ * Builds an executable JavaScript path ready to be used in JS code:
+ * E.g. context?.res?.List_Row?.data?.[0]?.address
+ * Or for trigger: context?.req?.body?.address, context?.req?.query?.name
+ */
+export function buildExecutablePath(relPath: string, headerLabel?: string | null, urlSlug?: string | null): string {
+  const cleanLabel = (headerLabel || '').trim()
+  const cleanSlug = (urlSlug || '').trim()
+
+  const isTrigger = ['body', 'query', 'headers', 'attachment'].includes(cleanLabel.toLowerCase())
+
+  let prefix = ''
+  if (isTrigger) {
+    prefix = `context?.req?.${cleanLabel.toLowerCase()}`
+  } else {
+    let stepName = cleanLabel || cleanSlug
+    if (!stepName || stepName.toLowerCase() === 'response' || stepName.toLowerCase() === 'payload') {
+      stepName = cleanSlug || 'step'
+    }
+    const safeStep = /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(stepName) ? stepName : JSON.stringify(stepName)
+    prefix = safeStep.startsWith('"') ? `context?.res?.[${safeStep}]` : `context?.res?.${safeStep}`
+  }
+
+  if (!relPath) return prefix
+
+  // Tokenize relative path (handles dot notation and bracket notation, e.g. "data[0].address")
+  const tokens = relPath.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean)
+  let result = prefix
+
+  for (const token of tokens) {
+    if (!Number.isNaN(Number(token))) {
+      result += `?.[${token}]`
+    } else if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(token)) {
+      result += `?.${token}`
+    } else {
+      result += `?.[${JSON.stringify(token)}]`
+    }
+  }
+
+  return result
+}
+
 export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerController {
   const editors = new Map<HTMLElement, EditorState>()
   let scanTimer: number | undefined
@@ -568,11 +612,20 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     pill.id = HOVER_PILL_ID
 
     // Path preview badge
+    const headerLabel =
+      state.monacoEl.closest('.flex.flex-col')?.querySelector<HTMLElement>(
+        '.flex.justify-between.items-center .MuiTypography-caption, .justify-between span, .justify-between p'
+      )?.textContent?.trim() || ''
+
+    const urlParams = new URLSearchParams(window.location.search)
+    const urlSlug = urlParams.get('slugName') || urlParams.get('stepId') || ''
+
+    const fullExecPath = buildExecutablePath(info.path || info.key, headerLabel, urlSlug)
+
     const pathSpan = document.createElement('span')
     pathSpan.className = 'vs-res-pill-path'
-    const displayPath = info.path || info.key
-    pathSpan.innerHTML = `${KEY_ICON_SVG}<span>${displayPath}</span>`
-    pathSpan.title = displayPath
+    pathSpan.innerHTML = `${KEY_ICON_SVG}<span>${fullExecPath}</span>`
+    pathSpan.title = fullExecPath
     pill.appendChild(pathSpan)
 
     // Array count indicator inside pill
@@ -587,14 +640,13 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     const copyPathBtn = document.createElement('button')
     copyPathBtn.type = 'button'
     copyPathBtn.className = 'vs-res-pill-btn'
-    copyPathBtn.title = `Copy path: ${displayPath}`
+    copyPathBtn.title = `Copy path: ${fullExecPath}`
     copyPathBtn.innerHTML = `${COPY_ICON_SVG}<span>Copy Path</span>`
 
     copyPathBtn.addEventListener('click', async (ev) => {
       ev.preventDefault()
       ev.stopPropagation()
-      const pathToCopy = info.path || info.key
-      await copyText(pathToCopy)
+      await copyText(fullExecPath)
       copyPathBtn.classList.add('copied')
       copyPathBtn.innerHTML = `${CHECK_ICON_SVG}<span>Path Copied!</span>`
       setTimeout(() => {

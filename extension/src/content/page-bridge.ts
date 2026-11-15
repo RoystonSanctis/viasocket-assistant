@@ -121,6 +121,10 @@ function sanitizeStepContext(raw: unknown): StepContextData | null {
     const iconUrl = typeof app.iconUrl === 'string' && /^https:\/\//.test(app.iconUrl) ? app.iconUrl.slice(0, 500) : undefined
     if (serviceId && name) connectedApps.push({ serviceId, name, iconUrl })
   }
+  let contextTree: StepContextData['contextTree'] | undefined
+  if (isObj(raw.contextTree)) {
+    contextTree = raw.contextTree as StepContextData['contextTree']
+  }
   return {
     scriptId,
     stepId,
@@ -132,6 +136,7 @@ function sanitizeStepContext(raw: unknown): StepContextData | null {
     otherSubfunctions,
     connectedApps,
     variables: strings(raw.variables, VARIABLES_MAX),
+    contextTree,
   }
 }
 
