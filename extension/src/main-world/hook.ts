@@ -612,6 +612,7 @@ function install(): void {
                   ? (sample as Record<string, unknown>).attachment
                   : null,
           },
+          dynamicVariables: isObj(draft.dynamicVariables) ? draft.dynamicVariables : undefined,
         }
         const serializedTree = JSON.stringify(trigTree)
         if (document.documentElement.getAttribute('data-vs-trigger-tree') !== serializedTree) {
@@ -843,6 +844,18 @@ function install(): void {
       }
     }
     if (
+      inner.type === 'add-dynamic-variable' &&
+      typeof inner.requestId === 'string' &&
+      typeof inner.name === 'string'
+    ) {
+      return {
+        type: 'add-dynamic-variable',
+        requestId: inner.requestId.slice(0, 64),
+        name: inner.name.slice(0, 64),
+        nonce: inner.nonce,
+      }
+    }
+    if (
       inner.type === 'set-field-value' &&
       typeof inner.requestId === 'string' &&
       typeof inner.fieldLabel === 'string' &&
@@ -895,9 +908,56 @@ function install(): void {
         return
       }
       if (msg.type === 'editor-insert') {
-        const success = insertIntoEditor(msg.editorId, msg.text)
+        const success = insertIntoEditor(msg.editorId, msg.text, findReduxStore)
         post({ type: 'editor-insert-response', requestId: msg.requestId, success })
         return
+      }
+      if (msg.type === 'add-dynamic-variable') {
+        try {
+          const store = findReduxStore()
+          if (!store) {
+            post({ type: 'add-dynamic-variable-response', requestId: msg.requestId, success: false })
+            return
+          }
+          const state = store.getState()
+          const scriptId =
+            extractScriptId(location.pathname) ||
+            (isObj(state.appInfo) && typeof state.appInfo.currentScriptId === 'string' ? state.appInfo.currentScriptId : '')
+          const urlParams = new URLSearchParams(location.search)
+          const stepId =
+            urlParams.get('stepId') ||
+            (isObj(state.appInfo) && typeof state.appInfo.currentStepId === 'string' && state.appInfo.currentStepId ? state.appInfo.currentStepId : 'CRON_PRE_PROCESS')
+          const tabName = urlParams.get('tabName') || 'draft'
+          const slugName =
+            urlParams.get('slugName') ||
+            (isObj(state.appInfo) && typeof state.appInfo.currentSlugName === 'string' && state.appInfo.currentSlugName ? state.appInfo.currentSlugName : 'CRON_PRE_PROCESS')
+
+          const stepsData = isObj(state.stepsDataV3) ? (state.stepsDataV3 as Record<string, unknown>)[scriptId] : undefined
+          const stepEntry = isObj(stepsData) ? (stepsData as Record<string, unknown>)[stepId] : undefined
+          const draft = (isObj(stepEntry) ? ((stepEntry as Record<string, unknown>).draft || stepEntry) : {}) as Record<string, unknown>
+          const currentVars = isObj(draft.dynamicVariables) ? (draft.dynamicVariables as Record<string, string>) : {}
+
+          const newVars = {
+            ...currentVars,
+            [msg.name]: '',
+          }
+
+          store.dispatch({
+            type: 'stepsDataV3/setKeyValueInstance',
+            urlData: { scriptId, stepId, tabName, slugName },
+            payload: {
+              dynamicVariables: newVars,
+              variablesChanged: true,
+              hasUnsavedCode: true,
+            },
+          })
+          syncDraftToDom()
+          post({ type: 'add-dynamic-variable-response', requestId: msg.requestId, success: true })
+          return
+        } catch {
+          post({ type: 'add-dynamic-variable-response', requestId: msg.requestId, success: false })
+          return
+        }
       }
       if (msg.type === 'set-field-value') {
         const res = setFieldValue(msg.fieldLabel, msg.value, msg.clickSave)

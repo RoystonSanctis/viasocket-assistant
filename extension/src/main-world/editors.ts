@@ -130,7 +130,11 @@ export function editorAction(editorId: string, action: EditorAction): EditorActi
 }
 
 /** Inserts variable expression at cursor or replaces selection in the targeted Monaco editor */
-export function insertIntoEditor(editorId: string, text: string): boolean {
+export function insertIntoEditor(
+  editorId: string,
+  text: string,
+  getStore?: () => { dispatch: (action: unknown) => unknown; getState: () => Record<string, unknown> } | null
+): boolean {
   try {
     const el =
       (EDITOR_ID_RE.test(editorId) ? document.querySelector(`.monaco-editor[${EDITOR_ID_ATTR}="${editorId}"]`) : null) ||
@@ -176,13 +180,19 @@ export function insertIntoEditor(editorId: string, text: string): boolean {
     if (model) {
       const code = model.getValue()
       try {
-        const store = (window as unknown as { store?: { dispatch?: (action: unknown) => void } }).store
+        const store = getStore ? getStore() : (window as unknown as { store?: { dispatch?: (action: unknown) => void; getState?: () => Record<string, unknown> } }).store
         if (store?.dispatch) {
+          const state = typeof store.getState === 'function' ? store.getState() : {}
+          const m = /\/workflow\/([A-Za-z0-9]+)/.exec(location.pathname)
+          const scriptId = m?.[1] || (isObj(state.appInfo) && typeof state.appInfo.currentScriptId === 'string' ? state.appInfo.currentScriptId : '')
           const urlParams = new URLSearchParams(location.search)
-          const scriptId = urlParams.get('scriptId') || ''
-          const stepId = urlParams.get('stepId') || 'CRON_PRE_PROCESS'
+          const stepId =
+            urlParams.get('stepId') ||
+            (isObj(state.appInfo) && typeof state.appInfo.currentStepId === 'string' && state.appInfo.currentStepId ? state.appInfo.currentStepId : 'CRON_PRE_PROCESS')
           const tabName = urlParams.get('tabName') || 'draft'
-          const slugName = urlParams.get('slugName') || 'CRON_PRE_PROCESS'
+          const slugName =
+            urlParams.get('slugName') ||
+            (isObj(state.appInfo) && typeof state.appInfo.currentSlugName === 'string' && state.appInfo.currentSlugName ? state.appInfo.currentSlugName : 'CRON_PRE_PROCESS')
           store.dispatch({
             type: 'stepsDataV3/setKeyValueInstance',
             urlData: { scriptId, stepId, tabName, slugName },

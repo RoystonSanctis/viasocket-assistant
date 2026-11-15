@@ -200,6 +200,7 @@ export type PageToContentMsg =
   | { type: 'step-context-response'; requestId: string; data: StepContextData | null }
   | { type: 'editor-action-response'; requestId: string; result: EditorActionResult }
   | { type: 'editor-insert-response'; requestId: string; success: boolean }
+  | { type: 'add-dynamic-variable-response'; requestId: string; success: boolean }
   | { type: 'field-value-response'; requestId: string; success: boolean; error?: string }
 
 export type ContentToPageMsg =
@@ -228,6 +229,8 @@ export type ContentToPageMsg =
   | { type: 'editor-action'; requestId: string; editorId: string; action: EditorAction }
   /** Insert variable/text at cursor in the Monaco editor marked with EDITOR_ID_ATTR */
   | { type: 'editor-insert'; requestId: string; editorId: string; text: string }
+  /** Add a dynamic variable to the current step draft in Redux */
+  | { type: 'add-dynamic-variable'; requestId: string; name: string }
   /** The content script was orphaned (extension updated or reloaded): the hook pairs with the next init instead */
   | { type: 'release' }
 

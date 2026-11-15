@@ -1,9 +1,10 @@
 // Implements the native viaSocket cascading hover mapping menu for Get Data (CRON_PRE_PROCESS):
 // 1. App Actions in Get Data: injects [+] AddBoxTwoTone button on custom mapping fields.
 // 2. JS Code in Get Data: injects (+) Data chip on Monaco code editor toolbar, exactly matching Action JS Code.
+// 3. Includes "+ Add new variable" functionality and dynamic variables display at the bottom of the menu.
 //
 // When the user clicks the [+] button or (+) Data chip:
-// 1. A root menu opens showing "Trigger" with sections: query, body, headers, attachment.
+// 1. A root menu opens showing "Trigger" with sections: query, body, headers, attachment, plus dynamic variables.
 // 2. Hovering over any item with children (e.g. query >) immediately flies out a submenu to the left,
 //    displaying primary (key) and secondary (sample value) labels with 0 gap.
 // 3. Hover resilience (grace timers + invisible hover bridge) prevents vanishing on diagonal movements.
@@ -12,11 +13,12 @@
 //    - Number: Blue (#3b82f6)
 //    - String: Normal secondary text color
 //    - Null / Undefined: Muted italic grey (#8b949e)
-// 5. Clicking any item inserts:
-//    - In App Action inputs: ${context.req.query.name}
-//    - In JS Code editors: context.req.query.name (valid JavaScript code)
+// 5. "+ Add new variable" button allows inline creation of dynamic variables, saving to Redux and inserting into code.
+// 6. Clicking any item inserts:
+//    - In App Action inputs: ${context.req.query.name} or ${varName}
+//    - In JS Code editors: context.req.query.name or varName (valid JavaScript code)
 //    and updates React Fiber (getHtmlAndValue / Monaco) and Redux draft state via page-bridge.
-// 6. Closes cleanly on outside click, Escape key, or window scroll.
+// 7. Closes cleanly on outside click, Escape key, or window scroll.
 
 import type { PageBridge } from './page-bridge'
 
@@ -39,6 +41,18 @@ const ADD_BOX_TWO_TONE_SVG = `
 const ADD_CIRCLE_SVG = `
 <svg class="MuiSvgIcon-root" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="width: 17px; height: 17px; display: block; margin-right: 4px;" data-testid="AddCircleIcon">
   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5 11h-4v4h-2v-4H7v-2h4V7h2v4h4v2z" fill="currentColor"></path>
+</svg>
+`
+
+const ADD_ICON_SVG = `
+<svg class="MuiSvgIcon-root" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="width: 15px; height: 15px; display: block;">
+  <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" fill="currentColor"></path>
+</svg>
+`
+
+const CODE_VAR_ICON_SVG = `
+<svg class="MuiSvgIcon-root" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="width: 15px; height: 15px; display: block;">
+  <path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z" fill="currentColor"></path>
 </svg>
 `
 
@@ -120,7 +134,7 @@ const CSS = `
   z-index: 1000000;
   min-width: 200px;
   max-width: 280px;
-  max-height: 340px;
+  max-height: 380px;
   overflow-y: auto;
   overscroll-behavior: contain;
   background-color: var(--col-surface-raised, #181a1f);
@@ -147,6 +161,89 @@ const CSS = `
   font-weight: 500;
   color: var(--col-text-secondary, #9e9e9e);
   letter-spacing: 0.2px;
+}
+
+.vs-menu-divider {
+  height: 1px;
+  background-color: var(--col-border, rgba(255, 255, 255, 0.12));
+  margin: 4px 0;
+}
+
+.vs-menu-footer {
+  padding: 4px 8px 6px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.vs-menu-add-var-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  color: var(--col-primary, #3b82f6);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: background-color 0.12s ease;
+}
+
+.vs-menu-add-var-btn:hover {
+  background-color: rgba(59, 130, 246, 0.08);
+}
+
+.vs-menu-add-var-btn svg {
+  fill: currentColor;
+}
+
+.vs-menu-add-var-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.vs-menu-add-var-input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--col-border, rgba(255, 255, 255, 0.2));
+  border-radius: 4px;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 12.5px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.vs-menu-add-var-input:focus {
+  border-color: var(--col-primary, #3b82f6);
+}
+
+.vs-menu-add-var-submit {
+  height: 28px;
+  padding: 0 10px;
+  background-color: var(--col-primary, #3b82f6);
+  border: none;
+  border-radius: 4px;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+
+.vs-menu-add-var-submit:hover {
+  opacity: 0.9;
 }
 
 .vs-menu-item-row {
@@ -202,6 +299,7 @@ const CSS = `
   justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
+  color: var(--col-text-secondary, #9e9e9e);
 }
 
 .vs-menu-avatar-icon img {
@@ -354,9 +452,12 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     if (stepId === 'CRON_PRE_PROCESS' || slugName === 'CRON_PRE_PROCESS') return true
 
     const header = slider.querySelector<HTMLElement>(
-      'h5, h6, [data-testid="plugin-header"], [data-testid="step-title"], .MuiTypography-h6'
+      '#step-name-component, .step-header, h5, h6, [data-testid="plugin-header"], [data-testid="step-title"], .MuiTypography-h6'
     )
     if (header && /get data/i.test(header.textContent || '')) return true
+
+    const anyHeader = slider.querySelector<HTMLElement>('.step-header, #step-name-component')
+    if (anyHeader && /get data/i.test(anyHeader.innerText || anyHeader.textContent || '')) return true
 
     try {
       const rawDraft = document.documentElement.getAttribute('data-vs-draft-step')
@@ -456,16 +557,40 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     }, 180)
   }
 
-  function getTriggerTreeData(): { title: string; iconUrl: string; data: Record<string, unknown> } {
+  function getTriggerTreeData(): {
+    title: string
+    iconUrl: string
+    data: Record<string, unknown>
+    dynamicVariables?: Record<string, string>
+  } {
+    let dynVars: Record<string, string> | undefined
+    try {
+      const rawDraft = document.documentElement.getAttribute('data-vs-draft-step')
+      if (rawDraft) {
+        const parsed = JSON.parse(rawDraft) as { dynamicVariables?: Record<string, string> }
+        if (parsed && typeof parsed.dynamicVariables === 'object' && parsed.dynamicVariables !== null) {
+          dynVars = parsed.dynamicVariables
+        }
+      }
+    } catch {
+      // ignore
+    }
+
     try {
       const raw = document.documentElement.getAttribute('data-vs-trigger-tree')
       if (raw) {
-        const parsed = JSON.parse(raw) as { title?: string; iconUrl?: string; data?: Record<string, unknown> }
+        const parsed = JSON.parse(raw) as {
+          title?: string
+          iconUrl?: string
+          data?: Record<string, unknown>
+          dynamicVariables?: Record<string, string>
+        }
         if (parsed && typeof parsed.data === 'object' && parsed.data !== null) {
           return {
             title: parsed.title || 'Trigger',
             iconUrl: parsed.iconUrl || WEBHOOK_ICON_URL,
             data: parsed.data,
+            dynamicVariables: parsed.dynamicVariables || dynVars,
           }
         }
       }
@@ -482,12 +607,13 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
         headers: {},
         attachment: null,
       },
+      dynamicVariables: dynVars,
     }
   }
 
   function insertVariable(target: HTMLElement, varPath: string, isCodeEditor: boolean): void {
     if (isCodeEditor) {
-      // In JS Code, insert plain JavaScript expression (e.g. context.req.query.name)
+      // In JS Code, insert plain JavaScript expression (e.g. context.req.query.name or varName)
       let editorId = target.getAttribute(EDITOR_ID_ATTR)
       if (!editorId) {
         editorId = makeId()
@@ -720,10 +846,14 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     if (iconUrl) {
       const avatar = document.createElement('div')
       avatar.className = 'vs-menu-avatar-icon'
-      const img = document.createElement('img')
-      img.src = iconUrl
-      img.alt = primary
-      avatar.appendChild(img)
+      if (iconUrl.startsWith('<svg')) {
+        avatar.innerHTML = iconUrl
+      } else {
+        const img = document.createElement('img')
+        img.src = iconUrl
+        img.alt = primary
+        avatar.appendChild(img)
+      }
       row.appendChild(avatar)
     }
 
@@ -854,6 +984,114 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       rootCard.appendChild(row)
     }
 
+    // Dynamic Variables section (if any exist in current draft)
+    const dynEntries = Object.entries(tree.dynamicVariables || {})
+    if (dynEntries.length > 0) {
+      const divider = document.createElement('div')
+      divider.className = 'vs-menu-divider'
+      rootCard.appendChild(divider)
+
+      const dynSectionTitle = document.createElement('div')
+      dynSectionTitle.className = 'vs-menu-section-title'
+      dynSectionTitle.textContent = 'Variables'
+      rootCard.appendChild(dynSectionTitle)
+
+      for (const [varName, varVal] of dynEntries) {
+        const row = createMenuItemRow(
+          varName,
+          varVal ? classifyValue(varVal) : undefined,
+          false,
+          CODE_VAR_ICON_SVG,
+          () => {
+            insertVariable(target, varName, isCodeEditor)
+            closeAllMenus()
+          },
+          (r) => {
+            scheduleCloseSubmenusAbove(0)
+            clearTimeout(submenuOpenTimer)
+            submenuOpenTimer = window.setTimeout(() => {
+              if (r.isConnected) {
+                const prev = activeRowByLevel.get(0)
+                if (prev && prev !== r) {
+                  prev.classList.remove('active', 'flyout-left', 'flyout-right')
+                }
+                r.classList.add('active')
+                activeRowByLevel.set(0, r)
+              }
+            }, 130)
+          }
+        )
+        rootCard.appendChild(row)
+      }
+    }
+
+    // Add new variable footer button
+    const footerDivider = document.createElement('div')
+    footerDivider.className = 'vs-menu-divider'
+    rootCard.appendChild(footerDivider)
+
+    const footer = document.createElement('div')
+    footer.className = 'vs-menu-footer'
+
+    const addBtn = document.createElement('button')
+    addBtn.type = 'button'
+    addBtn.className = 'vs-menu-add-var-btn'
+    addBtn.setAttribute('data-testid', 'context-menu-add-variable-link')
+    addBtn.innerHTML = `${ADD_ICON_SVG}<span>Add new variable</span>`
+
+    addBtn.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      // Replace button with inline input form
+      footer.innerHTML = ''
+      const form = document.createElement('div')
+      form.className = 'vs-menu-add-var-form'
+
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.className = 'vs-menu-add-var-input'
+      input.setAttribute('data-testid', 'context-menu-add-variable-input')
+      input.placeholder = "Enter Variable's name"
+      input.maxLength = 50
+
+      const submitBtn = document.createElement('button')
+      submitBtn.type = 'button'
+      submitBtn.className = 'vs-menu-add-var-submit'
+      submitBtn.setAttribute('data-testid', 'context-menu-add-variable-button')
+      submitBtn.textContent = 'Add'
+
+      const doSubmit = () => {
+        const name = input.value.trim()
+        if (!name) return
+        insertVariable(target, name, isCodeEditor)
+        bridge.addDynamicVariable(name).catch(() => undefined)
+        closeAllMenus()
+      }
+
+      submitBtn.addEventListener('click', (ev) => {
+        ev.preventDefault()
+        ev.stopPropagation()
+        doSubmit()
+      })
+
+      input.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+          ev.preventDefault()
+          ev.stopPropagation()
+          doSubmit()
+        }
+      })
+
+      form.appendChild(input)
+      form.appendChild(submitBtn)
+      footer.appendChild(form)
+
+      setTimeout(() => input.focus(), 50)
+    })
+
+    footer.appendChild(addBtn)
+    rootCard.appendChild(footer)
+
     // Stop events inside root menu
     for (const evt of ['click', 'mousedown', 'pointerdown'] as const) {
       rootCard.addEventListener(evt, (e) => e.stopPropagation())
@@ -970,9 +1208,22 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     scanTimer = undefined
     if (dead) return
 
-    const slider = document.querySelector<HTMLElement>(
-      '[data-testid="step-config-slider"], [data-slider-container="true"], .custom_slider'
+    const candidateSliders = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[data-testid="step-config-slider"], [data-slider-container="true"], .custom_slider, .customSliderParent, .sliderChild'
+      )
     )
+
+    let slider = candidateSliders.find((s) => s.offsetParent !== null && isGetDataSlider(s))
+    if (!slider) {
+      slider = candidateSliders.find((s) => isGetDataSlider(s))
+    }
+    if (!slider) {
+      const header = document.querySelector<HTMLElement>('#step-name-component')
+      if (header && /get data/i.test(header.textContent || '')) {
+        slider = header.closest<HTMLElement>('.custom_slider, [data-slider-container="true"], .customSliderParent, body') || document.body
+      }
+    }
 
     if (!slider || !isGetDataSlider(slider)) {
       closeAllMenus()

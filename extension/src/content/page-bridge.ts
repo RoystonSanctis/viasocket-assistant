@@ -52,6 +52,8 @@ export interface PageBridge {
   editorAction(editorId: string, action: EditorAction): Promise<EditorActionResult | null>
   /** Inserts text at cursor into the Monaco editor marked with EDITOR_ID_ATTR = editorId */
   editorInsert(editorId: string, text: string): Promise<boolean>
+  /** Adds a dynamic variable to the current step draft in Redux */
+  addDynamicVariable(name: string): Promise<boolean>
   /** Set a field value in the open step panel via React fiber/Redux */
   setFieldValue(fieldLabel: string, value: string, clickSave?: boolean): Promise<{ success: boolean; error?: string }>
   /** The MAIN-world hook answered (it is missing in tabs that were open before an extension update) */
@@ -185,6 +187,7 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
   const pendingContext = new Map<string, (data: StepContextData | null) => void>()
   const pendingEditor = new Map<string, (result: EditorActionResult | null) => void>()
   const pendingEditorInsert = new Map<string, (success: boolean) => void>()
+  const pendingDynamicVar = new Map<string, (success: boolean) => void>()
   const pendingField = new Map<string, (res: { success: boolean; error?: string }) => void>()
 
   function onMessage(ev: MessageEvent): void {
@@ -223,6 +226,11 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
       }
       case 'editor-insert-response': {
         const handler = typeof inner.requestId === 'string' ? pendingEditorInsert.get(inner.requestId) : undefined
+        if (handler) handler(inner.success === true)
+        break
+      }
+      case 'add-dynamic-variable-response': {
+        const handler = typeof inner.requestId === 'string' ? pendingDynamicVar.get(inner.requestId) : undefined
         if (handler) handler(inner.success === true)
         break
       }
@@ -300,6 +308,20 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
         const timer = setTimeout(() => finish(false), EDITOR_ACTION_TIMEOUT_MS)
         pendingEditorInsert.set(requestId, finish)
         post({ type: 'editor-insert', requestId, editorId, text })
+      })
+    },
+    addDynamicVariable(name) {
+      if (!hookReady) return Promise.resolve(false)
+      const requestId = makeNonce()
+      return new Promise<boolean>((resolve) => {
+        const finish = (result: boolean) => {
+          clearTimeout(timer)
+          pendingDynamicVar.delete(requestId)
+          resolve(result)
+        }
+        const timer = setTimeout(() => finish(false), 5000)
+        pendingDynamicVar.set(requestId, finish)
+        post({ type: 'add-dynamic-variable', requestId, name })
       })
     },
     setFieldValue(fieldLabel, value, clickSave) {
