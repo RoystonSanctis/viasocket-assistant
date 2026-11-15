@@ -731,16 +731,50 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
           dynamicVariables?: Record<string, string>
         }
         if (parsed && typeof parsed.data === 'object' && parsed.data !== null) {
+          dynVars = parsed.dynamicVariables || dynVars
+          if (!dynVars || Object.keys(dynVars).length === 0) {
+            const varCards = document.querySelectorAll<HTMLElement>('[data-testid*="variable-item-"]')
+            if (varCards.length > 0) {
+              dynVars = dynVars || {}
+              for (const card of varCards) {
+                const nameEl = card.querySelector<HTMLElement>('[data-testid*="variable-name-"]')
+                const name = nameEl?.textContent?.trim()
+                if (name) {
+                  const inputEl = card.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+                    'textarea, input:not([type="hidden"])'
+                  )
+                  dynVars[name] = inputEl?.value?.trim() || ''
+                }
+              }
+            }
+          }
           return {
             title: parsed.title || 'Trigger',
             iconUrl: parsed.iconUrl || WEBHOOK_ICON_URL,
             data: parsed.data,
-            dynamicVariables: parsed.dynamicVariables || dynVars,
+            dynamicVariables: dynVars,
           }
         }
       }
     } catch {
       // ignore
+    }
+
+    if (!dynVars || Object.keys(dynVars).length === 0) {
+      const varCards = document.querySelectorAll<HTMLElement>('[data-testid*="variable-item-"]')
+      if (varCards.length > 0) {
+        dynVars = dynVars || {}
+        for (const card of varCards) {
+          const nameEl = card.querySelector<HTMLElement>('[data-testid*="variable-name-"]')
+          const name = nameEl?.textContent?.trim()
+          if (name) {
+            const inputEl = card.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+              'textarea, input:not([type="hidden"])'
+            )
+            dynVars[name] = inputEl?.value?.trim() || ''
+          }
+        }
+      }
     }
 
     return {
@@ -1130,113 +1164,115 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       rootCard.appendChild(row)
     }
 
-    // Dynamic Variables section (if any exist in current draft)
-    const dynEntries = Object.entries(tree.dynamicVariables || {})
-    if (dynEntries.length > 0) {
-      const divider = document.createElement('div')
-      divider.className = 'vs-menu-divider'
-      rootCard.appendChild(divider)
+    // Dynamic Variables section and "+ Add new variable" are ONLY available on the Code editor's Data chip
+    if (isCodeEditor) {
+      const dynEntries = Object.entries(tree.dynamicVariables || {})
+      if (dynEntries.length > 0) {
+        const divider = document.createElement('div')
+        divider.className = 'vs-menu-divider'
+        rootCard.appendChild(divider)
 
-      const dynSectionTitle = document.createElement('div')
-      dynSectionTitle.className = 'vs-menu-section-title'
-      dynSectionTitle.textContent = 'Variables'
-      rootCard.appendChild(dynSectionTitle)
+        const dynSectionTitle = document.createElement('div')
+        dynSectionTitle.className = 'vs-menu-section-title'
+        dynSectionTitle.textContent = 'Variables'
+        rootCard.appendChild(dynSectionTitle)
 
-      for (const [varName, varVal] of dynEntries) {
-        const row = createMenuItemRow(
-          varName,
-          varVal ? classifyValue(varVal) : undefined,
-          false,
-          VARIABLE_ICON_URL,
-          () => {
-            insertVariable(target, varName, isCodeEditor)
-            closeAllMenus()
-          },
-          (r) => {
-            scheduleCloseSubmenusAbove(0)
-            clearTimeout(submenuOpenTimer)
-            submenuOpenTimer = window.setTimeout(() => {
-              if (r.isConnected) {
-                const prev = activeRowByLevel.get(0)
-                if (prev && prev !== r) {
-                  prev.classList.remove('active', 'flyout-left', 'flyout-right')
+        for (const [varName, varVal] of dynEntries) {
+          const row = createMenuItemRow(
+            varName,
+            varVal ? classifyValue(varVal) : undefined,
+            false,
+            VARIABLE_ICON_URL,
+            () => {
+              insertVariable(target, varName, isCodeEditor)
+              closeAllMenus()
+            },
+            (r) => {
+              scheduleCloseSubmenusAbove(0)
+              clearTimeout(submenuOpenTimer)
+              submenuOpenTimer = window.setTimeout(() => {
+                if (r.isConnected) {
+                  const prev = activeRowByLevel.get(0)
+                  if (prev && prev !== r) {
+                    prev.classList.remove('active', 'flyout-left', 'flyout-right')
+                  }
+                  r.classList.add('active')
+                  activeRowByLevel.set(0, r)
                 }
-                r.classList.add('active')
-                activeRowByLevel.set(0, r)
-              }
-            }, 130)
-          }
-        )
-        rootCard.appendChild(row)
-      }
-    }
-
-    // Add new variable footer button
-    const footerDivider = document.createElement('div')
-    footerDivider.className = 'vs-menu-divider'
-    rootCard.appendChild(footerDivider)
-
-    const footer = document.createElement('div')
-    footer.className = 'vs-menu-footer'
-
-    const addBtn = document.createElement('button')
-    addBtn.type = 'button'
-    addBtn.className = 'vs-menu-add-var-btn'
-    addBtn.setAttribute('data-testid', 'context-menu-add-variable-link')
-    addBtn.innerHTML = `${ADD_ICON_SVG}<span>Add new variable</span>`
-
-    addBtn.addEventListener('click', (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      // Replace button with inline input form
-      footer.innerHTML = ''
-      const form = document.createElement('div')
-      form.className = 'vs-menu-add-var-form'
-
-      const input = document.createElement('input')
-      input.type = 'text'
-      input.className = 'vs-menu-add-var-input'
-      input.setAttribute('data-testid', 'context-menu-add-variable-input')
-      input.placeholder = "Enter Variable's name"
-      input.maxLength = 50
-
-      const submitBtn = document.createElement('button')
-      submitBtn.type = 'button'
-      submitBtn.className = 'vs-menu-add-var-submit'
-      submitBtn.setAttribute('data-testid', 'context-menu-add-variable-button')
-      submitBtn.textContent = 'Add'
-
-      const doSubmit = () => {
-        const name = input.value.trim()
-        if (!name) return
-        insertVariable(target, name, isCodeEditor)
-        bridge.addDynamicVariable(name).catch(() => undefined)
-        closeAllMenus()
+              }, 130)
+            }
+          )
+          rootCard.appendChild(row)
+        }
       }
 
-      submitBtn.addEventListener('click', (ev) => {
-        ev.preventDefault()
-        ev.stopPropagation()
-        doSubmit()
-      })
+      // Add new variable footer button
+      const footerDivider = document.createElement('div')
+      footerDivider.className = 'vs-menu-divider'
+      rootCard.appendChild(footerDivider)
 
-      input.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter') {
+      const footer = document.createElement('div')
+      footer.className = 'vs-menu-footer'
+
+      const addBtn = document.createElement('button')
+      addBtn.type = 'button'
+      addBtn.className = 'vs-menu-add-var-btn'
+      addBtn.setAttribute('data-testid', 'context-menu-add-variable-link')
+      addBtn.innerHTML = `${ADD_ICON_SVG}<span>Add new variable</span>`
+
+      addBtn.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        // Replace button with inline input form
+        footer.innerHTML = ''
+        const form = document.createElement('div')
+        form.className = 'vs-menu-add-var-form'
+
+        const input = document.createElement('input')
+        input.type = 'text'
+        input.className = 'vs-menu-add-var-input'
+        input.setAttribute('data-testid', 'context-menu-add-variable-input')
+        input.placeholder = "Enter Variable's name"
+        input.maxLength = 50
+
+        const submitBtn = document.createElement('button')
+        submitBtn.type = 'button'
+        submitBtn.className = 'vs-menu-add-var-submit'
+        submitBtn.setAttribute('data-testid', 'context-menu-add-variable-button')
+        submitBtn.textContent = 'Add'
+
+        const doSubmit = () => {
+          const name = input.value.trim()
+          if (!name) return
+          insertVariable(target, name, isCodeEditor)
+          bridge.addDynamicVariable(name).catch(() => undefined)
+          closeAllMenus()
+        }
+
+        submitBtn.addEventListener('click', (ev) => {
           ev.preventDefault()
           ev.stopPropagation()
           doSubmit()
-        }
+        })
+
+        input.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter') {
+            ev.preventDefault()
+            ev.stopPropagation()
+            doSubmit()
+          }
+        })
+
+        form.appendChild(input)
+        form.appendChild(submitBtn)
+        footer.appendChild(form)
+
+        setTimeout(() => input.focus(), 50)
       })
 
-      form.appendChild(input)
-      form.appendChild(submitBtn)
-      footer.appendChild(form)
-
-      setTimeout(() => input.focus(), 50)
-    })
-
-    footer.appendChild(addBtn)
-    rootCard.appendChild(footer)
+      footer.appendChild(addBtn)
+      rootCard.appendChild(footer)
+    }
 
     // Stop events inside root menu
     for (const evt of ['click', 'mousedown', 'pointerdown'] as const) {
