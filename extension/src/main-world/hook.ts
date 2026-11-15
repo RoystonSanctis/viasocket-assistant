@@ -585,12 +585,37 @@ function install(): void {
           title:
             isObj(trigger) && typeof (trigger as Record<string, unknown>).title === 'string'
               ? (trigger as Record<string, unknown>).title
-              : 'Trigger (Webhook)',
+              : 'Trigger',
           vars,
         }
         const trigSerialized = JSON.stringify(trigPayload)
         if (document.documentElement.getAttribute('data-vs-trigger-vars') !== trigSerialized) {
           document.documentElement.setAttribute('data-vs-trigger-vars', trigSerialized)
+        }
+
+        // Full hierarchical tree for the viaSocket flyout hover menu
+        const trigTree = {
+          triggerType: trigPayload.type,
+          title: 'Trigger',
+          iconUrl:
+            isObj(trigger) && typeof (trigger as Record<string, unknown>).iconUrl === 'string'
+              ? (trigger as Record<string, unknown>).iconUrl
+              : 'https://stuff.thingsofbrand.com/viasocket.com/images/imge_Webhook-bg.svg',
+          data: {
+            query: q || {},
+            body: b || {},
+            headers: h || {},
+            attachment:
+              isObj(req) && (req as Record<string, unknown>).attachment !== undefined
+                ? (req as Record<string, unknown>).attachment
+                : isObj(sample) && (sample as Record<string, unknown>).attachment !== undefined
+                  ? (sample as Record<string, unknown>).attachment
+                  : null,
+          },
+        }
+        const serializedTree = JSON.stringify(trigTree)
+        if (document.documentElement.getAttribute('data-vs-trigger-tree') !== serializedTree) {
+          document.documentElement.setAttribute('data-vs-trigger-tree', serializedTree)
         }
       } catch {
         // never disturb the page

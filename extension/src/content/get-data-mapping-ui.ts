@@ -1,17 +1,20 @@
-// Adds the mapping "+" button to custom mapping field boxes in Get Data (CRON_PRE_PROCESS)
-// when an app is added. In viaSocket, the native AddVariableButton was omitted for CRON_PRE_PROCESS,
-// leaving custom input fields without a way to pick trigger variables (context.req.query, body, etc.).
+// Implements the native viaSocket cascading hover mapping menu for Get Data (CRON_PRE_PROCESS)
+// custom mapping field boxes, exactly matching the appearance and behavior in Actions (Image 2).
 //
-// This controller detects when the Get Data slider is active, injects the AddBoxTwoTone button
-// onto every custom mapping input container, and displays an accessible variable picker popover
-// that inserts selected variables (e.g. ${context.req.query.name}) into both the input element
-// and the underlying React Fiber / Redux state via page-bridge.
+// When the user clicks the [+] AddBoxTwoTone button:
+// 1. A root menu opens showing "Trigger" with sections: query, body, headers, attachment.
+// 2. Hovering over any item with children (e.g. query >) immediately flies out a submenu to the left,
+//    displaying primary (key) and secondary (sample value) labels.
+// 3. Hovering deeper nested objects flies out level 3 submenus.
+// 4. Clicking any item inserts the expression (e.g. ${context.req.query.name}) into the input
+//    and updates React Fiber (getHtmlAndValue) and Redux draft state via page-bridge.
+// 5. Closes cleanly on outside click, Escape key, or scroll.
 
 import type { PageBridge } from './page-bridge'
 
 const STYLE_ID = 'vs-get-data-mapping-styles'
 const BTN_CLASS = 'vs-mapping-plus-btn'
-const POPOVER_ID = 'vs-mapping-popover'
+const MENU_ROOT_ID = 'vs-mapping-root-menu'
 const SCAN_DELAY_MS = 200
 
 // Exact SVG equivalent of Material-UI AddBoxTwoTone
@@ -21,6 +24,14 @@ const ADD_BOX_TWO_TONE_SVG = `
   <path d="M19 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zm-8-2h2v-4h4v-2h-4V7h-2v4H7v2h4z" fill="currentColor"></path>
 </svg>
 `
+
+const CHEVRON_RIGHT_SVG = `
+<svg class="MuiSvgIcon-root vs-menu-chevron" focusable="false" aria-hidden="true" viewBox="0 0 24 24">
+  <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" fill="currentColor"></path>
+</svg>
+`
+
+const WEBHOOK_ICON_URL = 'https://stuff.thingsofbrand.com/viasocket.com/images/imge_Webhook-bg.svg'
 
 const CSS = `
 .${BTN_CLASS} {
@@ -56,119 +67,111 @@ const CSS = `
   outline-offset: 1px;
 }
 
-#${POPOVER_ID} {
+.vs-viasocket-menu-card {
   position: fixed;
-  z-index: 99999;
-  width: 290px;
-  max-height: 380px;
-  display: flex;
-  flex-direction: column;
-  background: var(--col-surface-raised, #ffffff);
-  color: var(--col-text-primary, #1a1a1a);
-  border: 1px solid var(--col-control-edge, rgba(0, 0, 0, 0.14));
-  border-radius: 8px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
-  font-family: var(--font-family-ui, 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
-  font-size: 13px;
-  overflow: hidden;
-  animation: vsMappingFadeIn 0.12s ease-out;
-}
-@keyframes vsMappingFadeIn {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
-}
-.vs-mapping-popover-header {
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--col-control-edge, rgba(0, 0, 0, 0.08));
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  background: var(--col-surface, #f8f9fa);
-}
-.vs-mapping-popover-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.vs-mapping-popover-title {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--col-text-secondary, #666);
-}
-.vs-mapping-search-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 5px 8px;
-  font-size: 12px;
-  border: 1px solid var(--col-control-edge, rgba(0, 0, 0, 0.18));
-  border-radius: 4px;
-  background: var(--col-surface-raised, #fff);
-  color: var(--col-text-primary, #1a1a1a);
-  outline: none;
-}
-.vs-mapping-search-input:focus {
-  border-color: var(--col-primary, #3b82f6);
-}
-.vs-mapping-popover-body {
-  flex: 1;
+  z-index: 1000000;
+  min-width: 200px;
+  max-width: 280px;
+  max-height: 340px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  background-color: var(--col-surface-raised, #181a1f);
+  color: var(--col-text-primary, #ffffff);
+  border: 1px solid var(--col-border, rgba(255, 255, 255, 0.12));
+  border-radius: 6px;
+  box-shadow: 0px 4px 16px rgba(0, 0, 0, 0.35);
+  font-family: var(--font-family-ui, 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
   padding: 4px 0;
-  max-height: 290px;
+  user-select: none;
 }
-.vs-mapping-group-title {
+
+.vs-viasocket-menu-card::-webkit-scrollbar {
+  width: 6px;
+}
+.vs-viasocket-menu-card::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 3px;
+}
+
+.vs-menu-section-title {
   padding: 6px 12px 2px 12px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--col-text-secondary, #888);
-  letter-spacing: 0.4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--col-text-secondary, #9e9e9e);
+  letter-spacing: 0.2px;
 }
-.vs-mapping-item {
+
+.vs-menu-item-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: 10px;
+  min-height: 38px;
   padding: 6px 12px;
   cursor: pointer;
-  user-select: none;
   transition: background-color 0.1s ease;
+  position: relative;
 }
-.vs-mapping-item:hover {
-  background: var(--col-control-hover, rgba(59, 130, 246, 0.08));
+
+.vs-menu-item-row:hover,
+.vs-menu-item-row.active {
+  background-color: var(--col-action-hover, rgba(255, 255, 255, 0.08));
 }
-.vs-mapping-item-name {
-  font-family: var(--font-family-mono, monospace);
-  font-size: 12px;
-  color: var(--col-primary, #2563eb);
+
+.vs-menu-avatar-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: rgba(255, 255, 255, 0.04);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.vs-menu-avatar-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.vs-menu-text-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.vs-menu-primary-text {
+  font-size: 13.5px;
+  font-weight: 400;
+  color: var(--col-text-primary, #ffffff);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
 }
-.vs-mapping-item-val {
-  font-size: 11px;
-  color: var(--col-text-secondary, #6b7280);
+
+.vs-menu-secondary-text {
+  font-size: 11.5px;
+  color: var(--col-text-secondary, #9e9e9e);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 120px;
-  text-align: right;
+  line-height: 1.25;
+  margin-top: 1px;
 }
-.vs-mapping-empty {
-  padding: 16px 12px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--col-text-secondary, #888);
+
+.vs-menu-chevron {
+  width: 18px;
+  height: 18px;
+  color: var(--col-text-secondary, #9e9e9e);
+  margin-left: auto;
+  flex-shrink: 0;
 }
 `
-
-export interface TriggerVariableItem {
-  path: string
-  label: string
-  value?: string
-  group: string
-}
 
 export interface GetDataMappingController {
   destroy(): void
@@ -177,8 +180,9 @@ export interface GetDataMappingController {
 export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingController {
   let dead = false
   let scanTimer: number | undefined
-  let activePopover: HTMLElement | null = null
   let activeBtn: HTMLButtonElement | null = null
+  let activeTargetContainer: HTMLElement | null = null
+  let openMenus: HTMLElement[] = []
   const attachedContainers = new Set<HTMLElement>()
 
   if (!document.getElementById(STYLE_ID)) {
@@ -194,13 +198,11 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     const slugName = urlParams.get('slugName')
     if (stepId === 'CRON_PRE_PROCESS' || slugName === 'CRON_PRE_PROCESS') return true
 
-    // Check heading in slider
     const header = slider.querySelector<HTMLElement>(
       'h5, h6, [data-testid="plugin-header"], [data-testid="step-title"], .MuiTypography-h6'
     )
     if (header && /get data/i.test(header.textContent || '')) return true
 
-    // Check synced DOM draft attribute
     try {
       const rawDraft = document.documentElement.getAttribute('data-vs-draft-step')
       if (rawDraft) {
@@ -213,26 +215,28 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     return false
   }
 
-  function closePopover(): void {
+  function closeAllMenus(): void {
     if (activeBtn) {
       activeBtn.classList.remove('active')
       activeBtn = null
     }
-    if (activePopover) {
-      activePopover.remove()
-      activePopover = null
+    activeTargetContainer = null
+    for (const menu of openMenus) {
+      menu.remove()
     }
+    openMenus = []
   }
 
-  function getTriggerVariables(): { triggerTitle: string; items: TriggerVariableItem[] } {
+  function getTriggerTreeData(): { title: string; iconUrl: string; data: Record<string, unknown> } {
     try {
-      const raw = document.documentElement.getAttribute('data-vs-trigger-vars')
+      const raw = document.documentElement.getAttribute('data-vs-trigger-tree')
       if (raw) {
-        const parsed = JSON.parse(raw) as { title?: string; vars?: TriggerVariableItem[] }
-        if (Array.isArray(parsed?.vars) && parsed.vars.length > 0) {
+        const parsed = JSON.parse(raw) as { title?: string; iconUrl?: string; data?: Record<string, unknown> }
+        if (parsed && typeof parsed.data === 'object' && parsed.data !== null) {
           return {
-            triggerTitle: parsed.title || 'Trigger (Webhook)',
-            items: parsed.vars,
+            title: parsed.title || 'Trigger',
+            iconUrl: parsed.iconUrl || WEBHOOK_ICON_URL,
+            data: parsed.data,
           }
         }
       }
@@ -240,14 +244,15 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       // ignore
     }
 
-    // Default trigger variables fallback
     return {
-      triggerTitle: 'Trigger (Webhook)',
-      items: [
-        { path: 'context.req.query', label: 'query', group: 'query' },
-        { path: 'context.req.body', label: 'body', group: 'body' },
-        { path: 'context.req.headers', label: 'headers', group: 'headers' },
-      ],
+      title: 'Trigger',
+      iconUrl: WEBHOOK_ICON_URL,
+      data: {
+        query: {},
+        body: {},
+        headers: {},
+        attachment: null,
+      },
     }
   }
 
@@ -311,155 +316,271 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     }
   }
 
-  function showPopover(button: HTMLButtonElement, container: HTMLElement): void {
-    if (activePopover && activeBtn === button) {
-      closePopover()
+  function formatPath(parentPath: string, key: string): string {
+    const isIdentifier = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)
+    if (!parentPath) return key
+    if (isIdentifier) return `${parentPath}.${key}`
+    return `${parentPath}['${key.replace(/'/g, "\\'")}']`
+  }
+
+  function isNonEmptyObject(val: unknown): val is Record<string, unknown> {
+    return Boolean(val && typeof val === 'object' && !Array.isArray(val) && Object.keys(val).length > 0)
+  }
+
+  function isNonEmptyArray(val: unknown): val is unknown[] {
+    return Boolean(Array.isArray(val) && val.length > 0)
+  }
+
+  // Opens a cascading submenu for an item at level >= 1
+  function openSubmenu(
+    parentRow: HTMLElement,
+    childData: unknown,
+    parentPath: string,
+    level: number
+  ): void {
+    // Close any submenus at this level or deeper
+    while (openMenus.length > level) {
+      const m = openMenus.pop()
+      m?.remove()
+    }
+
+    // Un-highlight sibling items in this parent menu
+    const parentCard = parentRow.closest('.vs-viasocket-menu-card')
+    if (parentCard) {
+      for (const row of parentCard.querySelectorAll('.vs-menu-item-row')) {
+        row.classList.remove('active')
+      }
+    }
+    parentRow.classList.add('active')
+
+    if (!isNonEmptyObject(childData) && !isNonEmptyArray(childData)) {
       return
     }
-    closePopover()
+
+    const card = document.createElement('div')
+    card.className = 'vs-viasocket-menu-card vs-submenu'
+    card.setAttribute('data-level', String(level))
+
+    // Position submenu directly to the left of the parent row (matching Image 2)
+    const rowRect = parentRow.getBoundingClientRect()
+    const cardWidth = 240
+    let left = rowRect.left - cardWidth - 4
+    if (left < 10) {
+      // If no room on left, open to right
+      left = rowRect.right + 4
+    }
+
+    let top = rowRect.top - 6
+    if (top + 280 > window.innerHeight) {
+      top = Math.max(10, window.innerHeight - 290)
+    }
+    card.style.left = `${left}px`
+    card.style.top = `${top}px`
+    card.style.zIndex = String(1000000 + level)
+
+    if (isNonEmptyArray(childData)) {
+      childData.forEach((item, index) => {
+        const itemPath = `${parentPath}[${index}]`
+        const hasChildren = isNonEmptyObject(item) || isNonEmptyArray(item)
+        const row = createMenuItemRow(
+          `[${index}]`,
+          hasChildren ? undefined : String(item ?? ''),
+          hasChildren,
+          null,
+          () => {
+            if (activeTargetContainer) {
+              insertVariable(activeTargetContainer, itemPath)
+              closeAllMenus()
+            }
+          },
+          (r) => {
+            if (hasChildren) openSubmenu(r, item, itemPath, level + 1)
+            else {
+              while (openMenus.length > level) openMenus.pop()?.remove()
+            }
+          }
+        )
+        card.appendChild(row)
+      })
+    } else if (isNonEmptyObject(childData)) {
+      for (const [key, val] of Object.entries(childData)) {
+        const itemPath = formatPath(parentPath, key)
+        const hasChildren = isNonEmptyObject(val) || isNonEmptyArray(val)
+        let displayVal: string | undefined
+        if (!hasChildren && val !== undefined && val !== null) {
+          displayVal = String(val)
+        }
+
+        const row = createMenuItemRow(
+          key,
+          displayVal,
+          hasChildren,
+          null,
+          () => {
+            if (activeTargetContainer) {
+              insertVariable(activeTargetContainer, itemPath)
+              closeAllMenus()
+            }
+          },
+          (r) => {
+            if (hasChildren) openSubmenu(r, val, itemPath, level + 1)
+            else {
+              while (openMenus.length > level) openMenus.pop()?.remove()
+            }
+          }
+        )
+        card.appendChild(row)
+      }
+    }
+
+    // Stop click/scroll propagation inside card
+    for (const evt of ['click', 'mousedown', 'pointerdown'] as const) {
+      card.addEventListener(evt, (e) => e.stopPropagation())
+    }
+
+    document.body.appendChild(card)
+    openMenus.push(card)
+  }
+
+  function createMenuItemRow(
+    primary: string,
+    secondary: string | undefined,
+    hasChildren: boolean,
+    iconUrl: string | null,
+    onClick: () => void,
+    onHover: (r: HTMLElement) => void
+  ): HTMLElement {
+    const row = document.createElement('div')
+    row.className = 'vs-menu-item-row'
+
+    if (iconUrl) {
+      const avatar = document.createElement('div')
+      avatar.className = 'vs-menu-avatar-icon'
+      const img = document.createElement('img')
+      img.src = iconUrl
+      img.alt = primary
+      avatar.appendChild(img)
+      row.appendChild(avatar)
+    }
+
+    const textWrap = document.createElement('div')
+    textWrap.className = 'vs-menu-text-wrap'
+
+    const primarySpan = document.createElement('span')
+    primarySpan.className = 'vs-menu-primary-text'
+    primarySpan.textContent = primary
+    textWrap.appendChild(primarySpan)
+
+    if (secondary) {
+      const secondarySpan = document.createElement('span')
+      secondarySpan.className = 'vs-menu-secondary-text'
+      secondarySpan.textContent = secondary
+      textWrap.appendChild(secondarySpan)
+    }
+
+    row.appendChild(textWrap)
+
+    if (hasChildren) {
+      const chevron = document.createElement('span')
+      chevron.innerHTML = CHEVRON_RIGHT_SVG
+      row.appendChild(chevron)
+    }
+
+    row.addEventListener('mouseenter', () => onHover(row))
+    row.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      onClick()
+    })
+
+    return row
+  }
+
+  function showRootMenu(button: HTMLButtonElement, container: HTMLElement): void {
+    if (activeBtn === button) {
+      closeAllMenus()
+      return
+    }
+    closeAllMenus()
 
     activeBtn = button
+    activeTargetContainer = container
     button.classList.add('active')
 
-    const { triggerTitle, items } = getTriggerVariables()
+    const tree = getTriggerTreeData()
 
-    const popover = document.createElement('div')
-    popover.id = POPOVER_ID
+    const rootCard = document.createElement('div')
+    rootCard.id = MENU_ROOT_ID
+    rootCard.className = 'vs-viasocket-menu-card'
 
-    // Calculate position
-    const rect = button.getBoundingClientRect()
-    const popoverWidth = 290
-    const popoverHeight = 320
-    let left = rect.right - popoverWidth
-    if (left < 10) left = 10
-    if (left + popoverWidth > window.innerWidth - 10) left = window.innerWidth - popoverWidth - 10
-
-    let top = rect.bottom + 6
-    if (top + popoverHeight > window.innerHeight - 10) {
-      top = rect.top - popoverHeight - 6
+    // Position root menu right next to the [+] button
+    const btnRect = button.getBoundingClientRect()
+    const cardWidth = 230
+    let right = window.innerWidth - btnRect.left
+    if (right + cardWidth > window.innerWidth - 10) {
+      right = window.innerWidth - 10 - cardWidth
     }
-    if (top < 10) top = 10
 
-    popover.style.left = `${left}px`
-    popover.style.top = `${top}px`
+    let top = btnRect.bottom + 2
+    if (top + 260 > window.innerHeight) {
+      top = Math.max(10, btnRect.top - 260)
+    }
 
-    // Header
-    const header = document.createElement('div')
-    header.className = 'vs-mapping-popover-header'
+    rootCard.style.right = `${right}px`
+    rootCard.style.top = `${top}px`
 
-    const titleRow = document.createElement('div')
-    titleRow.className = 'vs-mapping-popover-title-row'
-    const title = document.createElement('span')
-    title.className = 'vs-mapping-popover-title'
-    title.textContent = triggerTitle
-    titleRow.appendChild(title)
-    header.appendChild(titleRow)
+    // Section header: Trigger
+    const sectionTitle = document.createElement('div')
+    sectionTitle.className = 'vs-menu-section-title'
+    sectionTitle.textContent = tree.title || 'Trigger'
+    rootCard.appendChild(sectionTitle)
 
-    const searchInput = document.createElement('input')
-    searchInput.type = 'text'
-    searchInput.className = 'vs-mapping-search-input'
-    searchInput.placeholder = 'Search trigger variables...'
-    searchInput.autocomplete = 'off'
-    header.appendChild(searchInput)
-    popover.appendChild(header)
+    // Four standard Trigger sections: query, body, headers, attachment
+    const sections: Array<{ key: string; label: string }> = [
+      { key: 'query', label: 'query' },
+      { key: 'body', label: 'body' },
+      { key: 'headers', label: 'headers' },
+      { key: 'attachment', label: 'attachment' },
+    ]
 
-    // Body
-    const body = document.createElement('div')
-    body.className = 'vs-mapping-popover-body'
-    popover.appendChild(body)
+    for (const sec of sections) {
+      const childData = tree.data?.[sec.key]
+      const hasChildren = isNonEmptyObject(childData) || isNonEmptyArray(childData)
+      const secPath = `context.req.${sec.key}`
 
-    function renderList(query = ''): void {
-      body.innerHTML = ''
-      const q = query.trim().toLowerCase()
-      const filtered = items.filter((item) => {
-        if (!q) return true
-        return (
-          item.label.toLowerCase().includes(q) ||
-          item.path.toLowerCase().includes(q) ||
-          (item.value && item.value.toLowerCase().includes(q))
-        )
-      })
-
-      if (filtered.length === 0) {
-        const empty = document.createElement('div')
-        empty.className = 'vs-mapping-empty'
-        empty.textContent = query ? 'No matching variables found' : 'No trigger variables available'
-        body.appendChild(empty)
-        return
-      }
-
-      // Group items
-      const groups = new Map<string, TriggerVariableItem[]>()
-      for (const item of filtered) {
-        const g = item.group || 'variables'
-        if (!groups.has(g)) groups.set(g, [])
-        groups.get(g)!.push(item)
-      }
-
-      for (const [groupName, groupItems] of groups) {
-        const gTitle = document.createElement('div')
-        gTitle.className = 'vs-mapping-group-title'
-        gTitle.textContent = groupName
-        body.appendChild(gTitle)
-
-        for (const item of groupItems) {
-          const row = document.createElement('div')
-          row.className = 'vs-mapping-item'
-          row.title = `Insert \${${item.path}}`
-
-          const nameSpan = document.createElement('span')
-          nameSpan.className = 'vs-mapping-item-name'
-          nameSpan.textContent = item.label || item.path
-
-          row.appendChild(nameSpan)
-
-          if (item.value) {
-            const valSpan = document.createElement('span')
-            valSpan.className = 'vs-mapping-item-val'
-            valSpan.textContent = item.value
-            row.appendChild(valSpan)
+      const row = createMenuItemRow(
+        sec.label,
+        undefined,
+        hasChildren,
+        tree.iconUrl,
+        () => {
+          // If clicked and has no children (e.g. empty body/attachment), insert top-level path
+          insertVariable(container, secPath)
+          closeAllMenus()
+        },
+        (r) => {
+          if (hasChildren) {
+            openSubmenu(r, childData, secPath, 1)
+          } else {
+            // Close any open submenus
+            while (openMenus.length > 1) openMenus.pop()?.remove()
+            for (const otherRow of rootCard.querySelectorAll('.vs-menu-item-row')) {
+              otherRow.classList.remove('active')
+            }
+            r.classList.add('active')
           }
-
-          row.addEventListener('click', (e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            insertVariable(container, item.path)
-            closePopover()
-          })
-
-          body.appendChild(row)
         }
-      }
+      )
+      rootCard.appendChild(row)
     }
 
-    renderList()
-
-    searchInput.addEventListener('input', () => {
-      renderList(searchInput.value)
-    })
-
-    searchInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault()
-        closePopover()
-      }
-    })
-
-    // Stop events from reaching slider / backdrop
-    for (const evt of ['mousedown', 'mouseup', 'click', 'dblclick', 'pointerdown', 'pointerup'] as const) {
-      popover.addEventListener(evt, (e) => e.stopPropagation())
+    // Stop events inside root menu
+    for (const evt of ['click', 'mousedown', 'pointerdown'] as const) {
+      rootCard.addEventListener(evt, (e) => e.stopPropagation())
     }
 
-    document.body.appendChild(popover)
-    activePopover = popover
-
-    setTimeout(() => {
-      try {
-        searchInput.focus()
-      } catch {
-        // ignore
-      }
-    }, 40)
+    document.body.appendChild(rootCard)
+    openMenus.push(rootCard)
   }
 
   function attachButton(container: HTMLElement): void {
@@ -467,7 +588,6 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       return
     }
 
-    // Ensure input has right padding so text doesn't overlap the button
     const input = container.querySelector<HTMLInputElement | HTMLTextAreaElement>(
       'textarea, input:not([type="hidden"])'
     )
@@ -475,7 +595,6 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       input.style.paddingRight = '32px'
     }
 
-    // Look for existing right icon box in CustomAutoSuggest
     const existingIconBox = container.querySelector<HTMLElement>('.absolute.right-1, .right-1')
 
     const button = document.createElement('button')
@@ -495,7 +614,7 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     button.addEventListener('click', (e) => {
       e.preventDefault()
       e.stopPropagation()
-      showPopover(button, container)
+      showRootMenu(button, container)
     })
 
     if (existingIconBox) {
@@ -516,7 +635,7 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     )
 
     if (!slider || !isGetDataSlider(slider)) {
-      closePopover()
+      closeAllMenus()
       for (const container of attachedContainers) {
         container.querySelector(`.${BTN_CLASS}`)?.remove()
       }
@@ -524,12 +643,10 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       return
     }
 
-    // Clean up disconnected containers
     for (const container of attachedContainers) {
       if (!container.isConnected) attachedContainers.delete(container)
     }
 
-    // Find all custom mapping input containers inside Get Data slider
     const containers = slider.querySelectorAll<HTMLElement>(
       '[data-testid="custom-autosuggest-input-container"], [data-testid="custom-autosuggest-wrapper"]'
     )
@@ -540,18 +657,26 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
   }
 
   function onGlobalClick(e: MouseEvent): void {
-    if (!activePopover) return
+    if (openMenus.length === 0) return
     const target = e.target as Node | null
-    if (target && (activePopover.contains(target) || activeBtn?.contains(target))) {
-      return
+    if (target) {
+      if (activeBtn?.contains(target)) return
+      if (openMenus.some((m) => m.contains(target))) return
     }
-    closePopover()
+    closeAllMenus()
   }
 
   function onGlobalKeyDown(e: KeyboardEvent): void {
-    if (e.key === 'Escape' && activePopover) {
-      closePopover()
+    if (e.key === 'Escape' && openMenus.length > 0) {
+      closeAllMenus()
     }
+  }
+
+  function onGlobalScroll(e: Event): void {
+    if (openMenus.length === 0) return
+    const target = e.target as Node | null
+    if (target && openMenus.some((m) => m.contains(target))) return
+    closeAllMenus()
   }
 
   const observer = new MutationObserver(() => {
@@ -562,6 +687,7 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
   observer.observe(document.body, { childList: true, subtree: true })
   document.addEventListener('click', onGlobalClick, true)
   window.addEventListener('keydown', onGlobalKeyDown, true)
+  window.addEventListener('scroll', onGlobalScroll, { capture: true, passive: true })
 
   scan()
 
@@ -572,7 +698,8 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       clearTimeout(scanTimer)
       document.removeEventListener('click', onGlobalClick, true)
       window.removeEventListener('keydown', onGlobalKeyDown, true)
-      closePopover()
+      window.removeEventListener('scroll', onGlobalScroll, true)
+      closeAllMenus()
       for (const container of attachedContainers) {
         container.querySelector(`.${BTN_CLASS}`)?.remove()
       }
