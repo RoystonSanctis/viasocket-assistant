@@ -1262,8 +1262,26 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
     openMenus.push(rootCard)
   }
 
+  function isResponseOrReadOnly(el: HTMLElement): boolean {
+    if (
+      el.closest(
+        '[role="tabpanel"], [id*="tabpanel"], [aria-labelledby*="simple-tab-"], [class*="responseAndConsole"], [class*="responseFlowData"], [class*="JsonViewer"], .json-viewer, [class*="ReadOnlyMonaco"], [data-testid*="response"], [data-testid*="console"], [data-testid*="payload"]'
+      )
+    ) {
+      return true
+    }
+    const textarea = el.querySelector('textarea')
+    if (textarea?.getAttribute('aria-readonly') === 'true') {
+      return true
+    }
+    return false
+  }
+
   function attachButton(container: HTMLElement): void {
     if (container.querySelector(`.${BTN_CLASS}, [data-testid="add-variable-button"]`)) {
+      return
+    }
+    if (isResponseOrReadOnly(container)) {
       return
     }
 
@@ -1318,6 +1336,9 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
   }
 
   function attachDataChip(monacoEl: HTMLElement): void {
+    // Never attach Data chip to response, console, output, or read-only viewers
+    if (isResponseOrReadOnly(monacoEl)) return
+
     // If chip already attached in this editor container, skip
     const existing = monacoEl.closest('.flex.flex-col')?.querySelector<HTMLElement>(
       `.${DATA_CHIP_CLASS}, [data-testid="add-variable-data-chip"]`
@@ -1396,12 +1417,31 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       return
     }
 
-    // Clean up disconnected containers
+    // Clean up disconnected containers and any chips inside response viewers
     for (const container of attachedContainers) {
       if (!container.isConnected) attachedContainers.delete(container)
     }
     for (const chip of attachedChips) {
-      if (!chip.isConnected) attachedChips.delete(chip)
+      if (!chip.isConnected || isResponseOrReadOnly(chip)) {
+        const toolbar = chip.closest('.vs-code-toolbar')
+        chip.remove()
+        if (toolbar && toolbar.children.length === 0) {
+          toolbar.remove()
+        }
+        attachedChips.delete(chip)
+      }
+    }
+
+    // Strip any rogue chips/toolbars that may have been injected into response panels
+    const rogueChips = slider.querySelectorAll<HTMLElement>(
+      `[role="tabpanel"] .${DATA_CHIP_CLASS}, [id*="tabpanel"] .${DATA_CHIP_CLASS}, [class*="responseAndConsole"] .${DATA_CHIP_CLASS}, [class*="JsonViewer"] .${DATA_CHIP_CLASS}, .json-viewer .${DATA_CHIP_CLASS}`
+    )
+    for (const rogue of rogueChips) {
+      const toolbar = rogue.closest('.vs-code-toolbar')
+      rogue.remove()
+      if (toolbar && toolbar.children.length === 0) {
+        toolbar.remove()
+      }
     }
 
     // 1. App Action custom field mapping inputs
@@ -1412,10 +1452,19 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       attachButton(container)
     }
 
-    // 2. Monaco Code Editor (JS Code in Get Data)
+    // 2. Monaco Code Editor (JS Code in Get Data) - exclude read-only / response / console / payload viewers
     const monacoEditors = slider.querySelectorAll<HTMLElement>('.monaco-editor')
+    const codeContainer = slider.querySelector<HTMLElement>('#code-editor, [data-testid="code-accordion"], .aceEditor')
+
     for (const monacoEl of monacoEditors) {
       if (monacoEl.parentElement?.closest('.monaco-editor') || monacoEl.closest('.monaco-diff-editor')) continue
+
+      // Skip read-only response, console, output, or payload viewers
+      if (isResponseOrReadOnly(monacoEl)) continue
+
+      // If a dedicated code container exists in this slider, ensure Monaco editor is inside it
+      if (codeContainer && !codeContainer.contains(monacoEl)) continue
+
       attachDataChip(monacoEl)
     }
   }
