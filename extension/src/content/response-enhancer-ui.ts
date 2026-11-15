@@ -386,7 +386,19 @@ export function parseJsonLines(jsonStr: string): Map<number, LineInfo> {
       continue
     }
 
-    // Object inside an array: {
+    // Object inside an array: { or empty object on single line
+    if (cur.type === 'array' && (line === '{}' || line === '{},')) {
+      const idx = cur.index
+      const fullPath = `${cur.path}[${idx}]`
+      lineMap.set(lineIdx + 1, {
+        path: fullPath,
+        key: `[${idx}]`,
+        value: resolveValue(fullPath),
+      })
+      cur.index++
+      continue
+    }
+
     if (cur.type === 'array' && (line === '{' || line === '{\r')) {
       const idx = cur.index
       const fullPath = `${cur.path}[${idx}]`
@@ -521,6 +533,52 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     }
   }
 
+  function getLineNumberForViewLine(monacoEl: HTMLElement, viewLine: HTMLElement): number {
+    const vlTop = Math.round(parseFloat(viewLine.style.top || '0'))
+    const vlRect = viewLine.getBoundingClientRect()
+
+    const gutterNums = monacoEl.querySelectorAll<HTMLElement>('.margin-view-overlays .line-numbers')
+    if (gutterNums.length === 0) return 0
+
+    // 1. Match by row element style.top in gutter
+    for (const g of gutterNums) {
+      const rowEl = (g.closest('.margin-view-overlays > div') as HTMLElement) || g.parentElement || g
+      const topStr = rowEl.style.top || g.style.top || ''
+      if (topStr) {
+        const topPx = Math.round(parseFloat(topStr))
+        if (Math.abs(topPx - vlTop) <= 2) {
+          const num = parseInt(g.textContent?.trim() || '0', 10)
+          if (num > 0) return num
+        }
+      }
+    }
+
+    // 2. Match by bounding client rect Y / top (immune to coordinate system differences)
+    for (const g of gutterNums) {
+      const gRect = g.getBoundingClientRect()
+      if (Math.abs(gRect.top - vlRect.top) <= 5) {
+        const num = parseInt(g.textContent?.trim() || '0', 10)
+        if (num > 0) return num
+      }
+    }
+
+    // 3. Fallback: line height offset from first visible gutter element
+    const firstGutter = gutterNums[0]
+    if (firstGutter) {
+      const firstLineNum = parseInt(firstGutter.textContent?.trim() || '0', 10)
+      const firstRow = (firstGutter.closest('.margin-view-overlays > div') as HTMLElement) || firstGutter.parentElement || firstGutter
+      const firstTop = Math.round(parseFloat(firstRow.style.top || firstGutter.style.top || '0'))
+      const rowHeight = parseFloat(viewLine.style.height || '') || (gutterNums.length > 1 ? Math.round(parseFloat(((gutterNums[1]?.closest('.margin-view-overlays > div') as HTMLElement) || gutterNums[1]?.parentElement)?.style.top || '0') - firstTop) : 19)
+      if (firstLineNum > 0 && rowHeight > 0) {
+        const diffLines = Math.round((vlTop - firstTop) / rowHeight)
+        const estimatedLine = firstLineNum + diffLines
+        if (estimatedLine > 0) return estimatedLine
+      }
+    }
+
+    return 0
+  }
+
   let isApplyingBadges = false
   function applyArrayBadges(state: EditorState): void {
     if (isApplyingBadges || !state.lineMap || !state.monacoEl.isConnected) return
@@ -530,20 +588,6 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       // Find all visible .view-line elements inside Monaco
       const viewLines = state.monacoEl.querySelectorAll<HTMLElement>('.view-lines .view-line')
       if (viewLines.length === 0) return
-
-      // Build map of topPx -> line number from line-numbers gutter
-      const gutterNums = state.monacoEl.querySelectorAll<HTMLElement>('.margin-view-overlays .line-numbers')
-      const lineByTop = new Map<number, number>()
-      for (const g of gutterNums) {
-        const lineNum = parseInt(g.textContent?.trim() || '0', 10)
-        const topStr = g.style.top || g.parentElement?.style.top || ''
-        if (lineNum > 0 && topStr) {
-          const topPx = Math.round(parseFloat(topStr))
-          lineByTop.set(topPx, lineNum)
-          lineByTop.set(topPx - 1, lineNum)
-          lineByTop.set(topPx + 1, lineNum)
-        }
-      }
 
       for (const vl of viewLines) {
         const lineText = vl.textContent || ''
@@ -556,19 +600,7 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
           continue
         }
 
-        const vlTop = Math.round(parseFloat(vl.style.top || '0'))
-        let lineNum = lineByTop.get(vlTop)
-
-        // Fallback matching by line key if gutter didn't map (only when line actually has [)
-        if (!lineNum && state.lineMap) {
-          for (const [n, info] of state.lineMap) {
-            if (info.isArray && info.key && lineText.includes(`"${info.key}":`)) {
-              lineNum = n
-              break
-            }
-          }
-        }
-
+        const lineNum = getLineNumberForViewLine(state.monacoEl, vl)
         if (!lineNum || lineNum <= 0) {
           if (existingBadge) existingBadge.remove()
           continue
@@ -789,27 +821,8 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
         return
       }
 
-      // Resolve line number from gutter
-      const gutterNums = monacoEl.querySelectorAll<HTMLElement>('.margin-view-overlays .line-numbers')
-      const vlTop = Math.round(parseFloat(viewLine.style.top || '0'))
-      let lineNum = 0
-      for (const g of gutterNums) {
-        if (Math.round(parseFloat(g.style.top || '0')) === vlTop) {
-          lineNum = parseInt(g.textContent?.trim() || '0', 10)
-          break
-        }
-      }
-
-      // Fallback: match by key from line text
-      if (lineNum <= 0 && state.lineMap) {
-        const lineText = viewLine.textContent || ''
-        for (const [n, info] of state.lineMap) {
-          if (info.key && lineText.includes(`"${info.key}"`)) {
-            lineNum = n
-            break
-          }
-        }
-      }
+      // Resolve line number accurately from gutter or view-line position
+      const lineNum = getLineNumberForViewLine(monacoEl, viewLine)
 
       if (lineNum > 0) {
         const info = state.lineMap.get(lineNum)
