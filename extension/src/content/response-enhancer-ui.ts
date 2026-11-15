@@ -14,7 +14,7 @@ const COPY_BTN_CLASS = 'vs-response-copy-btn'
 const ARRAY_BADGE_CLASS = 'vs-response-array-badge'
 const HOVER_PILL_ID = 'vs-response-hover-pill'
 const SCAN_DELAY_MS = 250
-const HOVER_HIDE_DELAY_MS = 320
+const HOVER_HIDE_DELAY_MS = 220
 
 // Static SVG Icons
 const COPY_ICON_SVG = `
@@ -30,9 +30,10 @@ const CHECK_ICON_SVG = `
 </svg>
 `
 
-const KEY_ICON_SVG = `
-<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; display: block; opacity: 0.75;">
-  <path d="M21 2l-2 2m-1.5 1.5L16 7l-1.5-1.5M19 4l-4 4m-3.5 3.5a5 5 0 1 1-7-7 5 5 0 0 1 7 7z"></path>
+const CODE_ICON_SVG = `
+<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; display: block;">
+  <polyline points="16 18 22 12 16 6"></polyline>
+  <polyline points="8 6 2 12 8 18"></polyline>
 </svg>
 `
 
@@ -147,18 +148,17 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
 #${HOVER_PILL_ID} {
   position: fixed;
   z-index: 100000;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 3px 7px;
+  gap: 2px;
+  padding: 2px;
   font-family: var(--font-family-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1;
   background: var(--col-surface-raised, var(--vs-res-bg));
-  color: var(--col-text-primary, var(--vs-res-text));
   border: 1px solid var(--col-border, var(--vs-res-border));
-  border-radius: 6px;
-  box-shadow: var(--vs-res-shadow);
+  border-radius: 5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   pointer-events: auto;
   user-select: none;
   animation: vsResPillFade 0.12s cubic-bezier(0.16, 1, 0.3, 1);
@@ -166,47 +166,21 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
 }
 
 @keyframes vsResPillFade {
-  from { opacity: 0; transform: translateY(-3px) scale(0.98); }
+  from { opacity: 0; transform: translateY(-2px) scale(0.97); }
   to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-.vs-res-pill-path {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 190px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
-  color: var(--col-text-primary, var(--vs-res-text));
-  font-weight: 600;
-  padding-right: 2px;
-}
-
-.vs-res-pill-count {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--vs-res-badge-text);
-  padding: 1.5px 5px;
-  border-radius: 4px;
-  background: var(--vs-res-badge-bg);
-  border: 1px solid var(--vs-res-badge-border);
 }
 
 .vs-res-pill-btn {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  width: 22px;
   height: 20px;
-  padding: 0 7px;
-  font-size: 11px;
-  font-weight: 500;
+  padding: 0;
   color: var(--col-text-secondary, var(--vs-res-text-sec));
   background: transparent;
-  border: 1px solid var(--col-border, var(--vs-res-border));
-  border-radius: 4px;
+  border: none;
+  border-radius: 3px;
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.12s ease;
@@ -215,13 +189,11 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
 .vs-res-pill-btn:hover {
   background: var(--col-action-hover, var(--vs-res-hover));
   color: var(--col-text-primary, var(--vs-res-text));
-  border-color: var(--col-link, #3b82f6);
 }
 
 .vs-res-pill-btn.copied {
   color: #10b981 !important;
-  border-color: rgba(16, 185, 129, 0.4) !important;
-  background: rgba(16, 185, 129, 0.12) !important;
+  background: rgba(16, 185, 129, 0.15) !important;
 }
 `
 
@@ -668,7 +640,7 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     lineNum: number,
     info: LineInfo,
     viewLine: HTMLElement,
-    e: MouseEvent
+    clientX: number
   ): void {
     if (hidePillTimer !== undefined) {
       clearTimeout(hidePillTimer)
@@ -685,7 +657,6 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     const pill = document.createElement('div')
     pill.id = HOVER_PILL_ID
 
-    // Path preview badge
     const headerLabel =
       state.monacoEl.closest('.flex.flex-col')?.querySelector<HTMLElement>(
         '.flex.justify-between.items-center .MuiTypography-caption, .justify-between span, .justify-between p'
@@ -696,48 +667,38 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
 
     const fullExecPath = buildExecutablePath(info.path || info.key, headerLabel, urlSlug)
 
-    const pathSpan = document.createElement('span')
-    pathSpan.className = 'vs-res-pill-path'
-    pathSpan.innerHTML = `${KEY_ICON_SVG}<span>${fullExecPath}</span>`
-    pathSpan.title = fullExecPath
-    pill.appendChild(pathSpan)
-
-    // Array count indicator inside pill
-    if (info.isArray && Array.isArray(info.value) && typeof info.arrayCount === 'number') {
-      const countSpan = document.createElement('span')
-      countSpan.className = 'vs-res-pill-count'
-      countSpan.textContent = `${info.arrayCount} ${info.arrayCount === 1 ? 'item' : 'items'}`
-      pill.appendChild(countSpan)
-    }
-
-    // Copy Path button
+    // Minimal Button 1: Copy Path (icon only)
     const copyPathBtn = document.createElement('button')
     copyPathBtn.type = 'button'
     copyPathBtn.className = 'vs-res-pill-btn'
-    copyPathBtn.title = `Copy path: ${fullExecPath}`
-    copyPathBtn.innerHTML = `${COPY_ICON_SVG}<span>Copy Path</span>`
+    copyPathBtn.title = `Copy Path: ${fullExecPath}`
+    copyPathBtn.setAttribute('aria-label', 'Copy Path')
+    copyPathBtn.innerHTML = CODE_ICON_SVG
 
     copyPathBtn.addEventListener('click', async (ev) => {
       ev.preventDefault()
       ev.stopPropagation()
       await copyText(fullExecPath)
       copyPathBtn.classList.add('copied')
-      copyPathBtn.innerHTML = `${CHECK_ICON_SVG}<span>Path Copied!</span>`
+      copyPathBtn.innerHTML = CHECK_ICON_SVG
+      copyPathBtn.title = 'Path Copied!'
       setTimeout(() => {
         if (copyPathBtn.isConnected) {
           copyPathBtn.classList.remove('copied')
-          copyPathBtn.innerHTML = `${COPY_ICON_SVG}<span>Copy Path</span>`
+          copyPathBtn.innerHTML = CODE_ICON_SVG
+          copyPathBtn.title = `Copy Path: ${fullExecPath}`
         }
-      }, 1500)
+      }, 1200)
     })
     pill.appendChild(copyPathBtn)
 
-    // Copy Value button
+    // Minimal Button 2: Copy Value (icon only)
     const copyValBtn = document.createElement('button')
     copyValBtn.type = 'button'
     copyValBtn.className = 'vs-res-pill-btn'
-    copyValBtn.title = 'Copy value'
-    copyValBtn.innerHTML = `${COPY_ICON_SVG}<span>Copy Value</span>`
+    copyValBtn.title = 'Copy Value'
+    copyValBtn.setAttribute('aria-label', 'Copy Value')
+    copyValBtn.innerHTML = COPY_ICON_SVG
 
     copyValBtn.addEventListener('click', async (ev) => {
       ev.preventDefault()
@@ -759,31 +720,33 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
 
       await copyText(valStr)
       copyValBtn.classList.add('copied')
-      copyValBtn.innerHTML = `${CHECK_ICON_SVG}<span>Value Copied!</span>`
+      copyValBtn.innerHTML = CHECK_ICON_SVG
+      copyValBtn.title = 'Value Copied!'
       setTimeout(() => {
         if (copyValBtn.isConnected) {
           copyValBtn.classList.remove('copied')
-          copyValBtn.innerHTML = `${COPY_ICON_SVG}<span>Copy Value</span>`
+          copyValBtn.innerHTML = COPY_ICON_SVG
+          copyValBtn.title = 'Copy Value'
         }
-      }, 1500)
+      }, 1200)
     })
     pill.appendChild(copyValBtn)
 
-    // Position pill right above or below the line near cursor
+    // Position minimal pill right above or below the line near cursor
     const vlRect = viewLine.getBoundingClientRect()
     const monacoRect = state.monacoEl.getBoundingClientRect()
 
-    let top = vlRect.top - 28
+    let top = vlRect.top - 24
     if (top < monacoRect.top + 4) {
-      top = vlRect.bottom + 4
+      top = vlRect.bottom + 2
     }
 
-    let left = e.clientX - 15
-    if (left + 260 > monacoRect.right - 8) {
-      left = monacoRect.right - 268
+    let left = clientX - 25
+    if (left + 54 > monacoRect.right - 6) {
+      left = monacoRect.right - 60
     }
-    if (left < monacoRect.left + 8) {
-      left = monacoRect.left + 8
+    if (left < monacoRect.left + 6) {
+      left = monacoRect.left + 6
     }
 
     pill.style.top = `${Math.max(4, Math.round(top))}px`
@@ -806,12 +769,23 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
 
   function attachEditorHandlers(state: EditorState): void {
     const { monacoEl } = state
+    let hoverShowTimer: number | undefined
+    let pendingHoverLine: number | null = null
 
-    // 1. Mouse movement to detect hovered line
+    function cancelHoverTimer(): void {
+      if (hoverShowTimer !== undefined) {
+        clearTimeout(hoverShowTimer)
+        hoverShowTimer = undefined
+      }
+      pendingHoverLine = null
+    }
+
+    // 1. Mouse movement with slight settle delay (140ms) to avoid flashing pills during casual mouse travel
     monacoEl.addEventListener('mousemove', (e: MouseEvent) => {
       const target = e.target as HTMLElement | null
       const viewLine = target?.closest<HTMLElement>('.view-line')
       if (!viewLine) {
+        cancelHoverTimer()
         scheduleCloseHoverPill()
         return
       }
@@ -824,29 +798,66 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       // Resolve line number accurately from gutter or view-line position
       const lineNum = getLineNumberForViewLine(monacoEl, viewLine)
 
-      if (lineNum > 0) {
-        const info = state.lineMap.get(lineNum)
+      if (lineNum <= 0) {
+        cancelHoverTimer()
+        scheduleCloseHoverPill()
+        return
+      }
+
+      // If active pill is already showing for this exact line, keep it alive
+      if (activeHoverLine === lineNum && activePill && activePill.isConnected) {
+        if (hidePillTimer !== undefined) {
+          clearTimeout(hidePillTimer)
+          hidePillTimer = undefined
+        }
+        return
+      }
+
+      if (pendingHoverLine === lineNum && hoverShowTimer !== undefined) {
+        return
+      }
+
+      cancelHoverTimer()
+      pendingHoverLine = lineNum
+      const clientX = e.clientX
+
+      hoverShowTimer = window.setTimeout(() => {
+        hoverShowTimer = undefined
+        pendingHoverLine = null
+        if (!monacoEl.isConnected) return
+
+        const info = state.lineMap?.get(lineNum)
         if (info && (info.key || info.path)) {
-          showHoverPill(state, lineNum, info, viewLine, e)
+          showHoverPill(state, lineNum, info, viewLine, clientX)
         } else {
           scheduleCloseHoverPill()
         }
-      }
+      }, 140)
     })
 
     monacoEl.addEventListener('mouseleave', () => {
+      cancelHoverTimer()
       scheduleCloseHoverPill()
     })
 
     // 2. Click listener on editor (e.g. folding/unfolding arrays) to reposition badges
     monacoEl.addEventListener('click', () => {
+      cancelHoverTimer()
       requestAnimationFrame(() => applyArrayBadges(state))
     })
 
-    // 3. Scroll listener to keep array badges positioned
+    // 3. Immediately dismiss hover pill on scroll or wheel in editor
+    const dismissOnScroll = (): void => {
+      cancelHoverTimer()
+      closeHoverPill()
+    }
+
+    monacoEl.addEventListener('wheel', dismissOnScroll, { passive: true })
+
     const scrollContainer = monacoEl.querySelector<HTMLElement>('.monaco-scrollable-element')
     if (scrollContainer) {
       scrollContainer.addEventListener('scroll', () => {
+        dismissOnScroll()
         applyArrayBadges(state)
       }, { passive: true })
     }
@@ -978,6 +989,11 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     }
   }
 
+  const handleGlobalScroll = (): void => {
+    closeHoverPill()
+  }
+  window.addEventListener('scroll', handleGlobalScroll, { capture: true, passive: true })
+
   const observer = new MutationObserver(() => {
     if (scanTimer !== undefined || dead) return
     scanTimer = window.setTimeout(scan, SCAN_DELAY_MS)
@@ -990,6 +1006,7 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     destroy() {
       dead = true
       observer.disconnect()
+      window.removeEventListener('scroll', handleGlobalScroll, { capture: true })
       if (scanTimer !== undefined) clearTimeout(scanTimer)
       if (hidePillTimer !== undefined) clearTimeout(hidePillTimer)
       closeHoverPill()
