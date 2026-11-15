@@ -176,8 +176,10 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
 
 .${BTN_CLASS} {
   position: absolute;
-  right: 4px;
-  bottom: 5px;
+  right: 6px;
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
   z-index: 5;
   display: inline-flex;
   align-items: center;
@@ -193,6 +195,32 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
   cursor: pointer;
   user-select: none;
   transition: color 0.12s ease, background-color 0.12s ease;
+}
+
+.${BTN_CLASS}.vs-mapping-btn-field {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+}
+
+.${BTN_CLASS}.vs-mapping-btn-prompt {
+  position: relative;
+  right: auto;
+  top: auto;
+  bottom: auto;
+  transform: none;
+  margin: 0 2px;
+}
+
+[data-testid="custom-autosuggest-input-container"] > .${BTN_CLASS}.vs-mapping-btn-prompt {
+  position: absolute;
+  right: 4px;
+  bottom: 6px;
+  top: auto;
+  transform: none;
+  margin: 0;
 }
 .${BTN_CLASS}:hover {
   color: var(--col-link, var(--vs-m-link));
@@ -1268,9 +1296,21 @@ export function initGetDataMappingUI(bridge: PageBridge): GetDataMappingControll
       showRootMenu(button, container, false)
     })
 
-    if (existingIconBox) {
-      existingIconBox.appendChild(button)
+    const isPromptBox = Boolean(
+      container.querySelector('[data-testid="custom-autosuggest-ai-icon"]') ||
+      container.closest('.description-component, [class*="DescriptionComponent"]') ||
+      (input && input.tagName.toLowerCase() === 'textarea' && container.clientHeight > 50)
+    )
+
+    if (isPromptBox) {
+      button.classList.add('vs-mapping-btn-prompt')
+      if (existingIconBox) {
+        existingIconBox.appendChild(button)
+      } else {
+        container.appendChild(button)
+      }
     } else {
+      button.classList.add('vs-mapping-btn-field')
       container.appendChild(button)
     }
 
