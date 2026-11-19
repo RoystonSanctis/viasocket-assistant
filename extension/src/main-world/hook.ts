@@ -19,6 +19,7 @@ import {
   type PageEnvelope,
   type PageToContentMsg,
   type StepContextData,
+  type StepInputDataResult,
 } from '../shared/messages'
 import type { ObservedEvent } from '../shared/observed'
 import { resolveEnv } from '../background/tools/env'
@@ -494,6 +495,249 @@ function install(): void {
         connectedApps,
         variables,
         contextTree,
+      }
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Resolves the active step's input data from Redux state (invocation data, plugin used variables,
+   * API stepRequestSnapshot, function used variables, or trigger incoming data).
+   */
+  function readStepInputData(msg: { scriptId?: string; stepId?: string; slugName?: string }): StepInputDataResult | null {
+    try {
+      const state = findReduxStore()?.getState()
+      if (!state) return null
+      const obj = (v: unknown): Record<string, unknown> => (isObj(v) ? v : {})
+      const route = /\/workflow\/([A-Za-z0-9]+)(?:\/([^/?#]+))?/.exec(location.pathname)
+      const scriptId =
+        msg.scriptId ||
+        (isObj(state.appInfo) && typeof state.appInfo.currentScriptId === 'string' ? state.appInfo.currentScriptId : '') ||
+        route?.[1] ||
+        Object.keys(obj(state.flowJsonV2))[0] ||
+        Object.keys(obj(state.invocationV2))[0] ||
+        ''
+      if (!scriptId) return null
+
+      const flowState = obj(obj(state.flowJsonV2)[scriptId])
+      const flowJson = obj(flowState.flowJson)
+      const blocks = obj(flowJson.blocks)
+      const params = new URLSearchParams(location.search)
+
+      let slugName =
+        msg.slugName ||
+        params.get('slugName') ||
+        (isObj(state.appInfo) && typeof state.appInfo.currentSlugName === 'string' ? state.appInfo.currentSlugName : '')
+      let stepId =
+        msg.stepId ||
+        params.get('stepId') ||
+        (isObj(state.appInfo) && typeof state.appInfo.currentStepId === 'string' ? state.appInfo.currentStepId : '')
+
+      if (!slugName && stepId) {
+        slugName = Object.keys(blocks).find((k) => obj(blocks[k]).identifier === stepId || obj(blocks[k]).id === stepId) ?? stepId
+      }
+      if (!stepId && slugName) {
+        const found = obj(blocks[slugName])
+        stepId = String(found.identifier || found.id || slugName)
+      }
+
+      // If still empty, check current step in stepsDataV3
+      if (!stepId && !slugName) {
+        const stepsMap = obj(obj(state.stepsDataV3)[scriptId])
+        const firstStepId = Object.keys(stepsMap)[0]
+        if (firstStepId) {
+          stepId = firstStepId
+          slugName = Object.keys(blocks).find((k) => obj(blocks[k]).identifier === stepId) ?? stepId
+        }
+      }
+
+      // Locate invocation data
+      const invState = obj(obj(state.invocationV2)[scriptId])
+      let invData = obj(invState.invocationData)
+      if (!Object.keys(invData).length) {
+        invData = obj(obj(obj(state.invocationV2)['selectedLog']).invocationData)
+      }
+      if (!Object.keys(invData).length) {
+        for (const v of Object.values(obj(state.invocationV2))) {
+          const cand = obj(obj(v).invocationData)
+          if (Object.keys(cand).length > 0) {
+            invData = cand
+            break
+          }
+        }
+      }
+
+      const flowHitId = String(invData.flowHitId || params.get('flowhitid') || '')
+      const timestamp = typeof invData.requestTimestamp === 'string' ? invData.requestTimestamp : undefined
+
+      const tryParse = (val: unknown): unknown => {
+        if (typeof val === 'string') {
+          try {
+            return JSON.parse(val)
+          } catch {
+            return val
+          }
+        }
+        return val ?? {}
+      }
+
+      const requestSnapshot = obj(tryParse(invData.requestSnapshotJsonData || invData.requestSnapshot))
+      const responseSnapshot = obj(tryParse(invData.responseSnapshotJsonData || invData.responseSnapshot))
+      const vals = obj(tryParse(invData.valsJson || invData.vals))
+      const stepRequestSnapshot = obj(tryParse(invData.stepRequestSnapshot))
+
+      const context: Record<string, unknown> = {
+        req: requestSnapshot,
+        res: responseSnapshot,
+        vals,
+      }
+
+      const block = obj(blocks[slugName])
+      const stepTitle =
+        typeof block.name === 'string'
+          ? block.name
+          : typeof block.title === 'string'
+            ? block.title
+            : slugName
+
+      const isTrigger = slugName === 'trigger' || TRIGGER_SLUGS.has(slugName) || stepId === 'trigger' || slugName === 'SET_TRIGGER'
+
+      let stepType = isTrigger ? 'trigger' : typeof block.type === 'string' ? block.type : 'plugin'
+      if (slugName === 'CRON_PRE_PROCESS' || slugName === 'WEBHOOK_PRE_PROCESS') {
+        stepType = 'trigger'
+      }
+
+      let inputData: unknown = undefined
+      let source: StepInputDataResult['source'] = 'none'
+
+      // Helper for template evaluation and unflattening
+      function unflattenAndEval(flatObj: Record<string, unknown>): Record<string, unknown> {
+        const out: Record<string, unknown> = {}
+        for (const [rawKey, rawVal] of Object.entries(flatObj)) {
+          if (rawKey.startsWith('_') && rawKey.endsWith('-Type')) continue
+          let val = rawVal
+          if (typeof val === 'string') {
+            const trimmed = val.trim()
+            const singleExpr = trimmed.match(/^\$\{([^}]+)\}$/)
+            if (singleExpr) {
+              try {
+                const fn = new Function('context', 'req', 'res', 'vals', `try { return (${singleExpr[1]}); } catch(e) { return undefined; }`)
+                const evaled = fn(context, requestSnapshot, responseSnapshot, vals)
+                if (evaled !== undefined) val = evaled
+              } catch {
+                // keep string
+              }
+            } else if (val.includes('${')) {
+              val = val.replace(/\$\{([^}]+)\}/g, (_, expr) => {
+                try {
+                  const fn = new Function('context', 'req', 'res', 'vals', `try { return (${expr}); } catch(e) { return undefined; }`)
+                  const evaled = fn(context, requestSnapshot, responseSnapshot, vals)
+                  return evaled !== undefined ? (typeof evaled === 'object' ? JSON.stringify(evaled) : String(evaled)) : `\${${expr}}`
+                } catch {
+                  return `\${${expr}}`
+                }
+              })
+            }
+          }
+
+          // Unflatten path like "paging[page_size]" or "paging.page_size"
+          const tokens = rawKey.replace(/\[(["']?)(.*?)\1\]/g, '.$2').split('.').filter(Boolean)
+          if (tokens.length > 1) {
+            let curr: any = out
+            for (let i = 0; i < tokens.length - 1; i++) {
+              const t = tokens[i]!
+              const nextT = tokens[i + 1] ?? ''
+              const isArr = /^\d+$/.test(nextT)
+              if (!curr[t] || typeof curr[t] !== 'object') {
+                curr[t] = isArr ? [] : {}
+              }
+              curr = curr[t]
+            }
+            const lastToken = tokens[tokens.length - 1]!
+            curr[lastToken] = val
+          } else if (tokens.length === 1 && tokens[0]) {
+            out[tokens[0]] = val
+          } else {
+            out[rawKey] = val
+          }
+        }
+        return out
+      }
+
+      if (isTrigger) {
+        source = 'trigger'
+        inputData = isObj(requestSnapshot.body) && Object.keys(requestSnapshot.body).length > 0 ? requestSnapshot.body : requestSnapshot
+      } else if (stepType === 'api') {
+        source = 'api'
+        inputData = stepRequestSnapshot[slugName] ?? stepRequestSnapshot[stepId]
+      } else if (stepType === 'function') {
+        source = 'function'
+        const usedVars = obj(invData.usedVariables)
+        const fnUsed = obj(usedVars.functions)
+        const fnVars = fnUsed[slugName] ?? fnUsed[stepId]
+        if (Array.isArray(fnVars) && fnVars.length > 0) {
+          const resolvedVars: Record<string, unknown> = {}
+          for (const v of fnVars) {
+            if (typeof v !== 'string') continue
+            try {
+              const fn = new Function('context', 'req', 'res', 'vals', `try { return (${v}); } catch(e) { return undefined; }`)
+              resolvedVars[v] = fn(context, requestSnapshot, responseSnapshot, vals)
+            } catch {
+              resolvedVars[v] = undefined
+            }
+          }
+          inputData = resolvedVars
+        } else {
+          inputData = stepRequestSnapshot[slugName] ?? stepRequestSnapshot[stepId]
+        }
+      } else {
+        // Plugin / Action step
+        source = 'plugin'
+        // 1. Check stepRequestSnapshot
+        const reqSnap = stepRequestSnapshot[slugName] ?? stepRequestSnapshot[stepId]
+        if (isObj(reqSnap) && Object.keys(reqSnap).length > 0) {
+          inputData = reqSnap
+        } else {
+          // 2. Check plugin used variables in flowJson
+          const isDryRun = Boolean(invData.isDryRun)
+          const flowUsed = isDryRun ? obj(flowState.usedVariables) : obj(flowState.publishUsedVariables)
+          const pluginVars = obj(flowUsed.plugin)[stepId] ?? obj(flowUsed.plugin)[slugName] ?? obj(obj(flowState.usedVariables).plugin)[stepId]
+          if (isObj(pluginVars) && Object.keys(pluginVars).length > 0) {
+            inputData = unflattenAndEval(pluginVars as Record<string, unknown>)
+          } else if (isObj(invData.inputData) && ((invData.inputData as any)[slugName] || (invData.inputData as any)[stepId])) {
+            inputData = (invData.inputData as any)[slugName] ?? (invData.inputData as any)[stepId]
+          } else {
+            // 3. Check stepsDataV3 draft inputs
+            const stepEntry = obj(obj(state.stepsDataV3)[scriptId])[stepId]
+            const draft = obj(isObj(stepEntry) ? stepEntry.draft || stepEntry : {})
+            const pluginData = obj(draft.pluginData)
+            const selVals = obj(isObj(pluginData.selectedValues) ? pluginData.selectedValues : draft.selectedValues)
+            const draftInputs = obj(selVals.inputData)
+            if (Object.keys(draftInputs).length > 0) {
+              inputData = unflattenAndEval(draftInputs)
+              source = 'draft'
+            }
+          }
+        }
+      }
+
+      const hasInputData =
+        inputData !== undefined &&
+        inputData !== null &&
+        (typeof inputData !== 'object' || Object.keys(inputData as object).length > 0)
+
+      return {
+        scriptId,
+        stepId,
+        slugName,
+        stepTitle,
+        stepType,
+        inputData: inputData ?? null,
+        hasInputData,
+        source: hasInputData ? source : 'none',
+        flowHitId: flowHitId || undefined,
+        timestamp,
       }
     } catch {
       return null
@@ -976,6 +1220,10 @@ function install(): void {
       }
       if (msg.type === 'get-step-context') {
         post({ type: 'step-context-response', requestId: msg.requestId, data: readStepContext(msg) })
+        return
+      }
+      if (msg.type === 'get-step-input-data') {
+        post({ type: 'step-input-data-response', requestId: msg.requestId, data: readStepInputData(msg) })
         return
       }
       if (msg.type === 'editor-action') {

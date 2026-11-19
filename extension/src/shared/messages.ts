@@ -164,6 +164,19 @@ export interface KeyTestResult {
   details?: Record<string, string | number | boolean>
 }
 
+export interface StepInputDataResult {
+  scriptId: string
+  stepId: string
+  slugName: string
+  stepTitle?: string
+  stepType?: string
+  inputData: unknown
+  hasInputData: boolean
+  source: 'plugin' | 'api' | 'function' | 'trigger' | 'snapshot' | 'draft' | 'none'
+  flowHitId?: string
+  timestamp?: string
+}
+
 /** The open JS step as the editor shows it, for the subfunctions panel. Read from the page; never fetched there. */
 export interface StepContextData {
   scriptId: string
@@ -209,6 +222,7 @@ export type PageToContentMsg =
   /** A navigation went ahead after waiting the maximum time for the page's own save, test or publish to finish */
   | { type: 'navigate-busy' }
   | { type: 'step-context-response'; requestId: string; data: StepContextData | null }
+  | { type: 'step-input-data-response'; requestId: string; data: StepInputDataResult | null }
   | { type: 'editor-action-response'; requestId: string; result: EditorActionResult }
   | { type: 'editor-insert-response'; requestId: string; success: boolean }
   | { type: 'add-dynamic-variable-response'; requestId: string; success: boolean }
@@ -235,6 +249,8 @@ export type ContentToPageMsg =
     }
   /** Read the open JS step for the subfunctions panel; answered with step-context-response */
   | { type: 'get-step-context'; requestId: string; scriptId?: string; stepId?: string; slugName?: string }
+  /** Read active step's input data from invocation / draft in Redux; answered with step-input-data-response */
+  | { type: 'get-step-input-data'; requestId: string; scriptId?: string; stepId?: string; slugName?: string }
   /** Set a field value in the open step panel via React fiber/Redux */
   | { type: 'set-field-value'; requestId: string; fieldLabel: string; value: string; clickSave?: boolean }
   /** The Beautify button: check or format the Monaco editor marked with EDITOR_ID_ATTR; answered with editor-action-response */

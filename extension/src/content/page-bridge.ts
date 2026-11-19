@@ -12,6 +12,7 @@ import {
   type EditorActionResult,
   type PageEnvelope,
   type StepContextData,
+  type StepInputDataResult,
 } from '../shared/messages'
 import type { ObservedEvent } from '../shared/observed'
 import { ERROR_TEXT_MAX, isObj, isObservedKind, PATH_MAX, SLUG_MAX } from '../shared/classify'
@@ -48,6 +49,8 @@ export interface PageBridge {
   refreshStep(scriptId?: string, stepId?: string, slugName?: string, saved?: { flowJson?: Record<string, unknown>; stepRow?: Record<string, unknown> }): void
   /** The open JS step's code (as the editor shows it), subfunctions and mappable variables; null when unavailable */
   getStepContext(scriptId?: string, stepId?: string, slugName?: string): Promise<StepContextData | null>
+  /** Active step's input data from invocation data / draft; null when unavailable */
+  getStepInputData(scriptId?: string, stepId?: string, slugName?: string): Promise<StepInputDataResult | null>
   /** Checks or beautifies the Monaco editor marked with EDITOR_ID_ATTR = editorId; null when the hook does not answer */
   editorAction(editorId: string, action: EditorAction): Promise<EditorActionResult | null>
   /** Gets full text from a Monaco editor or response viewer marked with EDITOR_ID_ATTR */
@@ -192,6 +195,7 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
   }
 
   const pendingContext = new Map<string, (data: StepContextData | null) => void>()
+  const pendingInputData = new Map<string, (data: StepInputDataResult | null) => void>()
   const pendingEditor = new Map<string, (result: EditorActionResult | null) => void>()
   const pendingEditorText = new Map<string, (text: string | null) => void>()
   const pendingEditorInsert = new Map<string, (success: boolean) => void>()
@@ -224,6 +228,11 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
       case 'step-context-response': {
         const handler = typeof inner.requestId === 'string' ? pendingContext.get(inner.requestId) : undefined
         if (handler) handler(sanitizeStepContext(inner.data))
+        break
+      }
+      case 'step-input-data-response': {
+        const handler = typeof inner.requestId === 'string' ? pendingInputData.get(inner.requestId) : undefined
+        if (handler) handler((inner.data as StepInputDataResult) ?? null)
         break
       }
       case 'editor-action-response': {
@@ -293,6 +302,20 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
         const timer = setTimeout(() => finish(null), STEP_CONTEXT_TIMEOUT_MS)
         pendingContext.set(requestId, finish)
         post({ type: 'get-step-context', requestId, scriptId, stepId, slugName })
+      })
+    },
+    getStepInputData(scriptId, stepId, slugName) {
+      if (!hookReady) return Promise.resolve(null)
+      const requestId = makeNonce()
+      return new Promise<StepInputDataResult | null>((resolve) => {
+        const finish = (data: StepInputDataResult | null) => {
+          clearTimeout(timer)
+          pendingInputData.delete(requestId)
+          resolve(data)
+        }
+        const timer = setTimeout(() => finish(null), 3000)
+        pendingInputData.set(requestId, finish)
+        post({ type: 'get-step-input-data', requestId, scriptId, stepId, slugName })
       })
     },
     editorAction(editorId, action) {
@@ -373,6 +396,7 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
       retry = undefined
       window.removeEventListener('message', onMessage)
       for (const finish of [...pendingContext.values()]) finish(null)
+      for (const finish of [...pendingInputData.values()]) finish(null)
       for (const finish of [...pendingEditor.values()]) finish(null)
       for (const finish of [...pendingEditorText.values()]) finish(null)
       for (const finish of [...pendingField.values()]) finish({ success: false, error: 'Bridge destroyed' })

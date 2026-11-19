@@ -6,7 +6,7 @@
 // Supports all response blocks: Action steps, Get Data, JS Code, Webhooks, API steps, Console & Payload tabs.
 // Fully supports light and dark themes with viaSocket semantic tokens.
 
-import { EDITOR_ID_ATTR } from '../shared/messages'
+import { EDITOR_ID_ATTR, type StepInputDataResult } from '../shared/messages'
 import type { PageBridge } from './page-bridge'
 
 const STYLE_ID = 'vs-response-enhancer-styles'
@@ -34,6 +34,27 @@ const CODE_ICON_SVG = `
 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; display: block;">
   <polyline points="16 18 22 12 16 6"></polyline>
   <polyline points="8 6 2 12 8 18"></polyline>
+</svg>
+`
+
+const SPLIT_ICON_SVG = `
+<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; display: block;">
+  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+  <line x1="12" y1="3" x2="12" y2="21"></line>
+</svg>
+`
+
+const SINGLE_ICON_SVG = `
+<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; display: block;">
+  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+</svg>
+`
+
+const EMPTY_ICON_SVG = `
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.5; margin-bottom: 4px; display: block;">
+  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+  <polyline points="14 2 14 8 20 8"></polyline>
+  <line x1="9" y1="15" x2="15" y2="15"></line>
 </svg>
 `
 
@@ -195,6 +216,239 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
   color: #10b981 !important;
   background: rgba(16, 185, 129, 0.15) !important;
 }
+
+/* Input Data Panel and Tabs Addon */
+.vs-response-tabs-addon {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding-left: 8px;
+}
+
+.vs-res-addon-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 10px;
+  font-family: var(--font-family-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--col-text-secondary, var(--vs-res-text-sec));
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  border-radius: 4px 4px 0 0;
+}
+
+.vs-res-addon-tab:hover {
+  color: var(--col-text-primary, var(--vs-res-text));
+  background: var(--col-action-hover, var(--vs-res-hover));
+}
+
+.vs-res-addon-tab.active {
+  color: var(--col-link, #3b82f6) !important;
+  border-bottom: 2px solid var(--col-link, #3b82f6) !important;
+  font-weight: 600;
+}
+
+.vs-res-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  font-family: var(--font-family-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--col-text-secondary, var(--vs-res-text-sec));
+  background: var(--col-surface-raised, var(--vs-res-bg));
+  border: 1px solid var(--col-border, var(--vs-res-border));
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.vs-res-mode-toggle:hover {
+  color: var(--col-text-primary, var(--vs-res-text));
+  border-color: var(--col-link, #3b82f6);
+  background: var(--col-action-hover, var(--vs-res-hover));
+}
+
+.vs-res-mode-toggle.active {
+  color: var(--col-link, #3b82f6);
+  border-color: var(--col-link, #3b82f6);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.vs-split-container {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 10px !important;
+  width: 100% !important;
+  align-items: stretch !important;
+}
+
+.vs-split-container > [role="tabpanel"],
+.vs-split-container > [id*="tabpanel"],
+.vs-split-container > .vs-input-panel-wrapper {
+  flex: 1 1 50% !important;
+  min-width: 0 !important;
+  max-width: 50% !important;
+}
+
+@media (max-width: 640px) {
+  .vs-split-container {
+    flex-direction: column !important;
+  }
+  .vs-split-container > [role="tabpanel"],
+  .vs-split-container > .vs-input-panel-wrapper {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+}
+
+.vs-input-panel-wrapper {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.vs-input-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  background: var(--col-surface-raised, var(--vs-res-bg));
+  border: 1px solid var(--col-border, var(--vs-res-border));
+  border-radius: 4px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.vs-input-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  min-height: 32px;
+  border-bottom: 1px solid var(--col-border, var(--vs-res-border));
+  background: var(--col-surface-dim, rgba(0, 0, 0, 0.02));
+}
+
+.vs-input-header-title {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-family-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--col-text-secondary, var(--vs-res-text-sec));
+  letter-spacing: 0.02em;
+}
+
+.vs-input-badge-source {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 5px;
+  margin-left: 6px;
+  border-radius: 3px;
+  background: var(--vs-res-badge-bg);
+  color: var(--vs-res-badge-text);
+  border: 1px solid var(--vs-res-badge-border);
+  text-transform: capitalize;
+}
+
+.vs-input-body {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  max-height: 400px;
+  overflow: auto;
+  font-family: var(--font-family-code, 'SF Mono', Consolas, Menlo, Monaco, 'Courier New', monospace);
+  font-size: 13px;
+  line-height: 20px;
+  background: var(--col-surface-raised, var(--vs-res-bg));
+  color: var(--col-text-primary, var(--vs-res-text));
+}
+
+.vs-input-gutter {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: 34px;
+  padding: 6px 6px 6px 0;
+  border-right: 1px solid var(--col-border, var(--vs-res-border));
+  user-select: none;
+  text-align: right;
+  color: var(--vs-res-text-sec);
+  opacity: 0.55;
+  font-size: 12px;
+}
+
+.vs-input-gutter-line {
+  height: 20px;
+  line-height: 20px;
+}
+
+.vs-input-lines {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  white-space: pre;
+}
+
+.vs-input-view-line {
+  position: relative;
+  height: 20px;
+  line-height: 20px;
+}
+
+.vs-input-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 36px 16px;
+  text-align: center;
+  gap: 6px;
+  color: var(--col-text-secondary, var(--vs-res-text-sec));
+  font-family: var(--font-family-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-size: 12.5px;
+  background: var(--col-surface-raised, var(--vs-res-bg));
+}
+
+.vs-syntax-key { color: #0550ae; font-weight: 500; }
+.vs-syntax-string { color: #0a3069; }
+.vs-syntax-number { color: #cf222e; }
+.vs-syntax-bool { color: #953800; }
+.vs-syntax-null { color: #8250df; }
+.vs-syntax-punct { color: var(--vs-res-text-sec); }
+
+@media (prefers-color-scheme: dark) {
+  .vs-syntax-key { color: #79c0ff; }
+  .vs-syntax-string { color: #a5d6ff; }
+  .vs-syntax-number { color: #ff7b72; }
+  .vs-syntax-bool { color: #ffa657; }
+  .vs-syntax-null { color: #d2a8ff; }
+}
+
+html[data-theme='dark'] .vs-syntax-key, body[data-theme='dark'] .vs-syntax-key,
+html.dark .vs-syntax-key, body.dark .vs-syntax-key { color: #79c0ff; }
+html[data-theme='dark'] .vs-syntax-string, body[data-theme='dark'] .vs-syntax-string,
+html.dark .vs-syntax-string, body.dark .vs-syntax-string { color: #a5d6ff; }
+html[data-theme='dark'] .vs-syntax-number, body[data-theme='dark'] .vs-syntax-number,
+html.dark .vs-syntax-number, body.dark .vs-syntax-number { color: #ff7b72; }
+html[data-theme='dark'] .vs-syntax-bool, body[data-theme='dark'] .vs-syntax-bool,
+html.dark .vs-syntax-bool, body.dark .vs-syntax-bool { color: #ffa657; }
+html[data-theme='dark'] .vs-syntax-null, body[data-theme='dark'] .vs-syntax-null,
+html.dark .vs-syntax-null, body.dark .vs-syntax-null { color: #d2a8ff; }
 `
 
 export interface ResponseEnhancerController {
@@ -419,15 +673,24 @@ function extractRawTextFromMonaco(monacoEl: HTMLElement): string | null {
  * Builds an executable JavaScript path ready to be used in JS code:
  * E.g. context?.res?.List_Row?.data?.[0]?.address
  * Or for trigger: context?.req?.body?.address, context?.req?.query?.name
+ * Or for input data: context?.inputData?.paging?.page_size
  */
-export function buildExecutablePath(relPath: string, headerLabel?: string | null, urlSlug?: string | null): string {
+export function buildExecutablePath(
+  relPath: string,
+  headerLabel?: string | null,
+  urlSlug?: string | null,
+  isInput?: boolean,
+  stepType?: string
+): string {
   const cleanLabel = (headerLabel || '').trim()
   const cleanSlug = (urlSlug || '').trim()
 
-  const isTrigger = ['body', 'query', 'headers', 'attachment'].includes(cleanLabel.toLowerCase())
+  const isTrigger = stepType === 'trigger' || ['body', 'query', 'headers', 'attachment'].includes(cleanLabel.toLowerCase())
 
   let prefix = ''
-  if (isTrigger) {
+  if (isInput) {
+    prefix = isTrigger ? 'context?.req?.body' : 'context?.inputData'
+  } else if (isTrigger) {
     prefix = `context?.req?.${cleanLabel.toLowerCase()}`
   } else {
     let stepName = cleanLabel || cleanSlug
@@ -455,6 +718,249 @@ export function buildExecutablePath(relPath: string, headerLabel?: string | null
   }
 
   return result
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function highlightJsonValue(valStr: string): string {
+  let comma = ''
+  let content = valStr
+  if (content.endsWith(',')) {
+    comma = '<span class="vs-syntax-punct">,</span>'
+    content = content.slice(0, -1).trim()
+  }
+
+  if (content.startsWith('"') && content.endsWith('"')) {
+    return `<span class="vs-syntax-string">${escapeHtml(content)}</span>${comma}`
+  }
+  if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(content)) {
+    return `<span class="vs-syntax-number">${escapeHtml(content)}</span>${comma}`
+  }
+  if (content === 'true' || content === 'false') {
+    return `<span class="vs-syntax-bool">${content}</span>${comma}`
+  }
+  if (content === 'null') {
+    return `<span class="vs-syntax-null">null</span>${comma}`
+  }
+  if (content === '{' || content === '[' || content === '{}' || content === '[]') {
+    return `<span class="vs-syntax-punct">${escapeHtml(content)}</span>${comma}`
+  }
+  return `${escapeHtml(content)}${comma}`
+}
+
+function highlightJsonLine(rawLine: string): string {
+  const indentMatch = rawLine.match(/^(\s*)/)
+  const indent = indentMatch ? indentMatch[1] : ''
+  const trimmed = rawLine.trim()
+  if (!trimmed) return indent || '&nbsp;'
+
+  if (/^[\]}],?$/.test(trimmed)) {
+    return `${indent}<span class="vs-syntax-punct">${escapeHtml(trimmed)}</span>`
+  }
+
+  const kvMatch = trimmed.match(/^"([^"]+)":\s*(.*)$/)
+  if (kvMatch) {
+    const key = kvMatch[1] ?? ''
+    const rest = kvMatch[2] ?? ''
+    const highlightedVal = highlightJsonValue(rest)
+    return `${indent}<span class="vs-syntax-key">"${escapeHtml(key)}"</span><span class="vs-syntax-punct">: </span>${highlightedVal}`
+  }
+
+  return `${indent}${highlightJsonValue(trimmed)}`
+}
+
+function applyFlowViewMode(
+  mode: 'single' | 'split',
+  activeTab: 'response' | 'input',
+  panelsParent: HTMLElement,
+  responsePanel: HTMLElement,
+  inputWrapper: HTMLElement,
+  inputTabBtn: HTMLElement,
+  modeToggleBtn: HTMLElement
+): void {
+  if (mode === 'split') {
+    panelsParent.classList.add('vs-split-container')
+    modeToggleBtn.classList.add('active')
+    modeToggleBtn.innerHTML = `${SINGLE_ICON_SVG}<span>Single</span>`
+    modeToggleBtn.title = 'Switch to single tab view'
+
+    responsePanel.style.display = ''
+    responsePanel.style.flex = '1 1 50%'
+    responsePanel.style.minWidth = '0'
+    responsePanel.style.maxWidth = '50%'
+
+    inputWrapper.style.display = 'flex'
+    inputWrapper.style.flex = '1 1 50%'
+    inputWrapper.style.minWidth = '0'
+    inputWrapper.style.maxWidth = '50%'
+
+    inputTabBtn.classList.remove('active')
+  } else {
+    panelsParent.classList.remove('vs-split-container')
+    modeToggleBtn.classList.remove('active')
+    modeToggleBtn.innerHTML = `${SPLIT_ICON_SVG}<span>Side by Side</span>`
+    modeToggleBtn.title = 'Show input data and response side by side'
+
+    responsePanel.style.flex = ''
+    responsePanel.style.minWidth = ''
+    responsePanel.style.maxWidth = ''
+
+    inputWrapper.style.flex = ''
+    inputWrapper.style.minWidth = ''
+    inputWrapper.style.maxWidth = ''
+
+    if (activeTab === 'input') {
+      inputTabBtn.classList.add('active')
+      inputWrapper.style.display = 'flex'
+      responsePanel.style.display = 'none'
+    } else {
+      inputTabBtn.classList.remove('active')
+      inputWrapper.style.display = 'none'
+      responsePanel.style.display = ''
+    }
+  }
+}
+
+function buildInputDataCard(
+  dataResult: StepInputDataResult | null,
+  onCopy: (text: string) => Promise<void> | void,
+  onHoverLine: (lineNum: number, info: LineInfo, viewLine: HTMLElement, clientX: number) => void,
+  onLeaveLine: () => void
+): { cardEl: HTMLElement; lineMap: Map<number, LineInfo>; rawJson: string } {
+  const cardEl = document.createElement('div')
+  cardEl.className = 'vs-input-card'
+
+  const hasData = Boolean(
+    dataResult &&
+    dataResult.hasInputData &&
+    dataResult.inputData !== null &&
+    dataResult.inputData !== undefined &&
+    (typeof dataResult.inputData !== 'object' || Object.keys(dataResult.inputData as object).length > 0)
+  )
+
+  const rawJson = hasData ? JSON.stringify(dataResult!.inputData, null, 2) : ''
+  const lineMap = hasData ? parseJsonLines(rawJson) : new Map<number, LineInfo>()
+
+  // Header row
+  const headerEl = document.createElement('div')
+  headerEl.className = 'vs-input-header'
+
+  const titleEl = document.createElement('div')
+  titleEl.className = 'vs-input-header-title'
+  titleEl.textContent = 'Input Data'
+
+  if (dataResult?.source && dataResult.source !== 'none') {
+    const badge = document.createElement('span')
+    badge.className = 'vs-input-badge-source'
+    badge.textContent = dataResult.source
+    badge.title = `Source: ${dataResult.source}`
+    titleEl.appendChild(badge)
+  }
+
+  headerEl.appendChild(titleEl)
+
+  if (hasData) {
+    const copyBtn = document.createElement('button')
+    copyBtn.type = 'button'
+    copyBtn.className = COPY_BTN_CLASS
+    copyBtn.title = 'Copy input data JSON'
+    copyBtn.innerHTML = `${COPY_ICON_SVG}<span>Copy Input</span>`
+
+    copyBtn.addEventListener('click', async (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      await onCopy(rawJson)
+      copyBtn.classList.add('copied')
+      copyBtn.innerHTML = `${CHECK_ICON_SVG}<span>Copied!</span>`
+      setTimeout(() => {
+        if (copyBtn.isConnected) {
+          copyBtn.classList.remove('copied')
+          copyBtn.innerHTML = `${COPY_ICON_SVG}<span>Copy Input</span>`
+        }
+      }, 1500)
+    })
+    headerEl.appendChild(copyBtn)
+  }
+
+  cardEl.appendChild(headerEl)
+
+  // Body content
+  if (!hasData) {
+    const emptyEl = document.createElement('div')
+    emptyEl.className = 'vs-input-empty-state'
+    emptyEl.innerHTML = `${EMPTY_ICON_SVG}<span>No input data available for this step run.</span>`
+    cardEl.appendChild(emptyEl)
+    return { cardEl, lineMap, rawJson }
+  }
+
+  const bodyEl = document.createElement('div')
+  bodyEl.className = 'vs-input-body'
+
+  const lines = rawJson.split(/\r?\n/)
+
+  const gutterEl = document.createElement('div')
+  gutterEl.className = 'vs-input-gutter'
+
+  const linesContainer = document.createElement('div')
+  linesContainer.className = 'vs-input-lines'
+
+  for (let i = 0; i < lines.length; i++) {
+    const lineNum = i + 1
+    const rawLine = lines[i] ?? ''
+
+    // Gutter line number
+    const gLine = document.createElement('div')
+    gLine.className = 'vs-input-gutter-line'
+    gLine.textContent = String(lineNum)
+    gutterEl.appendChild(gLine)
+
+    // Code line
+    const viewLine = document.createElement('div')
+    viewLine.className = 'view-line vs-input-view-line'
+    viewLine.setAttribute('data-line-number', String(lineNum))
+    viewLine.innerHTML = highlightJsonLine(rawLine)
+
+    // Array count badge if this line is an array
+    const info = lineMap.get(lineNum)
+    if (info && info.isArray && Array.isArray(info.value) && typeof info.arrayCount === 'number') {
+      const badge = document.createElement('span')
+      badge.className = ARRAY_BADGE_CLASS
+      badge.textContent = `${info.arrayCount} ${info.arrayCount === 1 ? 'item' : 'items'}`
+      badge.title = `${info.arrayCount} items in array`
+      const textLength = rawLine.length
+      const leftPx = Math.max(90, Math.round(textLength * 8.2 + 8))
+      badge.style.left = `${leftPx}px`
+      viewLine.appendChild(badge)
+    }
+
+    // Hover listeners
+    viewLine.addEventListener('mousemove', (e) => {
+      if (info && (info.key || info.path)) {
+        onHoverLine(lineNum, info, viewLine, e.clientX)
+      } else {
+        onLeaveLine()
+      }
+    })
+
+    linesContainer.appendChild(viewLine)
+  }
+
+  bodyEl.appendChild(gutterEl)
+  bodyEl.appendChild(linesContainer)
+
+  bodyEl.addEventListener('mouseleave', () => {
+    onLeaveLine()
+  })
+
+  cardEl.appendChild(bodyEl)
+  return { cardEl, lineMap, rawJson }
 }
 
 export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerController {
@@ -636,7 +1142,7 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
   }
 
   function showHoverPill(
-    state: EditorState,
+    source: EditorState | { containerEl: HTMLElement; isInput?: boolean; stepType?: string },
     lineNum: number,
     info: LineInfo,
     viewLine: HTMLElement,
@@ -657,15 +1163,20 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     const pill = document.createElement('div')
     pill.id = HOVER_PILL_ID
 
-    const headerLabel =
-      state.monacoEl.closest('.flex.flex-col')?.querySelector<HTMLElement>(
-        '.flex.justify-between.items-center .MuiTypography-caption, .justify-between span, .justify-between p'
-      )?.textContent?.trim() || ''
+    const isInput = 'isInput' in source && Boolean(source.isInput)
+    const sourceEl = 'monacoEl' in source ? source.monacoEl : source.containerEl
+    const stepType = 'stepType' in source ? source.stepType : undefined
+
+    const headerLabel = isInput
+      ? 'Input Data'
+      : sourceEl.closest('.flex.flex-col')?.querySelector<HTMLElement>(
+          '.flex.justify-between.items-center .MuiTypography-caption, .justify-between span, .justify-between p'
+        )?.textContent?.trim() || ''
 
     const urlParams = new URLSearchParams(window.location.search)
     const urlSlug = urlParams.get('slugName') || urlParams.get('stepId') || ''
 
-    const fullExecPath = buildExecutablePath(info.path || info.key, headerLabel, urlSlug)
+    const fullExecPath = buildExecutablePath(info.path || info.key, headerLabel, urlSlug, isInput, stepType)
 
     // Minimal Button 1: Copy Path (icon only)
     const copyPathBtn = document.createElement('button')
@@ -734,19 +1245,19 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
 
     // Position minimal pill right above or below the line near cursor
     const vlRect = viewLine.getBoundingClientRect()
-    const monacoRect = state.monacoEl.getBoundingClientRect()
+    const containerRect = sourceEl.getBoundingClientRect()
 
     let top = vlRect.top - 24
-    if (top < monacoRect.top + 4) {
+    if (top < containerRect.top + 4) {
       top = vlRect.bottom + 2
     }
 
     let left = clientX - 25
-    if (left + 54 > monacoRect.right - 6) {
-      left = monacoRect.right - 60
+    if (left + 54 > containerRect.right - 6) {
+      left = containerRect.right - 60
     }
-    if (left < monacoRect.left + 6) {
-      left = monacoRect.left + 6
+    if (left < containerRect.left + 6) {
+      left = containerRect.left + 6
     }
 
     pill.style.top = `${Math.max(4, Math.round(top))}px`
@@ -943,9 +1454,213 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     }
   }
 
+  interface FlowResponseState {
+    flowContainer: HTMLElement
+    tabsRoot: HTMLElement
+    panelsParent: HTMLElement
+    responsePanel: HTMLElement
+    toolbar: HTMLElement
+    inputWrapper: HTMLElement
+    inputTabBtn: HTMLButtonElement
+    splitToggleBtn: HTMLButtonElement
+    lastStepKey: string
+    currentDataResult: StepInputDataResult | null
+    activeTab: 'response' | 'input'
+    viewMode: 'single' | 'split'
+    lineMap?: Map<number, LineInfo>
+    rawJson?: string
+    isRefreshing?: boolean
+  }
+
+  let flowState: FlowResponseState | null = null
+
+  async function refreshFlowInputData(state: FlowResponseState): Promise<void> {
+    if (state.isRefreshing || dead) return
+    state.isRefreshing = true
+    try {
+      const urlParams = new URLSearchParams(window.location.search)
+      const slugName = urlParams.get('slugName') || undefined
+      const stepId = urlParams.get('stepId') || undefined
+      const dataResult = await bridge.getStepInputData(undefined, stepId, slugName)
+      state.currentDataResult = dataResult
+
+      state.inputWrapper.replaceChildren()
+
+      const { cardEl, lineMap, rawJson } = buildInputDataCard(
+        dataResult,
+        async (textToCopy) => {
+          await copyText(textToCopy)
+        },
+        (lineNum, info, viewLine, clientX) => {
+          showHoverPill(
+            { containerEl: cardEl, isInput: true, stepType: dataResult?.stepType },
+            lineNum,
+            info,
+            viewLine,
+            clientX
+          )
+        },
+        () => {
+          scheduleCloseHoverPill()
+        }
+      )
+
+      state.lineMap = lineMap
+      state.rawJson = rawJson
+      state.inputWrapper.appendChild(cardEl)
+      applyFlowViewMode(
+        state.viewMode,
+        state.activeTab,
+        state.panelsParent,
+        state.responsePanel,
+        state.inputWrapper,
+        state.inputTabBtn,
+        state.splitToggleBtn
+      )
+    } finally {
+      state.isRefreshing = false
+    }
+  }
+
+  function scanFlowResponseContainer(): void {
+    const flowContainer = document.querySelector<HTMLElement>('.responseAndConsoleTabs')
+    if (!flowContainer) {
+      if (flowState) {
+        flowState.toolbar.remove()
+        flowState.inputWrapper.remove()
+        flowState.panelsParent.classList.remove('vs-split-container')
+        flowState = null
+      }
+      return
+    }
+
+    const tabsRoot = flowContainer.querySelector<HTMLElement>('[data-testid="response-console-tabs"], .MuiTabs-root')
+    const responsePanel = flowContainer.querySelector<HTMLElement>(
+      '[role="tabpanel"][id*="RESPONSE"], [role="tabpanel"][id*="0"], [role="tabpanel"]'
+    )
+    const panelsParent = responsePanel?.parentElement || flowContainer.querySelector<HTMLElement>('.MuiCard-root') || flowContainer
+
+    if (!tabsRoot || !responsePanel || !panelsParent) {
+      return
+    }
+
+    if (!flowState || flowState.flowContainer !== flowContainer || !flowState.toolbar.isConnected || !flowState.inputWrapper.isConnected) {
+      if (flowState) {
+        flowState.toolbar.remove()
+        flowState.inputWrapper.remove()
+      }
+
+      const savedMode = (localStorage.getItem('vs_response_view_mode') as 'single' | 'split') || 'single'
+
+      const toolbar = document.createElement('div')
+      toolbar.className = 'vs-response-tabs-addon'
+
+      const inputTabBtn = document.createElement('button')
+      inputTabBtn.type = 'button'
+      inputTabBtn.className = 'vs-res-addon-tab vs-tab-input'
+      inputTabBtn.setAttribute('data-tab', 'input')
+      inputTabBtn.textContent = 'Input Data'
+
+      const splitToggleBtn = document.createElement('button')
+      splitToggleBtn.type = 'button'
+      splitToggleBtn.className = 'vs-res-mode-toggle'
+      splitToggleBtn.innerHTML = savedMode === 'split' ? `${SINGLE_ICON_SVG}<span>Single</span>` : `${SPLIT_ICON_SVG}<span>Side by Side</span>`
+      splitToggleBtn.title = savedMode === 'split' ? 'Switch to single tab view' : 'Show input data and response side by side'
+
+      toolbar.appendChild(inputTabBtn)
+      toolbar.appendChild(splitToggleBtn)
+
+      const tabsFlex = tabsRoot.querySelector<HTMLElement>('.MuiTabs-flexContainer') || tabsRoot
+      tabsFlex.parentElement?.appendChild(toolbar) || tabsRoot.appendChild(toolbar)
+
+      const inputWrapper = document.createElement('div')
+      inputWrapper.className = 'vs-input-panel-wrapper'
+      panelsParent.insertBefore(inputWrapper, responsePanel)
+
+      const currentFlowState: FlowResponseState = {
+        flowContainer,
+        tabsRoot,
+        panelsParent,
+        responsePanel,
+        toolbar,
+        inputWrapper,
+        inputTabBtn,
+        splitToggleBtn,
+        lastStepKey: '',
+        currentDataResult: null,
+        activeTab: 'response',
+        viewMode: savedMode,
+      }
+      flowState = currentFlowState
+
+      inputTabBtn.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (currentFlowState.viewMode === 'split') {
+          currentFlowState.viewMode = 'single'
+          localStorage.setItem('vs_response_view_mode', 'single')
+        }
+        currentFlowState.activeTab = 'input'
+        applyFlowViewMode(
+          currentFlowState.viewMode,
+          currentFlowState.activeTab,
+          currentFlowState.panelsParent,
+          currentFlowState.responsePanel,
+          currentFlowState.inputWrapper,
+          currentFlowState.inputTabBtn,
+          currentFlowState.splitToggleBtn
+        )
+      })
+
+      splitToggleBtn.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        currentFlowState.viewMode = currentFlowState.viewMode === 'split' ? 'single' : 'split'
+        localStorage.setItem('vs_response_view_mode', currentFlowState.viewMode)
+        applyFlowViewMode(
+          currentFlowState.viewMode,
+          currentFlowState.activeTab,
+          currentFlowState.panelsParent,
+          currentFlowState.responsePanel,
+          currentFlowState.inputWrapper,
+          currentFlowState.inputTabBtn,
+          currentFlowState.splitToggleBtn
+        )
+      })
+
+      tabsRoot.addEventListener('click', (e) => {
+        const target = e.target as HTMLElement | null
+        const tabEl = target?.closest<HTMLElement>('button[role="tab"], .MuiTab-root')
+        if (tabEl && !tabEl.classList.contains('vs-res-addon-tab')) {
+          if (currentFlowState.viewMode === 'single') {
+            currentFlowState.activeTab = 'response'
+            applyFlowViewMode(
+              currentFlowState.viewMode,
+              currentFlowState.activeTab,
+              currentFlowState.panelsParent,
+              currentFlowState.responsePanel,
+              currentFlowState.inputWrapper,
+              currentFlowState.inputTabBtn,
+              currentFlowState.splitToggleBtn
+            )
+          }
+        }
+      })
+    }
+
+    const urlParams = new URLSearchParams(window.location.search)
+    const currentStepKey = `${urlParams.get('slugName') || ''}:${urlParams.get('stepId') || ''}:${urlParams.get('flowhitid') || ''}`
+    if (flowState.lastStepKey !== currentStepKey || !flowState.inputWrapper.hasChildNodes()) {
+      flowState.lastStepKey = currentStepKey
+      void refreshFlowInputData(flowState)
+    }
+  }
+
   function scan(): void {
     scanTimer = undefined
     if (dead) return
+
+    scanFlowResponseContainer()
 
     // Clean up disconnected editors
     for (const [el, s] of editors) {
@@ -1010,6 +1725,12 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       if (scanTimer !== undefined) clearTimeout(scanTimer)
       if (hidePillTimer !== undefined) clearTimeout(hidePillTimer)
       closeHoverPill()
+      if (flowState) {
+        flowState.toolbar.remove()
+        flowState.inputWrapper.remove()
+        flowState.panelsParent.classList.remove('vs-split-container')
+        flowState = null
+      }
       for (const [el, s] of editors) {
         s.observer?.disconnect()
         el.closest('.flex.flex-col')?.querySelector(`.${COPY_BTN_CLASS}`)?.remove()
