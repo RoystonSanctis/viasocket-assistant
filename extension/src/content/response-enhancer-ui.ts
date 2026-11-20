@@ -1514,7 +1514,8 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       inputTabBtn.setAttribute('aria-selected', 'false')
       inputTabBtn.textContent = 'Input Data'
 
-      tabsList.appendChild(inputTabBtn)
+      // Input Data comes first, before Response
+      tabsList.insertBefore(inputTabBtn, tabsList.firstElementChild)
 
       const inputWrapper = document.createElement('div')
       inputWrapper.className = 'vs-input-panel-wrapper'
@@ -1562,8 +1563,8 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
         }
       })
     } else {
-      if (!tabsList.contains(flowState.inputTabBtn)) {
-        tabsList.appendChild(flowState.inputTabBtn)
+      if (!tabsList.contains(flowState.inputTabBtn) || flowState.inputTabBtn !== tabsList.firstElementChild) {
+        tabsList.insertBefore(flowState.inputTabBtn, tabsList.firstElementChild)
       }
       if (!panelsParent.contains(flowState.inputWrapper)) {
         panelsParent.insertBefore(flowState.inputWrapper, responsePanel)
