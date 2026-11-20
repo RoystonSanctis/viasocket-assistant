@@ -829,8 +829,9 @@ function buildInputDataCard(
   if (dataResult?.source && dataResult.source !== 'none') {
     const badge = document.createElement('span')
     badge.className = 'vs-input-badge-source'
-    badge.textContent = dataResult.source
-    badge.title = `Source: ${dataResult.source}`
+    const badgeText = dataResult.source === 'function' ? 'JS' : dataResult.source
+    badge.textContent = badgeText
+    badge.title = `Source: ${badgeText}`
     titleWrap.appendChild(badge)
   }
 

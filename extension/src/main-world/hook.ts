@@ -681,22 +681,160 @@ function install(): void {
       } else if (stepType === 'api') {
         source = 'api'
         inputData = stepRequestSnapshot[slugName] ?? stepRequestSnapshot[stepId]
-      } else if (stepType === 'function') {
+      } else if (stepType === 'function' || stepType === 'js') {
         source = 'function'
-        const usedVars = obj(invData.usedVariables)
-        const fnUsed = obj(usedVars.functions)
+
+        // Retrieve function step definitions from Redux
+        const stepEntry = obj(obj(state.stepsDataV3)[scriptId])[stepId] ?? obj(obj(state.stepsDataV3)[scriptId])[slugName]
+        const draft = obj(isObj(stepEntry) ? stepEntry.draft || stepEntry.publish || stepEntry : {})
+        const block = obj(blocks[slugName] ?? blocks[stepId])
+
+        const dynamicVars = {
+          ...obj(block.dynamicVariables),
+          ...obj(draft.dynamicVariables),
+        }
+
+        const codeStr =
+          (typeof draft.code === 'string' && draft.code) ||
+          (typeof block.code === 'string' && block.code) ||
+          ''
+
+        const usedVarsFromRedux: string[] = [
+          ...(Array.isArray(draft.usedVariables) ? draft.usedVariables : []),
+          ...(Array.isArray(block.usedVariables) ? block.usedVariables : []),
+        ]
+
+        const invUsedVars = obj(invData.usedVariables)
+        const fnUsed = obj(invUsedVars.functions)
         const fnVars = fnUsed[slugName] ?? fnUsed[stepId]
-        if (Array.isArray(fnVars) && fnVars.length > 0) {
-          const resolvedVars: Record<string, unknown> = {}
-          for (const v of fnVars) {
-            if (typeof v !== 'string') continue
-            try {
-              const fn = new Function('context', 'req', 'res', 'vals', `try { return (${v}); } catch(e) { return undefined; }`)
-              resolvedVars[v] = fn(context, requestSnapshot, responseSnapshot, vals)
-            } catch {
-              resolvedVars[v] = undefined
+        if (Array.isArray(fnVars)) {
+          usedVarsFromRedux.push(...fnVars)
+        }
+
+        function evalExpr(expr: string): unknown {
+          if (!expr || typeof expr !== 'string') return expr
+          let clean = expr.trim()
+          if (clean.startsWith('${') && clean.endsWith('}')) {
+            clean = clean.slice(2, -1).trim()
+          }
+          if (!clean) return undefined
+          try {
+            const fn = new Function(
+              'context',
+              'req',
+              'res',
+              'vals',
+              'body',
+              'steps',
+              `try { return (${clean}); } catch(e) { return undefined; }`
+            )
+            return fn(
+              context,
+              requestSnapshot,
+              responseSnapshot,
+              vals,
+              requestSnapshot.body ?? {},
+              responseSnapshot
+            )
+          } catch {
+            return undefined
+          }
+        }
+
+        function normalizePath(str: string): string {
+          if (!str || typeof str !== 'string') return ''
+          let p = str.trim()
+          if (p.startsWith('${') && p.endsWith('}')) {
+            p = p.slice(2, -1).trim()
+          }
+          return p
+            .replace(/\?\.\[/g, '[')
+            .replace(/\?\./g, '.')
+            .replace(/context\.req\.body/g, 'body')
+            .replace(/req\.body/g, 'body')
+            .replace(/context\.res/g, 'steps')
+            .replace(/res\b/g, 'steps')
+            .replace(/context\.vals/g, 'vals')
+            .replace(/\[(["']?)(.*?)\1\]/g, '.$2')
+            .replace(/\.{2,}/g, '.')
+            .replace(/^\.+/, '')
+            .trim()
+        }
+
+        function extractDirectPathsFromCode(str: string): string[] {
+          if (!str || typeof str !== 'string') return []
+          const results = new Set<string>()
+          const regex = /\b(context|req|res|body|steps)\b/g
+          const matches = Array.from(str.matchAll(regex))
+
+          for (const match of matches) {
+            const iStart = match.index
+            if (iStart === undefined) continue
+            if (iStart > 0 && /[\w.$]/.test(str[iStart - 1]!)) continue
+
+            let depth = 0
+            let variable = ''
+
+            for (let i = iStart; i < str.length; i++) {
+              const ch = str[i]!
+              variable += ch
+
+              if (ch === '[') depth++
+              else if (ch === ']') depth--
+
+              if (depth === 0) {
+                const next = str[i + 1] || ''
+                if (/[\s+\-*/%,;)}"'`]/.test(next)) break
+                const funcCallMatch = /^\.\w+\s*\(/.exec(str.slice(i + 1))
+                if (funcCallMatch) break
+              }
+            }
+
+            variable = variable
+              .replace(/\?\.(?=[a-zA-Z_$])/g, '.')
+              .replace(/\?\.\[/g, '[')
+              .replace(/(\?\.)+$/, '')
+              .replace(/\?$/, '')
+              .trim()
+
+            if (variable.includes('.') || variable.includes('[')) {
+              results.add(variable)
             }
           }
+          return Array.from(results)
+        }
+
+        const resolvedVars: Record<string, unknown> = {}
+        const coveredNormPaths = new Set<string>()
+
+        // 1. Process all input variables (dynamicVariables)
+        for (const [varName, varExpr] of Object.entries(dynamicVars)) {
+          if (typeof varExpr === 'string') {
+            coveredNormPaths.add(normalizePath(varExpr))
+            const val = evalExpr(varExpr)
+            resolvedVars[varName] = val !== undefined ? val : null
+          } else {
+            resolvedVars[varName] = varExpr
+          }
+        }
+
+        // 2. Process all direct paths in code and usedVariables
+        const codeDirectPaths = extractDirectPathsFromCode(codeStr)
+        const allDirectPaths = Array.from(new Set([...usedVarsFromRedux, ...codeDirectPaths]))
+
+        for (const p of allDirectPaths) {
+          if (typeof p !== 'string') continue
+          const norm = normalizePath(p)
+          if (coveredNormPaths.has(norm)) continue
+
+          const val = evalExpr(p)
+          if (val !== undefined) {
+            resolvedVars[p] = val
+            coveredNormPaths.add(norm)
+          }
+        }
+
+        if (Object.keys(resolvedVars).length > 0) {
           inputData = resolvedVars
         } else {
           inputData = stepRequestSnapshot[slugName] ?? stepRequestSnapshot[stepId]
