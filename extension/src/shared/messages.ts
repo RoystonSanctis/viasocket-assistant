@@ -177,6 +177,58 @@ export interface StepInputDataResult {
   timestamp?: string
 }
 
+export interface FlowGraphPort {
+  id: string
+  key: string
+  expression?: string
+  sourceSlug?: string
+  sourceField?: string
+  value?: unknown
+  displayValue: string
+  usedBySlugs?: string[]
+}
+
+export interface FlowGraphNode {
+  id: string
+  slugName: string
+  title: string
+  type: string
+  iconUrl?: string
+  depth: number
+  isIndependent: boolean
+  upstreamSlugs: string[]
+  inputs: FlowGraphPort[]
+  outputs: FlowGraphPort[]
+}
+
+export interface FlowGraphConnection {
+  id: string
+  fromNodeId: string
+  fromSlug: string
+  fromPortId: string
+  fromField: string
+  toNodeId: string
+  toSlug: string
+  toPortId: string
+  toField: string
+  expression: string
+  valuePreview: string
+}
+
+export interface FlowGraphData {
+  scriptId: string
+  flowHitId?: string
+  timestamp?: string
+  trigger: FlowGraphNode | null
+  steps: FlowGraphNode[]
+  connections: FlowGraphConnection[]
+  summary: {
+    totalSteps: number
+    dependentSteps: number
+    independentSteps: number
+  }
+}
+
 /** The open JS step as the editor shows it, for the subfunctions panel. Read from the page; never fetched there. */
 export interface StepContextData {
   scriptId: string
@@ -223,6 +275,7 @@ export type PageToContentMsg =
   | { type: 'navigate-busy' }
   | { type: 'step-context-response'; requestId: string; data: StepContextData | null }
   | { type: 'step-input-data-response'; requestId: string; data: StepInputDataResult | null }
+  | { type: 'flow-graph-data-response'; requestId: string; data: FlowGraphData | null }
   | { type: 'editor-action-response'; requestId: string; result: EditorActionResult }
   | { type: 'editor-insert-response'; requestId: string; success: boolean }
   | { type: 'add-dynamic-variable-response'; requestId: string; success: boolean }
@@ -251,6 +304,8 @@ export type ContentToPageMsg =
   | { type: 'get-step-context'; requestId: string; scriptId?: string; stepId?: string; slugName?: string }
   /** Read active step's input data from invocation / draft in Redux; answered with step-input-data-response */
   | { type: 'get-step-input-data'; requestId: string; scriptId?: string; stepId?: string; slugName?: string }
+  /** Read full flow dependency graph data from Redux; answered with flow-graph-data-response */
+  | { type: 'get-flow-graph-data'; requestId: string; scriptId?: string }
   /** Set a field value in the open step panel via React fiber/Redux */
   | { type: 'set-field-value'; requestId: string; fieldLabel: string; value: string; clickSave?: boolean }
   /** The Beautify button: check or format the Monaco editor marked with EDITOR_ID_ATTR; answered with editor-action-response */

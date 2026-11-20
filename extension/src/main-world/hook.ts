@@ -20,6 +20,10 @@ import {
   type PageToContentMsg,
   type StepContextData,
   type StepInputDataResult,
+  type FlowGraphData,
+  type FlowGraphNode,
+  type FlowGraphPort,
+  type FlowGraphConnection,
 } from '../shared/messages'
 import type { ObservedEvent } from '../shared/observed'
 import { resolveEnv } from '../background/tools/env'
@@ -899,6 +903,369 @@ function install(): void {
     }
   }
 
+  function readFlowGraphData(msg: { scriptId?: string }): FlowGraphData | null {
+    try {
+      const obj = (v: unknown): Record<string, unknown> => (isObj(v) ? (v as Record<string, unknown>) : {})
+      const store = findReduxStore()
+      if (!store) return null
+      const state = store.getState()
+      const scriptId =
+        msg.scriptId ||
+        extractScriptId(location.pathname) ||
+        (isObj(state.appInfo) && typeof state.appInfo.currentScriptId === 'string' ? state.appInfo.currentScriptId : undefined)
+      if (!scriptId) return null
+
+      const flowState = obj(obj(state.flowJsonV2)[scriptId])
+      const flowJson = obj(flowState.flowJson)
+      const blocks = obj(flowJson.blocks)
+      const trigger = obj(flowJson.trigger)
+      const rawStepOrder = Array.isArray(flowState.stepOrder)
+        ? (flowState.stepOrder as string[])
+        : Array.isArray(obj(flowJson.order).root)
+          ? (obj(flowJson.order).root as string[])
+          : Object.keys(blocks)
+      const stepOrder = rawStepOrder.filter((s) => s && s !== 'response')
+
+      const invState = obj(obj(state.invocationV2)[scriptId])
+      let invData = obj(invState.invocationData)
+      if (!Object.keys(invData).length) {
+        invData = obj(obj(obj(state.invocationV2)['selectedLog']).invocationData)
+      }
+      if (!Object.keys(invData).length) {
+        for (const v of Object.values(obj(state.invocationV2))) {
+          const cand = obj(obj(v).invocationData)
+          if (Object.keys(cand).length > 0) {
+            invData = cand
+            break
+          }
+        }
+      }
+      const flowHitId = typeof invData.flowHitId === 'string' ? invData.flowHitId : new URLSearchParams(location.search).get('flowhitid') || undefined
+      const timestamp = typeof invData.requestTimestamp === 'string' ? invData.requestTimestamp : undefined
+
+      const requestSnapshot = isObj(invData.requestSnapshot)
+        ? (invData.requestSnapshot as Record<string, unknown>)
+        : isObj(invData.requestSnapshotJsonData)
+          ? (invData.requestSnapshotJsonData as Record<string, unknown>)
+          : {}
+      const responseSnapshot = isObj(invData.responseSnapshot)
+        ? (invData.responseSnapshot as Record<string, unknown>)
+        : isObj(invData.responseSnapshotJsonData)
+          ? (invData.responseSnapshotJsonData as Record<string, unknown>)
+          : {}
+      const vals = isObj(invData.vals)
+        ? (invData.vals as Record<string, unknown>)
+        : isObj(invData.valsJson)
+          ? (invData.valsJson as Record<string, unknown>)
+          : {}
+
+      const isDryRun = Boolean(invData.isDryRun)
+      let usedVars = isDryRun ? obj(flowState.usedVariables) : obj(flowState.publishUsedVariables)
+      if (!usedVars || Object.keys(usedVars).length === 0) {
+        usedVars = obj(flowState.usedVariables)
+      }
+
+      function evalExpr(expr: string): unknown {
+        if (!expr || typeof expr !== 'string') return undefined
+        let clean = expr.trim()
+        if (clean.startsWith('${') && clean.endsWith('}')) {
+          clean = clean.slice(2, -1).trim()
+        }
+        if (!clean) return undefined
+        try {
+          const fn = new Function(
+            'context',
+            'req',
+            'res',
+            'vals',
+            'body',
+            'steps',
+            `try { return (${clean}); } catch(e) { return undefined; }`
+          )
+          return fn(
+            { req: requestSnapshot, res: responseSnapshot, vals, steps: responseSnapshot },
+            requestSnapshot,
+            responseSnapshot,
+            vals,
+            requestSnapshot.body ?? {},
+            responseSnapshot
+          )
+        } catch {
+          return undefined
+        }
+      }
+
+      function formatVal(v: unknown): string {
+        if (v === undefined) return 'undefined'
+        if (v === null) return 'null'
+        if (typeof v === 'string') return v.length > 24 ? v.slice(0, 21) + '...' : v
+        if (typeof v === 'number' || typeof v === 'boolean') return String(v)
+        if (Array.isArray(v)) return `[${v.length} items]`
+        if (typeof v === 'object') {
+          const keys = Object.keys(v as object)
+          return `{${keys.slice(0, 2).join(', ')}${keys.length > 2 ? '...' : ''}}`
+        }
+        return String(v)
+      }
+
+      // 1. Build Trigger Node
+      const triggerOutputs: FlowGraphPort[] = []
+      const triggerFields = new Set<string>()
+
+      const variablesMap = obj(usedVars.variables)
+      for (const varKey of Object.keys(variablesMap)) {
+        if (varKey.includes('req.body') || varKey.includes('req.')) {
+          const field = varKey
+            .replace(/context\.req\.body\b/g, '')
+            .replace(/req\.body\b/g, '')
+            .replace(/context\.req\b/g, '')
+            .replace(/\[["'](.*?)["']\]/g, '$1')
+            .replace(/^\.+/, '')
+          if (field) triggerFields.add(field)
+        }
+      }
+
+      const reqBody = obj(requestSnapshot.body)
+      for (const k of Object.keys(reqBody)) {
+        if (triggerFields.has(k) || triggerFields.size < 6) {
+          triggerFields.add(k)
+        }
+      }
+
+      for (const f of triggerFields) {
+        const val = reqBody[f] ?? evalExpr(`context.req.body.${f}`)
+        const usedBy =
+          (obj(variablesMap[`context.req.body.${f}`]).usedInFunctions as string[]) ||
+          (obj(variablesMap[`context.req.body["${f}"]`]).usedInFunctions as string[]) ||
+          []
+        if (usedBy.length === 0 && (val === '' || val === null || val === undefined)) {
+          continue
+        }
+        triggerOutputs.push({
+          id: `trigger-out-${f}`,
+          key: f,
+          value: val,
+          displayValue: formatVal(val),
+          usedBySlugs: usedBy,
+        })
+      }
+
+      const triggerType = typeof trigger.triggerType === 'string' ? trigger.triggerType : 'webhook'
+      const triggerNode: FlowGraphNode = {
+        id: 'trigger',
+        slugName: 'trigger',
+        title: triggerType === 'webhook' ? 'Webhook' : triggerType.toUpperCase(),
+        type: 'trigger',
+        depth: 0,
+        isIndependent: false,
+        upstreamSlugs: [],
+        inputs: [],
+        outputs: triggerOutputs,
+      }
+
+      // 2. Build Step Nodes
+      const stepNodes: FlowGraphNode[] = []
+      const connections: FlowGraphConnection[] = []
+      const funcsMap = obj(usedVars.functions)
+      const pluginMap = obj(usedVars.plugin)
+
+      for (const slug of stepOrder) {
+        const block = obj(blocks[slug])
+        const stepType = typeof block.type === 'string' ? block.type : 'function'
+        const iconUrl = typeof block.iconUrl === 'string' ? block.iconUrl : undefined
+        const inputs: FlowGraphPort[] = []
+        const upstreamSlugsSet = new Set<string>()
+        const seenInputKeys = new Set<string>()
+
+        // Collect expressions from function / plugin
+        const exprList: Array<{ key: string; expr: string }> = []
+
+        if (stepType === 'function') {
+          const list = Array.isArray(funcsMap[slug]) ? (funcsMap[slug] as string[]) : []
+          for (const item of list) {
+            if (typeof item === 'string') {
+              const cleanKey = item
+                .replace(/context\.req\.body\b/g, '')
+                .replace(/req\.body\b/g, '')
+                .replace(/context\.res\.[^.]+\b/g, '')
+                .replace(/\[["'](.*?)["']\]/g, '$1')
+                .replace(/^\.+/, '')
+              exprList.push({ key: cleanKey || item, expr: item })
+            }
+          }
+        } else if (stepType === 'plugin') {
+          const pVars = obj(pluginMap[slug])
+          for (const [k, v] of Object.entries(pVars)) {
+            if (typeof v === 'string' && v.includes('${')) {
+              const normalizedKey = k
+                .replace(/\[["']_?(.*?)["']\]/g, '.$1')
+                .replace(/\._/g, '.')
+                .replace(/^\.+/, '')
+              exprList.push({ key: normalizedKey, expr: v })
+            }
+          }
+        }
+
+        const seenExpressions = new Set<string>()
+        for (const { key, expr } of exprList) {
+          if (seenExpressions.has(expr) || seenInputKeys.has(key)) continue
+          seenExpressions.add(expr)
+          seenInputKeys.add(key)
+
+          const val = evalExpr(expr)
+          let sourceSlug: string | undefined = undefined
+          let sourceField: string | undefined = undefined
+
+          if (expr.includes('req.body') || expr.includes('req.')) {
+            sourceSlug = 'trigger'
+            sourceField = expr
+              .replace(/context\.req\.body\b/g, '')
+              .replace(/req\.body\b/g, '')
+              .replace(/context\.req\b/g, '')
+              .replace(/\[["'](.*?)["']\]/g, '$1')
+              .replace(/^\.+/, '')
+          } else if (expr.includes('res.') || expr.includes('steps.')) {
+            const m = /(?:res|steps)\.([a-zA-Z0-9_-]+)\??\.(.+)/.exec(expr)
+            if (m) {
+              sourceSlug = m[1]
+              sourceField = m[2]?.replace(/[}].*$/, '')?.replace(/\?.*$/, '')
+            }
+          }
+
+          if (sourceSlug && sourceSlug !== slug) {
+            upstreamSlugsSet.add(sourceSlug)
+          }
+
+          const portId = `in-${slug}-${key}`
+          inputs.push({
+            id: portId,
+            key,
+            expression: expr,
+            sourceSlug,
+            sourceField,
+            value: val,
+            displayValue: formatVal(val),
+          })
+
+          if (sourceSlug && sourceField) {
+            connections.push({
+              id: `conn-${sourceSlug}-${sourceField}-${slug}-${key}`,
+              fromNodeId: sourceSlug,
+              fromSlug: sourceSlug,
+              fromPortId: sourceSlug === 'trigger' ? `trigger-out-${sourceField}` : `out-${sourceSlug}-${sourceField}`,
+              fromField: sourceField,
+              toNodeId: slug,
+              toSlug: slug,
+              toPortId: portId,
+              toField: key,
+              expression: expr,
+              valuePreview: formatVal(val),
+            })
+          }
+        }
+
+        // Collect outputs from responseSnapshot
+        const outputs: FlowGraphPort[] = []
+        const stepResp = responseSnapshot[slug]
+        if (isObj(stepResp)) {
+          for (const [k, v] of Object.entries(stepResp as Record<string, unknown>)) {
+            const usedBy = (obj(variablesMap[`context.res.${slug}.${k}`]).usedInFunctions as string[]) || []
+            outputs.push({
+              id: `out-${slug}-${k}`,
+              key: k,
+              value: v,
+              displayValue: formatVal(v),
+              usedBySlugs: usedBy,
+            })
+          }
+        } else if (stepResp !== undefined) {
+          outputs.push({
+            id: `out-${slug}-output`,
+            key: 'output',
+            value: stepResp,
+            displayValue: formatVal(stepResp),
+            usedBySlugs: [],
+          })
+        }
+
+        const upstreamSlugs = Array.from(upstreamSlugsSet)
+        stepNodes.push({
+          id: slug,
+          slugName: slug,
+          title: slug.replace(/_/g, ' '),
+          type: stepType,
+          iconUrl,
+          depth: 1,
+          isIndependent: upstreamSlugs.length === 0,
+          upstreamSlugs,
+          inputs,
+          outputs,
+        })
+      }
+
+      // Ensure any missing ports referenced in connections exist on upstream nodes
+      for (const conn of connections) {
+        const sourceNode = conn.fromSlug === 'trigger' ? triggerNode : stepNodes.find((s) => s.slugName === conn.fromSlug)
+        if (sourceNode && !sourceNode.outputs.some((p) => p.key === conn.fromField)) {
+          const val = evalExpr(conn.expression)
+          sourceNode.outputs.push({
+            id: conn.fromPortId,
+            key: conn.fromField,
+            value: val,
+            displayValue: formatVal(val),
+            usedBySlugs: [conn.toSlug],
+          })
+        }
+      }
+
+      // Compute topological depths
+      const depthMap: Record<string, number> = { trigger: 0 }
+      let changed = true
+      let iterations = 0
+      while (changed && iterations < 15) {
+        changed = false
+        iterations++
+        for (const node of stepNodes) {
+          if (node.upstreamSlugs.length === 0) {
+            if (depthMap[node.slugName] !== 0) {
+              depthMap[node.slugName] = 0
+              changed = true
+            }
+          } else {
+            const maxUpstream = Math.max(...node.upstreamSlugs.map((u) => depthMap[u] ?? 0))
+            const newDepth = maxUpstream + 1
+            if (depthMap[node.slugName] !== newDepth) {
+              depthMap[node.slugName] = newDepth
+              changed = true
+            }
+          }
+        }
+      }
+
+      for (const node of stepNodes) {
+        node.depth = depthMap[node.slugName] ?? 1
+      }
+
+      const summary = {
+        totalSteps: stepNodes.length,
+        dependentSteps: stepNodes.filter((s) => !s.isIndependent).length,
+        independentSteps: stepNodes.filter((s) => s.isIndependent).length,
+      }
+
+      return {
+        scriptId,
+        flowHitId,
+        timestamp,
+        trigger: triggerNode,
+        steps: stepNodes,
+        connections,
+        summary,
+      }
+    } catch {
+      return null
+    }
+  }
+
   function syncDraftToDom(): void {
     try {
       const store = findReduxStore()
@@ -1281,6 +1648,14 @@ function install(): void {
         nonce: inner.nonce,
       }
     }
+    if (inner.type === 'get-flow-graph-data' && typeof inner.requestId === 'string') {
+      return {
+        type: 'get-flow-graph-data',
+        requestId: inner.requestId.slice(0, 64),
+        scriptId: typeof inner.scriptId === 'string' ? inner.scriptId : undefined,
+        nonce: inner.nonce,
+      }
+    }
     if (
       inner.type === 'editor-action' &&
       typeof inner.requestId === 'string' &&
@@ -1377,6 +1752,10 @@ function install(): void {
       }
       if (msg.type === 'get-step-input-data') {
         post({ type: 'step-input-data-response', requestId: msg.requestId, data: readStepInputData(msg) })
+        return
+      }
+      if (msg.type === 'get-flow-graph-data') {
+        post({ type: 'flow-graph-data-response', requestId: msg.requestId, data: readFlowGraphData(msg) })
         return
       }
       if (msg.type === 'editor-action') {

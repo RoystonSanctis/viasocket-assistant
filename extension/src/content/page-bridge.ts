@@ -13,6 +13,7 @@ import {
   type PageEnvelope,
   type StepContextData,
   type StepInputDataResult,
+  type FlowGraphData,
 } from '../shared/messages'
 import type { ObservedEvent } from '../shared/observed'
 import { ERROR_TEXT_MAX, isObj, isObservedKind, PATH_MAX, SLUG_MAX } from '../shared/classify'
@@ -51,6 +52,8 @@ export interface PageBridge {
   getStepContext(scriptId?: string, stepId?: string, slugName?: string): Promise<StepContextData | null>
   /** Active step's input data from invocation data / draft; null when unavailable */
   getStepInputData(scriptId?: string, stepId?: string, slugName?: string): Promise<StepInputDataResult | null>
+  /** Full flow dependency graph data from Redux; null when unavailable */
+  getFlowGraphData(scriptId?: string): Promise<FlowGraphData | null>
   /** Checks or beautifies the Monaco editor marked with EDITOR_ID_ATTR = editorId; null when the hook does not answer */
   editorAction(editorId: string, action: EditorAction): Promise<EditorActionResult | null>
   /** Gets full text from a Monaco editor or response viewer marked with EDITOR_ID_ATTR */
@@ -196,6 +199,7 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
 
   const pendingContext = new Map<string, (data: StepContextData | null) => void>()
   const pendingInputData = new Map<string, (data: StepInputDataResult | null) => void>()
+  const pendingGraphData = new Map<string, (data: FlowGraphData | null) => void>()
   const pendingEditor = new Map<string, (result: EditorActionResult | null) => void>()
   const pendingEditorText = new Map<string, (text: string | null) => void>()
   const pendingEditorInsert = new Map<string, (success: boolean) => void>()
@@ -233,6 +237,11 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
       case 'step-input-data-response': {
         const handler = typeof inner.requestId === 'string' ? pendingInputData.get(inner.requestId) : undefined
         if (handler) handler((inner.data as StepInputDataResult) ?? null)
+        break
+      }
+      case 'flow-graph-data-response': {
+        const handler = typeof inner.requestId === 'string' ? pendingGraphData.get(inner.requestId) : undefined
+        if (handler) handler((inner.data as FlowGraphData) ?? null)
         break
       }
       case 'editor-action-response': {
@@ -322,6 +331,26 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
         const timer = setTimeout(() => finish(null), 3500)
         pendingInputData.set(requestId, finish)
         post({ type: 'get-step-input-data', requestId, scriptId, stepId, slugName })
+      })
+    },
+    async getFlowGraphData(scriptId) {
+      if (!hookReady) {
+        const start = Date.now()
+        while (!hookReady && Date.now() - start < 2000) {
+          await new Promise((r) => setTimeout(r, 80))
+        }
+        if (!hookReady) return null
+      }
+      const requestId = makeNonce()
+      return new Promise<FlowGraphData | null>((resolve) => {
+        const finish = (data: FlowGraphData | null) => {
+          clearTimeout(timer)
+          pendingGraphData.delete(requestId)
+          resolve(data)
+        }
+        const timer = setTimeout(() => finish(null), 4000)
+        pendingGraphData.set(requestId, finish)
+        post({ type: 'get-flow-graph-data', requestId, scriptId })
       })
     },
     editorAction(editorId, action) {
