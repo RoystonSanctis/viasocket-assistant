@@ -37,19 +37,6 @@ const CODE_ICON_SVG = `
 </svg>
 `
 
-const SPLIT_ICON_SVG = `
-<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; display: block;">
-  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-  <line x1="12" y1="3" x2="12" y2="21"></line>
-</svg>
-`
-
-const SINGLE_ICON_SVG = `
-<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0; display: block;">
-  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-</svg>
-`
-
 const EMPTY_ICON_SVG = `
 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.5; margin-bottom: 4px; display: block;">
   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -217,104 +204,64 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
   background: rgba(16, 185, 129, 0.15) !important;
 }
 
-/* Input Data Panel and Tabs Addon */
-.vs-response-tabs-addon {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: auto;
-  padding-left: 8px;
+/* Input Data Tab (MUI Tab Lookalike) */
+.vs-tab-input {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  box-sizing: border-box !important;
+  outline: 0 !important;
+  border: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  vertical-align: middle !important;
+  appearance: none !important;
+  text-decoration: none !important;
+  font-family: inherit !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  line-height: 1.25 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+  max-width: 360px !important;
+  min-width: 90px !important;
+  min-height: 48px !important;
+  padding: 12px 16px !important;
+  text-align: center !important;
+  flex-shrink: 0 !important;
+  white-space: normal !important;
+  background: transparent !important;
+  color: var(--col-text-secondary, rgb(139, 148, 158)) !important;
+  transition: color 200ms cubic-bezier(0.4, 0, 0.2, 1) 0ms !important;
 }
 
-.vs-res-addon-tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 28px;
-  padding: 0 10px;
-  font-family: var(--font-family-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--col-text-secondary, var(--vs-res-text-sec));
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  user-select: none;
-  border-radius: 4px 4px 0 0;
+.vs-tab-input:hover {
+  color: var(--col-text-primary, rgb(240, 246, 252)) !important;
 }
 
-.vs-res-addon-tab:hover {
-  color: var(--col-text-primary, var(--vs-res-text));
-  background: var(--col-action-hover, var(--vs-res-hover));
+.vs-tab-input.Mui-selected {
+  color: var(--col-text-primary, rgb(240, 246, 252)) !important;
 }
 
-.vs-res-addon-tab.active {
-  color: var(--col-link, #3b82f6) !important;
-  border-bottom: 2px solid var(--col-link, #3b82f6) !important;
-  font-weight: 600;
+html[data-theme='light'] .vs-tab-input,
+body[data-theme='light'] .vs-tab-input,
+html.light .vs-tab-input,
+body.light .vs-tab-input {
+  color: rgba(0, 0, 0, 0.6) !important;
 }
 
-.vs-res-mode-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 24px;
-  padding: 0 8px;
-  font-family: var(--font-family-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--col-text-secondary, var(--vs-res-text-sec));
-  background: var(--col-surface-raised, var(--vs-res-bg));
-  border: 1px solid var(--col-border, var(--vs-res-border));
-  border-radius: 4px;
-  cursor: pointer;
-  user-select: none;
-  transition: all 0.15s ease;
-}
-
-.vs-res-mode-toggle:hover {
-  color: var(--col-text-primary, var(--vs-res-text));
-  border-color: var(--col-link, #3b82f6);
-  background: var(--col-action-hover, var(--vs-res-hover));
-}
-
-.vs-res-mode-toggle.active {
-  color: var(--col-link, #3b82f6);
-  border-color: var(--col-link, #3b82f6);
-  background: rgba(59, 130, 246, 0.08);
-}
-
-.vs-split-container {
-  display: flex !important;
-  flex-direction: row !important;
-  gap: 10px !important;
-  width: 100% !important;
-  align-items: stretch !important;
-}
-
-.vs-split-container > [role="tabpanel"]:not([hidden]),
-.vs-split-container > [id*="tabpanel"]:not([hidden]),
-.vs-split-container > .vs-input-panel-wrapper {
-  flex: 1 1 50% !important;
-  min-width: 0 !important;
-  max-width: 50% !important;
-}
-
-.vs-split-container > [hidden] {
-  display: none !important;
-}
-
-@media (max-width: 640px) {
-  .vs-split-container {
-    flex-direction: column !important;
-  }
-  .vs-split-container > [role="tabpanel"],
-  .vs-split-container > .vs-input-panel-wrapper {
-    max-width: 100% !important;
-    width: 100% !important;
-  }
+html[data-theme='light'] .vs-tab-input:hover,
+html[data-theme='light'] .vs-tab-input.Mui-selected,
+body[data-theme='light'] .vs-tab-input:hover,
+body[data-theme='light'] .vs-tab-input.Mui-selected,
+html.light .vs-tab-input:hover,
+html.light .vs-tab-input.Mui-selected,
+body.light .vs-tab-input:hover,
+body.light .vs-tab-input.Mui-selected {
+  color: #1976d2 !important;
 }
 
 .vs-input-panel-wrapper {
@@ -780,55 +727,57 @@ function highlightJsonLine(rawLine: string): string {
   return `${indent}${highlightJsonValue(trimmed)}`
 }
 
-function applyFlowViewMode(
-  mode: 'single' | 'split',
+function applyFlowTab(
   activeTab: 'response' | 'input',
-  panelsParent: HTMLElement,
+  tabsRoot: HTMLElement,
   responsePanel: HTMLElement,
   inputWrapper: HTMLElement,
-  inputTabBtn: HTMLElement,
-  modeToggleBtn: HTMLElement
+  inputTabBtn: HTMLElement
 ): void {
-  if (mode === 'split') {
-    panelsParent.classList.add('vs-split-container')
-    modeToggleBtn.classList.add('active')
-    modeToggleBtn.innerHTML = `${SINGLE_ICON_SVG}<span>Single</span>`
-    modeToggleBtn.title = 'Switch to single tab view'
+  const tabsList = tabsRoot.querySelector<HTMLElement>('.MuiTabs-flexContainer')
+  const indicator = tabsRoot.querySelector<HTMLElement>('.MuiTabs-indicator')
+  const nativeTabs = tabsList ? tabsList.querySelectorAll<HTMLElement>('button[role="tab"]:not(.vs-tab-input)') : []
 
-    responsePanel.style.display = ''
-    responsePanel.style.flex = '1 1 50%'
-    responsePanel.style.minWidth = '0'
-    responsePanel.style.maxWidth = '50%'
+  if (activeTab === 'input') {
+    nativeTabs.forEach((t) => {
+      t.classList.remove('Mui-selected')
+      t.setAttribute('aria-selected', 'false')
+      t.style.color = 'var(--col-text-secondary, rgb(139, 148, 158))'
+    })
+    inputTabBtn.classList.add('Mui-selected')
+    inputTabBtn.setAttribute('aria-selected', 'true')
+    inputTabBtn.style.color = 'var(--col-text-primary, rgb(240, 246, 252))'
 
-    inputWrapper.style.display = 'flex'
-    inputWrapper.style.flex = '1 1 50%'
-    inputWrapper.style.minWidth = '0'
-    inputWrapper.style.maxWidth = '50%'
-
-    inputTabBtn.classList.remove('active')
-  } else {
-    panelsParent.classList.remove('vs-split-container')
-    modeToggleBtn.classList.remove('active')
-    modeToggleBtn.innerHTML = `${SPLIT_ICON_SVG}<span>Side by Side</span>`
-    modeToggleBtn.title = 'Show input data and response side by side'
-
-    responsePanel.style.flex = ''
-    responsePanel.style.minWidth = ''
-    responsePanel.style.maxWidth = ''
-
-    inputWrapper.style.flex = ''
-    inputWrapper.style.minWidth = ''
-    inputWrapper.style.maxWidth = ''
-
-    if (activeTab === 'input') {
-      inputTabBtn.classList.add('active')
-      inputWrapper.style.display = 'flex'
-      responsePanel.style.display = 'none'
-    } else {
-      inputTabBtn.classList.remove('active')
-      inputWrapper.style.display = 'none'
-      responsePanel.style.display = ''
+    if (indicator) {
+      indicator.style.left = `${inputTabBtn.offsetLeft}px`
+      indicator.style.width = `${inputTabBtn.offsetWidth}px`
+      indicator.style.transition = 'all 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms'
     }
+
+    responsePanel.style.display = 'none'
+    inputWrapper.style.display = 'flex'
+    inputWrapper.style.width = '100%'
+  } else {
+    inputTabBtn.classList.remove('Mui-selected')
+    inputTabBtn.setAttribute('aria-selected', 'false')
+    inputTabBtn.style.color = 'var(--col-text-secondary, rgb(139, 148, 158))'
+
+    nativeTabs.forEach((t) => {
+      t.style.color = ''
+    })
+    const selectedNative = tabsList?.querySelector<HTMLElement>('button[role="tab"]:not(.vs-tab-input).Mui-selected') || nativeTabs[0]
+    if (selectedNative) {
+      selectedNative.classList.add('Mui-selected')
+      selectedNative.setAttribute('aria-selected', 'true')
+      if (indicator) {
+        indicator.style.left = `${selectedNative.offsetLeft}px`
+        indicator.style.width = `${selectedNative.offsetWidth}px`
+        indicator.style.transition = 'all 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms'
+      }
+    }
+
+    inputWrapper.style.display = 'none'
+    responsePanel.style.display = ''
   }
 }
 
@@ -838,8 +787,8 @@ function buildInputDataCard(
   onHoverLine: (lineNum: number, info: LineInfo, viewLine: HTMLElement, clientX: number) => void,
   onLeaveLine: () => void
 ): { cardEl: HTMLElement; lineMap: Map<number, LineInfo>; rawJson: string } {
-  const cardEl = document.createElement('div')
-  cardEl.className = 'vs-input-card'
+  const containerEl = document.createElement('div')
+  containerEl.className = 'w-full flex flex-col'
 
   const hasData = Boolean(
     dataResult &&
@@ -852,23 +801,30 @@ function buildInputDataCard(
   const rawJson = hasData ? JSON.stringify(dataResult!.inputData, null, 2) : ''
   const lineMap = hasData ? parseJsonLines(rawJson) : new Map<number, LineInfo>()
 
-  // Header row
+  // Header row - matches native Response header (caption + Copy button)
   const headerEl = document.createElement('div')
-  headerEl.className = 'vs-input-header'
+  headerEl.className = 'flex justify-between items-center px-1 pt-0.5 mb-1'
 
-  const titleEl = document.createElement('div')
-  titleEl.className = 'vs-input-header-title'
-  titleEl.textContent = 'Input Data'
+  const titleWrap = document.createElement('div')
+  titleWrap.className = 'flex items-center gap-1.5'
+
+  const titleEl = document.createElement('span')
+  titleEl.className = 'MuiTypography-root MuiTypography-caption'
+  titleEl.style.fontSize = '12px'
+  titleEl.style.fontWeight = '500'
+  titleEl.style.color = 'var(--col-text-secondary, rgb(139, 148, 158))'
+  titleEl.textContent = dataResult?.slugName || 'Input Data'
+  titleWrap.appendChild(titleEl)
 
   if (dataResult?.source && dataResult.source !== 'none') {
     const badge = document.createElement('span')
     badge.className = 'vs-input-badge-source'
     badge.textContent = dataResult.source
     badge.title = `Source: ${dataResult.source}`
-    titleEl.appendChild(badge)
+    titleWrap.appendChild(badge)
   }
 
-  headerEl.appendChild(titleEl)
+  headerEl.appendChild(titleWrap)
 
   if (hasData) {
     const copyBtn = document.createElement('button')
@@ -893,15 +849,18 @@ function buildInputDataCard(
     headerEl.appendChild(copyBtn)
   }
 
-  cardEl.appendChild(headerEl)
+  containerEl.appendChild(headerEl)
 
-  // Body content
+  const cardEl = document.createElement('div')
+  cardEl.className = 'vs-input-card'
+
   if (!hasData) {
     const emptyEl = document.createElement('div')
     emptyEl.className = 'vs-input-empty-state'
     emptyEl.innerHTML = `${EMPTY_ICON_SVG}<span>No input data available for this step run.</span>`
     cardEl.appendChild(emptyEl)
-    return { cardEl, lineMap, rawJson }
+    containerEl.appendChild(cardEl)
+    return { cardEl: containerEl, lineMap, rawJson }
   }
 
   const bodyEl = document.createElement('div')
@@ -964,7 +923,8 @@ function buildInputDataCard(
   })
 
   cardEl.appendChild(bodyEl)
-  return { cardEl, lineMap, rawJson }
+  containerEl.appendChild(cardEl)
+  return { cardEl: containerEl, lineMap, rawJson }
 }
 
 export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerController {
@@ -1459,18 +1419,15 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
   }
 
   interface FlowResponseState {
-    flowContainer: HTMLElement
     tabsRoot: HTMLElement
+    tabsList: HTMLElement
     panelsParent: HTMLElement
     responsePanel: HTMLElement
-    toolbar: HTMLElement
     inputWrapper: HTMLElement
     inputTabBtn: HTMLButtonElement
-    splitToggleBtn: HTMLButtonElement
     lastStepKey: string
     currentDataResult: StepInputDataResult | null
     activeTab: 'response' | 'input'
-    viewMode: 'single' | 'split'
     lineMap?: Map<number, LineInfo>
     rawJson?: string
     isRefreshing?: boolean
@@ -1512,14 +1469,12 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       state.lineMap = lineMap
       state.rawJson = rawJson
       state.inputWrapper.appendChild(cardEl)
-      applyFlowViewMode(
-        state.viewMode,
+      applyFlowTab(
         state.activeTab,
-        state.panelsParent,
+        state.tabsRoot,
         state.responsePanel,
         state.inputWrapper,
-        state.inputTabBtn,
-        state.splitToggleBtn
+        state.inputTabBtn
       )
     } finally {
       state.isRefreshing = false
@@ -1533,119 +1488,93 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     )
     if (!tabsRoot || !responsePanel) {
       if (flowState) {
-        flowState.toolbar.remove()
+        flowState.inputTabBtn.remove()
         flowState.inputWrapper.remove()
-        flowState.panelsParent.classList.remove('vs-split-container')
         flowState = null
       }
       return
     }
 
+    const tabsList = tabsRoot.querySelector<HTMLElement>('.MuiTabs-flexContainer')
     const panelsParent = responsePanel.parentElement
-    const tabsParent = tabsRoot.parentElement
-    if (!panelsParent || !tabsParent) return
+    if (!tabsList || !panelsParent) return
 
-    if (!flowState || flowState.tabsRoot !== tabsRoot || !flowState.toolbar.isConnected || !flowState.inputWrapper.isConnected) {
+    if (!flowState || flowState.tabsRoot !== tabsRoot || !flowState.inputTabBtn.isConnected || !flowState.inputWrapper.isConnected) {
       if (flowState) {
-        flowState.toolbar.remove()
+        flowState.inputTabBtn.remove()
         flowState.inputWrapper.remove()
       }
 
-      const savedMode = (localStorage.getItem('vs_response_view_mode') as 'single' | 'split') || 'single'
-
-      const toolbar = document.createElement('div')
-      toolbar.className = 'vs-response-tabs-addon'
-
       const inputTabBtn = document.createElement('button')
       inputTabBtn.type = 'button'
-      inputTabBtn.className = 'vs-res-addon-tab vs-tab-input'
+      inputTabBtn.className = 'MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary vs-tab-input'
       inputTabBtn.setAttribute('data-tab', 'input')
+      inputTabBtn.setAttribute('tabindex', '-1')
+      inputTabBtn.setAttribute('role', 'tab')
+      inputTabBtn.setAttribute('aria-selected', 'false')
       inputTabBtn.textContent = 'Input Data'
 
-      const splitToggleBtn = document.createElement('button')
-      splitToggleBtn.type = 'button'
-      splitToggleBtn.className = 'vs-res-mode-toggle'
-      splitToggleBtn.innerHTML = savedMode === 'split' ? `${SINGLE_ICON_SVG}<span>Single</span>` : `${SPLIT_ICON_SVG}<span>Side by Side</span>`
-      splitToggleBtn.title = savedMode === 'split' ? 'Switch to single tab view' : 'Show input data and response side by side'
-
-      toolbar.appendChild(inputTabBtn)
-      toolbar.appendChild(splitToggleBtn)
-
-      tabsParent.appendChild(toolbar)
+      tabsList.appendChild(inputTabBtn)
 
       const inputWrapper = document.createElement('div')
       inputWrapper.className = 'vs-input-panel-wrapper'
+      inputWrapper.style.display = 'none'
       panelsParent.insertBefore(inputWrapper, responsePanel)
 
       const currentFlowState: FlowResponseState = {
-        flowContainer: tabsParent,
         tabsRoot,
+        tabsList,
         panelsParent,
         responsePanel,
-        toolbar,
         inputWrapper,
         inputTabBtn,
-        splitToggleBtn,
         lastStepKey: '',
         currentDataResult: null,
         activeTab: 'response',
-        viewMode: savedMode,
       }
       flowState = currentFlowState
 
       inputTabBtn.addEventListener('click', (e) => {
         e.preventDefault()
         e.stopPropagation()
-        if (currentFlowState.viewMode === 'split') {
-          currentFlowState.viewMode = 'single'
-          localStorage.setItem('vs_response_view_mode', 'single')
-        }
         currentFlowState.activeTab = 'input'
-        applyFlowViewMode(
-          currentFlowState.viewMode,
+        applyFlowTab(
           currentFlowState.activeTab,
-          currentFlowState.panelsParent,
+          currentFlowState.tabsRoot,
           currentFlowState.responsePanel,
           currentFlowState.inputWrapper,
-          currentFlowState.inputTabBtn,
-          currentFlowState.splitToggleBtn
+          currentFlowState.inputTabBtn
         )
       })
 
-      splitToggleBtn.addEventListener('click', (e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        currentFlowState.viewMode = currentFlowState.viewMode === 'split' ? 'single' : 'split'
-        localStorage.setItem('vs_response_view_mode', currentFlowState.viewMode)
-        applyFlowViewMode(
-          currentFlowState.viewMode,
-          currentFlowState.activeTab,
-          currentFlowState.panelsParent,
-          currentFlowState.responsePanel,
-          currentFlowState.inputWrapper,
-          currentFlowState.inputTabBtn,
-          currentFlowState.splitToggleBtn
-        )
-      })
-
-      tabsRoot.addEventListener('click', (e) => {
+      tabsList.addEventListener('click', (e) => {
         const target = e.target as HTMLElement | null
-        const tabEl = target?.closest<HTMLElement>('button[role="tab"], .MuiTab-root')
-        if (tabEl && !tabEl.classList.contains('vs-res-addon-tab')) {
-          if (currentFlowState.viewMode === 'single') {
-            currentFlowState.activeTab = 'response'
-            applyFlowViewMode(
-              currentFlowState.viewMode,
-              currentFlowState.activeTab,
-              currentFlowState.panelsParent,
-              currentFlowState.responsePanel,
-              currentFlowState.inputWrapper,
-              currentFlowState.inputTabBtn,
-              currentFlowState.splitToggleBtn
-            )
-          }
+        const tabEl = target?.closest<HTMLElement>('button[role="tab"]')
+        if (tabEl && tabEl !== currentFlowState.inputTabBtn) {
+          currentFlowState.activeTab = 'response'
+          applyFlowTab(
+            currentFlowState.activeTab,
+            currentFlowState.tabsRoot,
+            currentFlowState.responsePanel,
+            currentFlowState.inputWrapper,
+            currentFlowState.inputTabBtn
+          )
         }
       })
+    } else {
+      if (!tabsList.contains(flowState.inputTabBtn)) {
+        tabsList.appendChild(flowState.inputTabBtn)
+      }
+      if (!panelsParent.contains(flowState.inputWrapper)) {
+        panelsParent.insertBefore(flowState.inputWrapper, responsePanel)
+      }
+      applyFlowTab(
+        flowState.activeTab,
+        flowState.tabsRoot,
+        flowState.responsePanel,
+        flowState.inputWrapper,
+        flowState.inputTabBtn
+      )
     }
 
     const urlParams = new URLSearchParams(window.location.search)
@@ -1731,9 +1660,8 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       if (hidePillTimer !== undefined) clearTimeout(hidePillTimer)
       closeHoverPill()
       if (flowState) {
-        flowState.toolbar.remove()
+        flowState.inputTabBtn.remove()
         flowState.inputWrapper.remove()
-        flowState.panelsParent.classList.remove('vs-split-container')
         flowState = null
       }
       for (const [el, s] of editors) {
