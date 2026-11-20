@@ -304,8 +304,14 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
         post({ type: 'get-step-context', requestId, scriptId, stepId, slugName })
       })
     },
-    getStepInputData(scriptId, stepId, slugName) {
-      if (!hookReady) return Promise.resolve(null)
+    async getStepInputData(scriptId, stepId, slugName) {
+      if (!hookReady) {
+        const start = Date.now()
+        while (!hookReady && Date.now() - start < 2000) {
+          await new Promise((r) => setTimeout(r, 80))
+        }
+        if (!hookReady) return null
+      }
       const requestId = makeNonce()
       return new Promise<StepInputDataResult | null>((resolve) => {
         const finish = (data: StepInputDataResult | null) => {
@@ -313,7 +319,7 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
           pendingInputData.delete(requestId)
           resolve(data)
         }
-        const timer = setTimeout(() => finish(null), 3000)
+        const timer = setTimeout(() => finish(null), 3500)
         pendingInputData.set(requestId, finish)
         post({ type: 'get-step-input-data', requestId, scriptId, stepId, slugName })
       })

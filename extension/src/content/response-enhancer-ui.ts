@@ -294,12 +294,16 @@ html[data-theme='light'], body[data-theme='light'], html.light, body.light {
   align-items: stretch !important;
 }
 
-.vs-split-container > [role="tabpanel"],
-.vs-split-container > [id*="tabpanel"],
+.vs-split-container > [role="tabpanel"]:not([hidden]),
+.vs-split-container > [id*="tabpanel"]:not([hidden]),
 .vs-split-container > .vs-input-panel-wrapper {
   flex: 1 1 50% !important;
   min-width: 0 !important;
   max-width: 50% !important;
+}
+
+.vs-split-container > [hidden] {
+  display: none !important;
 }
 
 @media (max-width: 640px) {
@@ -1523,8 +1527,11 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
   }
 
   function scanFlowResponseContainer(): void {
-    const flowContainer = document.querySelector<HTMLElement>('.responseAndConsoleTabs')
-    if (!flowContainer) {
+    const tabsRoot = document.querySelector<HTMLElement>('[data-testid="response-console-tabs"], .MuiTabs-root')
+    const responsePanel = document.querySelector<HTMLElement>(
+      '#simple-tabpanel-RESPONSE, [role="tabpanel"][id*="RESPONSE"], [role="tabpanel"][id*="0"]'
+    )
+    if (!tabsRoot || !responsePanel) {
       if (flowState) {
         flowState.toolbar.remove()
         flowState.inputWrapper.remove()
@@ -1534,17 +1541,11 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       return
     }
 
-    const tabsRoot = flowContainer.querySelector<HTMLElement>('[data-testid="response-console-tabs"], .MuiTabs-root')
-    const responsePanel = flowContainer.querySelector<HTMLElement>(
-      '[role="tabpanel"][id*="RESPONSE"], [role="tabpanel"][id*="0"], [role="tabpanel"]'
-    )
-    const panelsParent = responsePanel?.parentElement || flowContainer.querySelector<HTMLElement>('.MuiCard-root') || flowContainer
+    const panelsParent = responsePanel.parentElement
+    const tabsParent = tabsRoot.parentElement
+    if (!panelsParent || !tabsParent) return
 
-    if (!tabsRoot || !responsePanel || !panelsParent) {
-      return
-    }
-
-    if (!flowState || flowState.flowContainer !== flowContainer || !flowState.toolbar.isConnected || !flowState.inputWrapper.isConnected) {
+    if (!flowState || flowState.tabsRoot !== tabsRoot || !flowState.toolbar.isConnected || !flowState.inputWrapper.isConnected) {
       if (flowState) {
         flowState.toolbar.remove()
         flowState.inputWrapper.remove()
@@ -1570,15 +1571,14 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       toolbar.appendChild(inputTabBtn)
       toolbar.appendChild(splitToggleBtn)
 
-      const tabsFlex = tabsRoot.querySelector<HTMLElement>('.MuiTabs-flexContainer') || tabsRoot
-      tabsFlex.parentElement?.appendChild(toolbar) || tabsRoot.appendChild(toolbar)
+      tabsParent.appendChild(toolbar)
 
       const inputWrapper = document.createElement('div')
       inputWrapper.className = 'vs-input-panel-wrapper'
       panelsParent.insertBefore(inputWrapper, responsePanel)
 
       const currentFlowState: FlowResponseState = {
-        flowContainer,
+        flowContainer: tabsParent,
         tabsRoot,
         panelsParent,
         responsePanel,
@@ -1650,7 +1650,12 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
 
     const urlParams = new URLSearchParams(window.location.search)
     const currentStepKey = `${urlParams.get('slugName') || ''}:${urlParams.get('stepId') || ''}:${urlParams.get('flowhitid') || ''}`
-    if (flowState.lastStepKey !== currentStepKey || !flowState.inputWrapper.hasChildNodes()) {
+    const needsRefresh =
+      flowState.lastStepKey !== currentStepKey ||
+      !flowState.inputWrapper.hasChildNodes() ||
+      (!flowState.currentDataResult?.hasInputData && bridge.ready)
+
+    if (needsRefresh) {
       flowState.lastStepKey = currentStepKey
       void refreshFlowInputData(flowState)
     }

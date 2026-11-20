@@ -615,29 +615,39 @@ function install(): void {
       function unflattenAndEval(flatObj: Record<string, unknown>): Record<string, unknown> {
         const out: Record<string, unknown> = {}
         for (const [rawKey, rawVal] of Object.entries(flatObj)) {
-          if (rawKey.startsWith('_') && rawKey.endsWith('-Type')) continue
+          if (
+            rawKey.includes('-Type') ||
+            rawKey.includes('["_') ||
+            rawKey.includes("['_") ||
+            rawKey.startsWith('_') ||
+            rawKey.endsWith('-Type')
+          ) continue
           let val = rawVal
           if (typeof val === 'string') {
             const trimmed = val.trim()
-            const singleExpr = trimmed.match(/^\$\{([^}]+)\}$/)
-            if (singleExpr) {
-              try {
-                const fn = new Function('context', 'req', 'res', 'vals', `try { return (${singleExpr[1]}); } catch(e) { return undefined; }`)
-                const evaled = fn(context, requestSnapshot, responseSnapshot, vals)
-                if (evaled !== undefined) val = evaled
-              } catch {
-                // keep string
-              }
-            } else if (val.includes('${')) {
-              val = val.replace(/\$\{([^}]+)\}/g, (_, expr) => {
+            if (/^-?\d+$/.test(trimmed)) {
+              val = Number(trimmed)
+            } else {
+              const singleExpr = trimmed.match(/^\$\{([^}]+)\}$/)
+              if (singleExpr) {
                 try {
-                  const fn = new Function('context', 'req', 'res', 'vals', `try { return (${expr}); } catch(e) { return undefined; }`)
+                  const fn = new Function('context', 'req', 'res', 'vals', `try { return (${singleExpr[1]}); } catch(e) { return undefined; }`)
                   const evaled = fn(context, requestSnapshot, responseSnapshot, vals)
-                  return evaled !== undefined ? (typeof evaled === 'object' ? JSON.stringify(evaled) : String(evaled)) : `\${${expr}}`
+                  if (evaled !== undefined) val = evaled
                 } catch {
-                  return `\${${expr}}`
+                  // keep string
                 }
-              })
+              } else if (val.includes('${')) {
+                val = val.replace(/\$\{([^}]+)\}/g, (_, expr) => {
+                  try {
+                    const fn = new Function('context', 'req', 'res', 'vals', `try { return (${expr}); } catch(e) { return undefined; }`)
+                    const evaled = fn(context, requestSnapshot, responseSnapshot, vals)
+                    return evaled !== undefined ? (typeof evaled === 'object' ? JSON.stringify(evaled) : String(evaled)) : `\${${expr}}`
+                  } catch {
+                    return `\${${expr}}`
+                  }
+                })
+              }
             }
           }
 
@@ -702,14 +712,21 @@ function install(): void {
           // 2. Check plugin used variables in flowJson
           const isDryRun = Boolean(invData.isDryRun)
           const flowUsed = isDryRun ? obj(flowState.usedVariables) : obj(flowState.publishUsedVariables)
-          const pluginVars = obj(flowUsed.plugin)[stepId] ?? obj(flowUsed.plugin)[slugName] ?? obj(obj(flowState.usedVariables).plugin)[stepId]
+          const pluginVars =
+            obj(flowUsed.plugin)[slugName] ??
+            obj(flowUsed.plugin)[stepId] ??
+            obj(obj(flowState.usedVariables).plugin)[slugName] ??
+            obj(obj(flowState.usedVariables).plugin)[stepId] ??
+            obj(obj(flowState.publishUsedVariables).plugin)[slugName] ??
+            obj(obj(flowState.publishUsedVariables).plugin)[stepId] ??
+            {}
           if (isObj(pluginVars) && Object.keys(pluginVars).length > 0) {
             inputData = unflattenAndEval(pluginVars as Record<string, unknown>)
           } else if (isObj(invData.inputData) && ((invData.inputData as any)[slugName] || (invData.inputData as any)[stepId])) {
             inputData = (invData.inputData as any)[slugName] ?? (invData.inputData as any)[stepId]
           } else {
             // 3. Check stepsDataV3 draft inputs
-            const stepEntry = obj(obj(state.stepsDataV3)[scriptId])[stepId]
+            const stepEntry = obj(obj(state.stepsDataV3)[scriptId])[stepId] ?? obj(obj(state.stepsDataV3)[scriptId])[slugName]
             const draft = obj(isObj(stepEntry) ? stepEntry.draft || stepEntry : {})
             const pluginData = obj(draft.pluginData)
             const selVals = obj(isObj(pluginData.selectedValues) ? pluginData.selectedValues : draft.selectedValues)
@@ -1116,6 +1133,16 @@ function install(): void {
         nonce: inner.nonce,
       }
     }
+    if (inner.type === 'get-step-input-data' && typeof inner.requestId === 'string') {
+      return {
+        type: 'get-step-input-data',
+        requestId: inner.requestId.slice(0, 64),
+        scriptId: typeof inner.scriptId === 'string' ? inner.scriptId : undefined,
+        stepId: typeof inner.stepId === 'string' ? inner.stepId : undefined,
+        slugName: typeof inner.slugName === 'string' ? inner.slugName : undefined,
+        nonce: inner.nonce,
+      }
+    }
     if (
       inner.type === 'editor-action' &&
       typeof inner.requestId === 'string' &&
@@ -1162,18 +1189,6 @@ function install(): void {
         fieldLabel: inner.fieldLabel,
         value: inner.value,
         clickSave: inner.clickSave === true,
-        nonce: inner.nonce,
-      }
-    }
-    if (
-      inner.type === 'get-editor-text' &&
-      typeof inner.requestId === 'string' &&
-      typeof inner.editorId === 'string'
-    ) {
-      return {
-        type: 'get-editor-text',
-        requestId: inner.requestId.slice(0, 64),
-        editorId: inner.editorId,
         nonce: inner.nonce,
       }
     }
