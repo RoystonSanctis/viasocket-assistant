@@ -748,11 +748,16 @@ function applyFlowTab(
     inputTabBtn.setAttribute('aria-selected', 'true')
     inputTabBtn.style.color = 'var(--col-text-primary, rgb(240, 246, 252))'
 
-    if (indicator) {
-      indicator.style.left = `${inputTabBtn.offsetLeft}px`
-      indicator.style.width = `${inputTabBtn.offsetWidth}px`
-      indicator.style.transition = 'all 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms'
+    const syncIndicator = () => {
+      if (indicator && inputTabBtn.offsetWidth > 0) {
+        indicator.style.left = `${inputTabBtn.offsetLeft}px`
+        indicator.style.width = `${inputTabBtn.offsetWidth}px`
+        indicator.style.transition = 'all 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms'
+      }
     }
+    syncIndicator()
+    requestAnimationFrame(syncIndicator)
+    setTimeout(syncIndicator, 60)
 
     responsePanel.style.display = 'none'
     inputWrapper.style.display = 'flex'
@@ -769,11 +774,16 @@ function applyFlowTab(
     if (selectedNative) {
       selectedNative.classList.add('Mui-selected')
       selectedNative.setAttribute('aria-selected', 'true')
-      if (indicator) {
-        indicator.style.left = `${selectedNative.offsetLeft}px`
-        indicator.style.width = `${selectedNative.offsetWidth}px`
-        indicator.style.transition = 'all 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms'
+      const syncIndicator = () => {
+        if (indicator && selectedNative && selectedNative.offsetWidth > 0) {
+          indicator.style.left = `${selectedNative.offsetLeft}px`
+          indicator.style.width = `${selectedNative.offsetWidth}px`
+          indicator.style.transition = 'all 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms'
+        }
       }
+      syncIndicator()
+      requestAnimationFrame(syncIndicator)
+      setTimeout(syncIndicator, 60)
     }
 
     inputWrapper.style.display = 'none'
@@ -1431,6 +1441,7 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     lineMap?: Map<number, LineInfo>
     rawJson?: string
     isRefreshing?: boolean
+    wasVisible?: boolean
   }
 
   let flowState: FlowResponseState | null = null
@@ -1499,6 +1510,10 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     const panelsParent = responsePanel.parentElement
     if (!tabsList || !panelsParent) return
 
+    const urlParams = new URLSearchParams(window.location.search)
+    const currentStepKey = `${urlParams.get('slugName') || ''}:${urlParams.get('stepId') || ''}:${urlParams.get('flowhitid') || ''}`
+    const isVisible = tabsRoot.offsetWidth > 0 || tabsRoot.offsetHeight > 0
+
     if (!flowState || flowState.tabsRoot !== tabsRoot || !flowState.inputTabBtn.isConnected || !flowState.inputWrapper.isConnected) {
       if (flowState) {
         flowState.inputTabBtn.remove()
@@ -1529,9 +1544,10 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
         responsePanel,
         inputWrapper,
         inputTabBtn,
-        lastStepKey: '',
+        lastStepKey: currentStepKey,
         currentDataResult: null,
         activeTab: 'response',
+        wasVisible: isVisible,
       }
       flowState = currentFlowState
 
@@ -1562,6 +1578,15 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
           )
         }
       })
+
+      // When opening the sidebar, active tab must always be response
+      applyFlowTab(
+        currentFlowState.activeTab,
+        currentFlowState.tabsRoot,
+        currentFlowState.responsePanel,
+        currentFlowState.inputWrapper,
+        currentFlowState.inputTabBtn
+      )
     } else {
       if (!tabsList.contains(flowState.inputTabBtn) || flowState.inputTabBtn !== tabsList.firstElementChild) {
         tabsList.insertBefore(flowState.inputTabBtn, tabsList.firstElementChild)
@@ -1569,6 +1594,18 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       if (!panelsParent.contains(flowState.inputWrapper)) {
         panelsParent.insertBefore(flowState.inputWrapper, responsePanel)
       }
+
+      // If sidebar was opened (became visible) or step changed, always reset active tab to response
+      const stepChanged = flowState.lastStepKey !== currentStepKey
+      const justBecameVisible = flowState.wasVisible === false && isVisible
+      if (stepChanged || justBecameVisible) {
+        flowState.activeTab = 'response'
+        flowState.lastStepKey = currentStepKey
+        flowState.currentDataResult = null
+        flowState.inputWrapper.replaceChildren()
+      }
+      flowState.wasVisible = isVisible
+
       applyFlowTab(
         flowState.activeTab,
         flowState.tabsRoot,
@@ -1578,15 +1615,11 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       )
     }
 
-    const urlParams = new URLSearchParams(window.location.search)
-    const currentStepKey = `${urlParams.get('slugName') || ''}:${urlParams.get('stepId') || ''}:${urlParams.get('flowhitid') || ''}`
     const needsRefresh =
-      flowState.lastStepKey !== currentStepKey ||
       !flowState.inputWrapper.hasChildNodes() ||
       (!flowState.currentDataResult?.hasInputData && bridge.ready)
 
     if (needsRefresh) {
-      flowState.lastStepKey = currentStepKey
       void refreshFlowInputData(flowState)
     }
   }
