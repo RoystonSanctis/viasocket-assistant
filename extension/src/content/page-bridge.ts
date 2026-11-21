@@ -60,6 +60,12 @@ export interface PageBridge {
   editorAction(editorId: string, action: EditorAction): Promise<EditorActionResult | null>
   /** Gets full text from a Monaco editor or response viewer marked with EDITOR_ID_ATTR */
   getEditorText(editorId: string): Promise<string | null>
+  /** Mounts a native ReadOnly Monaco editor matching viaSocket theme into containerId */
+  mountMonacoViewer(containerId: string, value: string, language?: string): Promise<boolean>
+  /** Updates the content of an already mounted Monaco viewer */
+  updateMonacoViewer(containerId: string, value: string): Promise<boolean>
+  /** Disposes a mounted Monaco viewer */
+  disposeMonacoViewer(containerId: string): void
   /** Inserts text at cursor into the Monaco editor marked with EDITOR_ID_ATTR = editorId */
   editorInsert(editorId: string, text: string): Promise<boolean>
   /** Adds a dynamic variable to the current step draft in Redux */
@@ -207,6 +213,8 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
   const pendingEditorInsert = new Map<string, (success: boolean) => void>()
   const pendingDynamicVar = new Map<string, (success: boolean) => void>()
   const pendingField = new Map<string, (res: { success: boolean; error?: string }) => void>()
+  const pendingMountMonaco = new Map<string, (success: boolean) => void>()
+  const pendingUpdateMonaco = new Map<string, (success: boolean) => void>()
   const flowGraphChangedListeners = new Set<() => void>()
 
   function onMessage(ev: MessageEvent): void {
@@ -290,6 +298,16 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
       }
       case 'add-dynamic-variable-response': {
         const handler = typeof inner.requestId === 'string' ? pendingDynamicVar.get(inner.requestId) : undefined
+        if (handler) handler(inner.success === true)
+        break
+      }
+      case 'mount-monaco-viewer-response': {
+        const handler = typeof inner.requestId === 'string' ? pendingMountMonaco.get(inner.requestId) : undefined
+        if (handler) handler(inner.success === true)
+        break
+      }
+      case 'update-monaco-viewer-response': {
+        const handler = typeof inner.requestId === 'string' ? pendingUpdateMonaco.get(inner.requestId) : undefined
         if (handler) handler(inner.success === true)
         break
       }
@@ -414,6 +432,38 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
         pendingEditorText.set(requestId, finish)
         post({ type: 'get-editor-text', requestId, editorId })
       })
+    },
+    mountMonacoViewer(containerId, value, language = 'json') {
+      if (!hookReady) return Promise.resolve(false)
+      const requestId = makeNonce()
+      return new Promise<boolean>((resolve) => {
+        const finish = (result: boolean) => {
+          clearTimeout(timer)
+          pendingMountMonaco.delete(requestId)
+          resolve(result)
+        }
+        const timer = setTimeout(() => finish(false), 3000)
+        pendingMountMonaco.set(requestId, finish)
+        post({ type: 'mount-monaco-viewer', requestId, containerId, value, language })
+      })
+    },
+    updateMonacoViewer(containerId, value) {
+      if (!hookReady) return Promise.resolve(false)
+      const requestId = makeNonce()
+      return new Promise<boolean>((resolve) => {
+        const finish = (result: boolean) => {
+          clearTimeout(timer)
+          pendingUpdateMonaco.delete(requestId)
+          resolve(result)
+        }
+        const timer = setTimeout(() => finish(false), 2000)
+        pendingUpdateMonaco.set(requestId, finish)
+        post({ type: 'update-monaco-viewer', requestId, containerId, value })
+      })
+    },
+    disposeMonacoViewer(containerId) {
+      if (!hookReady) return
+      post({ type: 'dispose-monaco-viewer', containerId })
     },
     editorInsert(editorId, text) {
       if (!hookReady) return Promise.resolve(false)

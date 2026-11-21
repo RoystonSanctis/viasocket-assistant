@@ -282,6 +282,8 @@ export type PageToContentMsg =
   | { type: 'add-dynamic-variable-response'; requestId: string; success: boolean }
   | { type: 'field-value-response'; requestId: string; success: boolean; error?: string }
   | { type: 'editor-text-response'; requestId: string; text: string | null }
+  | { type: 'mount-monaco-viewer-response'; requestId: string; success: boolean }
+  | { type: 'update-monaco-viewer-response'; requestId: string; success: boolean }
 
 export type ContentToPageMsg =
   /** First message; the hook adopts this nonce and ignores any other init until that nonce is released */
@@ -317,6 +319,12 @@ export type ContentToPageMsg =
   | { type: 'add-dynamic-variable'; requestId: string; name: string }
   /** Get text content of a Monaco editor or response viewer marked with EDITOR_ID_ATTR */
   | { type: 'get-editor-text'; requestId: string; editorId: string }
+  /** Mount a native ReadOnly Monaco editor matching viaSocket theme into containerId */
+  | { type: 'mount-monaco-viewer'; requestId: string; containerId: string; value: string; language?: string }
+  /** Update content of an already mounted Monaco viewer */
+  | { type: 'update-monaco-viewer'; requestId: string; containerId: string; value: string }
+  /** Dispose a mounted Monaco viewer */
+  | { type: 'dispose-monaco-viewer'; containerId: string }
   /** The content script was orphaned (extension updated or reloaded): the hook pairs with the next init instead */
   | { type: 'release' }
 

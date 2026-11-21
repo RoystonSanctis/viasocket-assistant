@@ -271,6 +271,23 @@ body.light .vs-tab-input.Mui-selected {
   box-sizing: border-box;
 }
 
+.vs-monaco-viewer-box {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 1px solid var(--col-border, rgba(213, 217, 220, 0.24));
+  border-radius: 4px;
+  padding: 4px;
+  background-color: var(--col-background-paper);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.vs-monaco-editor-host {
+  width: 100%;
+  min-height: 25px;
+}
+
 .vs-input-card {
   display: flex;
   flex-direction: column;
@@ -793,9 +810,8 @@ function applyFlowTab(
 
 function buildInputDataCard(
   dataResult: StepInputDataResult | null,
-  onCopy: (text: string) => Promise<void> | void,
-  onHoverLine: (lineNum: number, info: LineInfo, viewLine: HTMLElement, clientX: number) => void,
-  onLeaveLine: () => void
+  hostId: string,
+  onCopy: (text: string) => Promise<void> | void
 ): { cardEl: HTMLElement; lineMap: Map<number, LineInfo>; rawJson: string } {
   const containerEl = document.createElement('div')
   containerEl.className = 'w-full flex flex-col'
@@ -862,79 +878,39 @@ function buildInputDataCard(
 
   containerEl.appendChild(headerEl)
 
-  const cardEl = document.createElement('div')
-  cardEl.className = 'vs-input-card'
-
   if (!hasData) {
+    const emptyCard = document.createElement('div')
+    emptyCard.className = 'vs-input-card'
     const emptyEl = document.createElement('div')
     emptyEl.className = 'vs-input-empty-state'
     emptyEl.innerHTML = `${EMPTY_ICON_SVG}<span>No input data available for this step run.</span>`
-    cardEl.appendChild(emptyEl)
-    containerEl.appendChild(cardEl)
+    emptyCard.appendChild(emptyEl)
+    containerEl.appendChild(emptyCard)
     return { cardEl: containerEl, lineMap, rawJson }
   }
 
-  const bodyEl = document.createElement('div')
-  bodyEl.className = 'vs-input-body'
-
-  const lines = rawJson.split(/\r?\n/)
-
-  const gutterEl = document.createElement('div')
-  gutterEl.className = 'vs-input-gutter'
-
-  const linesContainer = document.createElement('div')
-  linesContainer.className = 'vs-input-lines'
-
-  for (let i = 0; i < lines.length; i++) {
-    const lineNum = i + 1
-    const rawLine = lines[i] ?? ''
-
-    // Gutter line number
-    const gLine = document.createElement('div')
-    gLine.className = 'vs-input-gutter-line'
-    gLine.textContent = String(lineNum)
-    gutterEl.appendChild(gLine)
-
-    // Code line
-    const viewLine = document.createElement('div')
-    viewLine.className = 'view-line vs-input-view-line'
-    viewLine.setAttribute('data-line-number', String(lineNum))
-    viewLine.innerHTML = highlightJsonLine(rawLine)
-
-    // Array count badge if this line is an array
-    const info = lineMap.get(lineNum)
-    if (info && info.isArray && Array.isArray(info.value) && typeof info.arrayCount === 'number') {
-      const badge = document.createElement('span')
-      badge.className = ARRAY_BADGE_CLASS
-      badge.textContent = `${info.arrayCount} ${info.arrayCount === 1 ? 'item' : 'items'}`
-      badge.title = `${info.arrayCount} items in array`
-      const textLength = rawLine.length
-      const leftPx = Math.max(90, Math.round(textLength * 8.2 + 8))
-      badge.style.left = `${leftPx}px`
-      viewLine.appendChild(badge)
-    }
-
-    // Hover listeners
-    viewLine.addEventListener('mousemove', (e) => {
-      if (info && (info.key || info.path)) {
-        onHoverLine(lineNum, info, viewLine, e.clientX)
-      } else {
-        onLeaveLine()
-      }
-    })
-
-    linesContainer.appendChild(viewLine)
+  // Monaco Viewer Box - exact same styling as viaSocket MONACO_CONTAINER_BORDER_SX
+  const monacoBox = document.createElement('div')
+  monacoBox.className = 'vs-monaco-viewer-box'
+  monacoBox.style.border = '1px solid var(--col-border, rgba(213, 217, 220, 0.24))'
+  monacoBox.style.borderRadius = '4px'
+  monacoBox.style.padding = '4px'
+  monacoBox.style.backgroundColor = 'var(--col-background-paper)'
+  monacoBox.style.overflow = 'hidden'
+  monacoBox.style.width = '100%'
+  monacoBox.style.boxSizing = 'border-box'
+  if (dataResult?.stepType) {
+    monacoBox.setAttribute('data-step-type', dataResult.stepType)
   }
 
-  bodyEl.appendChild(gutterEl)
-  bodyEl.appendChild(linesContainer)
+  const hostEl = document.createElement('div')
+  hostEl.id = hostId
+  hostEl.className = 'vs-monaco-editor-host'
+  hostEl.style.width = '100%'
+  hostEl.style.minHeight = '25px'
+  monacoBox.appendChild(hostEl)
+  containerEl.appendChild(monacoBox)
 
-  bodyEl.addEventListener('mouseleave', () => {
-    onLeaveLine()
-  })
-
-  cardEl.appendChild(bodyEl)
-  containerEl.appendChild(cardEl)
   return { cardEl: containerEl, lineMap, rawJson }
 }
 
@@ -956,7 +932,7 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
   function isResponseViewer(el: HTMLElement): boolean {
     if (
       el.closest(
-        '[role="tabpanel"], [id*="tabpanel"], [aria-labelledby*="simple-tab-"], [class*="responseAndConsole"], [class*="responseFlowData"], [class*="JsonViewer"], .json-viewer, [class*="ReadOnlyMonaco"], [data-testid*="response"], [data-testid*="console"], [data-testid*="payload"]'
+        '[role="tabpanel"], [id*="tabpanel"], [aria-labelledby*="simple-tab-"], [class*="responseAndConsole"], [class*="responseFlowData"], [class*="JsonViewer"], .json-viewer, [class*="ReadOnlyMonaco"], [data-testid*="response"], [data-testid*="console"], [data-testid*="payload"], .vs-input-panel-wrapper, .vs-monaco-viewer-box'
       )
     ) {
       return true
@@ -1138,9 +1114,16 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     const pill = document.createElement('div')
     pill.id = HOVER_PILL_ID
 
-    const isInput = 'isInput' in source && Boolean(source.isInput)
+    const isInput =
+      ('isInput' in source && Boolean(source.isInput)) ||
+      ('monacoEl' in source && Boolean(source.monacoEl.closest('.vs-input-panel-wrapper, .vs-monaco-viewer-box')))
     const sourceEl = 'monacoEl' in source ? source.monacoEl : source.containerEl
-    const stepType = 'stepType' in source ? source.stepType : undefined
+    const stepType =
+      'stepType' in source
+        ? source.stepType
+        : ('monacoEl' in source
+            ? source.monacoEl.closest('[data-step-type]')?.getAttribute('data-step-type') || undefined
+            : undefined)
 
     const headerLabel = isInput
       ? 'Input Data'
@@ -1362,8 +1345,9 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
   function attachCopyResponseButton(state: EditorState): void {
     const { monacoEl } = state
 
-    // Check if copy button already mounted
+    // Check if copy button already mounted or if inside input data panel (which has Copy Input)
     if (
+      monacoEl.closest('.vs-input-panel-wrapper, .vs-monaco-viewer-box') ||
       monacoEl.parentElement?.querySelector(`.${COPY_BTN_CLASS}`) ||
       monacoEl.closest('.flex.flex-col')?.querySelector(`.${COPY_BTN_CLASS}`)
     ) {
@@ -1439,6 +1423,7 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     lastStepKey: string
     currentDataResult: StepInputDataResult | null
     activeTab: 'response' | 'input'
+    currentHostId?: string
     lineMap?: Map<number, LineInfo>
     rawJson?: string
     isRefreshing?: boolean
@@ -1457,30 +1442,39 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       const dataResult = await bridge.getStepInputData(undefined, stepId, slugName)
       state.currentDataResult = dataResult
 
+      const hasData = Boolean(
+        dataResult &&
+        dataResult.hasInputData &&
+        dataResult.inputData !== null &&
+        dataResult.inputData !== undefined &&
+        (typeof dataResult.inputData !== 'object' || Object.keys(dataResult.inputData as object).length > 0)
+      )
+
+      if (state.currentHostId) {
+        bridge.disposeMonacoViewer(state.currentHostId)
+        state.currentHostId = undefined
+      }
+
       state.inputWrapper.replaceChildren()
 
+      const hostId = `vs-input-monaco-${makeId()}`
       const { cardEl, lineMap, rawJson } = buildInputDataCard(
         dataResult,
+        hostId,
         async (textToCopy) => {
           await copyText(textToCopy)
-        },
-        (lineNum, info, viewLine, clientX) => {
-          showHoverPill(
-            { containerEl: cardEl, isInput: true, stepType: dataResult?.stepType },
-            lineNum,
-            info,
-            viewLine,
-            clientX
-          )
-        },
-        () => {
-          scheduleCloseHoverPill()
         }
       )
 
       state.lineMap = lineMap
       state.rawJson = rawJson
       state.inputWrapper.appendChild(cardEl)
+
+      if (hasData) {
+        state.currentHostId = hostId
+        void bridge.mountMonacoViewer(hostId, rawJson, 'json')
+      }
+
       applyFlowTab(
         state.activeTab,
         state.tabsRoot,
@@ -1500,6 +1494,9 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
     )
     if (!tabsRoot || !responsePanel) {
       if (flowState) {
+        if (flowState.currentHostId) {
+          bridge.disposeMonacoViewer(flowState.currentHostId)
+        }
         flowState.inputTabBtn.remove()
         flowState.inputWrapper.remove()
         flowState = null
@@ -1600,6 +1597,10 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       const stepChanged = flowState.lastStepKey !== currentStepKey
       const justBecameVisible = flowState.wasVisible === false && isVisible
       if (stepChanged || justBecameVisible) {
+        if (flowState.currentHostId) {
+          bridge.disposeMonacoViewer(flowState.currentHostId)
+          flowState.currentHostId = undefined
+        }
         flowState.activeTab = 'response'
         flowState.lastStepKey = currentStepKey
         flowState.currentDataResult = null
@@ -1622,6 +1623,11 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
 
     if (needsRefresh) {
       void refreshFlowInputData(flowState)
+    } else if (flowState && flowState.currentHostId && flowState.rawJson) {
+      const hostEl = document.getElementById(flowState.currentHostId)
+      if (hostEl && !hostEl.querySelector('.monaco-editor')) {
+        void bridge.mountMonacoViewer(flowState.currentHostId, flowState.rawJson, 'json')
+      }
     }
   }
 
@@ -1695,6 +1701,9 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
       if (hidePillTimer !== undefined) clearTimeout(hidePillTimer)
       closeHoverPill()
       if (flowState) {
+        if (flowState.currentHostId) {
+          bridge.disposeMonacoViewer(flowState.currentHostId)
+        }
         flowState.inputTabBtn.remove()
         flowState.inputWrapper.remove()
         flowState = null

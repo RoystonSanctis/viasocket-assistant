@@ -27,7 +27,14 @@ import {
 } from '../shared/messages'
 import type { ObservedEvent } from '../shared/observed'
 import { resolveEnv } from '../background/tools/env'
-import { editorAction, getEditorValue, insertIntoEditor } from './editors'
+import {
+  editorAction,
+  getEditorValue,
+  insertIntoEditor,
+  mountMonacoViewer,
+  updateMonacoViewer,
+  disposeMonacoViewer,
+} from './editors'
 import {
   classify, dryRunFailed, isObj, isPageMutation, MAX_PARSE_CHARS, outcomeInBody, parseCapped, shortErrorText, SLUG_MAX,
 } from '../shared/classify'
@@ -1868,6 +1875,42 @@ function install(): void {
         nonce: inner.nonce,
       }
     }
+    if (
+      inner.type === 'mount-monaco-viewer' &&
+      typeof inner.requestId === 'string' &&
+      typeof inner.containerId === 'string' &&
+      typeof inner.value === 'string'
+    ) {
+      return {
+        type: 'mount-monaco-viewer',
+        requestId: inner.requestId.slice(0, 64),
+        containerId: inner.containerId,
+        value: inner.value,
+        language: typeof inner.language === 'string' ? inner.language : undefined,
+        nonce: inner.nonce,
+      }
+    }
+    if (
+      inner.type === 'update-monaco-viewer' &&
+      typeof inner.requestId === 'string' &&
+      typeof inner.containerId === 'string' &&
+      typeof inner.value === 'string'
+    ) {
+      return {
+        type: 'update-monaco-viewer',
+        requestId: inner.requestId.slice(0, 64),
+        containerId: inner.containerId,
+        value: inner.value,
+        nonce: inner.nonce,
+      }
+    }
+    if (inner.type === 'dispose-monaco-viewer' && typeof inner.containerId === 'string') {
+      return {
+        type: 'dispose-monaco-viewer',
+        containerId: inner.containerId,
+        nonce: inner.nonce,
+      }
+    }
     if (inner.type === 'release') return { type: 'release', nonce: inner.nonce }
     return null
   }
@@ -1921,6 +1964,20 @@ function install(): void {
       if (msg.type === 'get-editor-text') {
         const text = getEditorValue(msg.editorId)
         post({ type: 'editor-text-response', requestId: msg.requestId, text })
+        return
+      }
+      if (msg.type === 'mount-monaco-viewer') {
+        const success = mountMonacoViewer(msg.containerId, msg.value, msg.language)
+        post({ type: 'mount-monaco-viewer-response', requestId: msg.requestId, success })
+        return
+      }
+      if (msg.type === 'update-monaco-viewer') {
+        const success = updateMonacoViewer(msg.containerId, msg.value)
+        post({ type: 'update-monaco-viewer-response', requestId: msg.requestId, success })
+        return
+      }
+      if (msg.type === 'dispose-monaco-viewer') {
+        disposeMonacoViewer(msg.containerId)
         return
       }
       if (msg.type === 'add-dynamic-variable') {

@@ -256,3 +256,149 @@ export function getEditorValue(editorId: string): string | null {
     return null
   }
 }
+
+interface MountedViewer {
+  editor: any
+  container: HTMLElement
+}
+
+const mountedViewers = new Map<string, MountedViewer>()
+
+function getResolvedMonacoTheme(): string {
+  const isDarkMode =
+    document.documentElement.classList.contains('dark') ||
+    document.body.classList.contains('dark') ||
+    document.documentElement.getAttribute('data-theme') === 'dark'
+  return isDarkMode ? 'vs-dark-transparent' : 'vs-transparent'
+}
+
+let themeObserverInitialized = false
+function ensureThemeObserver(): void {
+  if (themeObserverInitialized || typeof MutationObserver === 'undefined') return
+  themeObserverInitialized = true
+  const observer = new MutationObserver(() => {
+    const theme = getResolvedMonacoTheme()
+    for (const v of mountedViewers.values()) {
+      if (v.container.isConnected && typeof v.editor?.updateOptions === 'function') {
+        v.editor.updateOptions({ theme })
+      }
+    }
+  })
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] })
+  if (document.body) {
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class', 'data-theme'] })
+  }
+}
+
+export function mountMonacoViewer(containerId: string, value: string, language = 'json'): boolean {
+  try {
+    ensureThemeObserver()
+    const container = document.getElementById(containerId)
+    if (!container) return false
+
+    // If already mounted and connected, simply update its value
+    const existing = mountedViewers.get(containerId)
+    if (existing && existing.container.isConnected) {
+      const model = existing.editor.getModel()
+      if (model && typeof model.setValue === 'function') {
+        model.setValue(value)
+        return true
+      }
+    }
+
+    // Find prototype Monaco editor on the page to borrow instantiationService and constructor
+    const allMonaco = document.querySelectorAll('.monaco-editor')
+    let prototypeEditor: any = null
+    for (const el of allMonaco) {
+      const ed = findEditor(el)
+      if (ed && (ed as any)._instantiationService) {
+        prototypeEditor = ed
+        break
+      }
+    }
+
+    if (!prototypeEditor || !prototypeEditor._instantiationService) {
+      return false
+    }
+
+    container.innerHTML = ''
+
+    const theme = getResolvedMonacoTheme()
+    const editor = prototypeEditor._instantiationService.createInstance(
+      prototypeEditor.constructor,
+      container,
+      {
+        readOnly: true,
+        value,
+        language: language || 'json',
+        theme,
+        fontSize: 14,
+        lineNumbers: 'on',
+        folding: true,
+        lineNumbersMinChars: 3,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        automaticLayout: true,
+        wordWrap: 'on',
+        scrollbar: {
+          alwaysConsumeMouseWheel: false,
+          verticalScrollbarSize: 8,
+        },
+        fixedOverflowWidgets: true,
+        stickyScroll: { enabled: false },
+        renderLineHighlight: 'none',
+      }
+    )
+
+    const updateHeight = () => {
+      const lineCount = value.split('\n').length
+      const dynamicH = Math.min(Math.max(lineCount * 20, 25), 400)
+      const realH = typeof editor.getContentHeight === 'function' ? editor.getContentHeight() : dynamicH
+      const clamped = Math.min(Math.max(realH, 25), 400)
+      container.style.height = `${clamped}px`
+    }
+    updateHeight()
+    if (typeof editor.onDidContentSizeChange === 'function') {
+      editor.onDidContentSizeChange(updateHeight)
+    }
+
+    const domNode = typeof editor.getDomNode === 'function' ? editor.getDomNode() : container.querySelector('.monaco-editor')
+    if (domNode) {
+      editors.set(domNode, editor)
+    }
+
+    mountedViewers.set(containerId, { editor, container })
+    return true
+  } catch {
+    return false
+  }
+}
+
+export function updateMonacoViewer(containerId: string, value: string): boolean {
+  try {
+    const existing = mountedViewers.get(containerId)
+    if (!existing || !existing.container.isConnected) return false
+    const model = existing.editor.getModel()
+    if (model && typeof model.setValue === 'function') {
+      model.setValue(value)
+      return true
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
+export function disposeMonacoViewer(containerId: string): void {
+  try {
+    const existing = mountedViewers.get(containerId)
+    if (existing) {
+      if (typeof existing.editor?.dispose === 'function') {
+        existing.editor.dispose()
+      }
+      mountedViewers.delete(containerId)
+    }
+  } catch {
+    // ignore
+  }
+}
