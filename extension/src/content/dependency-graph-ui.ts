@@ -1016,9 +1016,8 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
     currentGraphData = data
     lastFlowHitId = new URLSearchParams(window.location.search).get('flowhitid') || ''
-    const initDrawer = (document.querySelector('[data-testid="logs-popover-container"]') ||
-      document.querySelector('.MuiPopper-root')) as HTMLElement | null
-    lastDrawerOpen = !!initDrawer && initDrawer.offsetWidth > 0 && initDrawer.offsetHeight > 0
+    const initDrawer = getLogsHistoryDrawer()
+    lastDrawerOpen = !!initDrawer
 
     renderView()
     requestAnimationFrame(() => {
@@ -1270,6 +1269,18 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     }, durationMs + 20)
   }
 
+  function getLogsHistoryDrawer(): HTMLElement | null {
+    const container = (document.querySelector('[data-testid="logs-popover-container"]') ||
+      document.querySelector('input[placeholder*="History"]')?.closest('.MuiPaper-root, .MuiBox-root, .MuiPopper-root') ||
+      document.querySelector('[data-testid="logs-list-container"]')?.closest('.MuiPaper-root, .MuiBox-root, .MuiPopper-root') ||
+      document.querySelector('[data-testid="logs-slider-card"]')) as HTMLElement | null
+
+    if (container && container.offsetWidth > 0 && container.offsetHeight > 0) {
+      return container
+    }
+    return null
+  }
+
   function fitView(animated = false): void {
     const viewport = overlayEl?.querySelector('#vs-graph-viewport') as HTMLElement | null
     if (!viewport || !currentGraphData) return
@@ -1301,10 +1312,8 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     const graphHeight = maxY - minY
     if (graphWidth <= 0 || graphHeight <= 0) return
 
-    const historyDrawer = (document.querySelector('[data-testid="logs-popover-container"]') ||
-      document.querySelector('.MuiPopper-root') ||
-      document.querySelector('input[placeholder*="History"]')?.closest('.MuiPaper-root, .MuiBox-root')) as HTMLElement | null
-    const isHistoryDrawerOpen = !!historyDrawer && historyDrawer.offsetWidth > 0 && historyDrawer.offsetHeight > 0
+    const historyDrawer = getLogsHistoryDrawer()
+    const isHistoryDrawerOpen = !!historyDrawer
     const drawerRight = isHistoryDrawerOpen ? historyDrawer.getBoundingClientRect().right : 0
     const availableLeft = drawerRight > 0 ? drawerRight + 24 : 0
     const availableWidth = Math.max(300, rect.width - availableLeft)
@@ -1829,9 +1838,8 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     ensureTabButton()
 
     if (isGraphActive) {
-      const drawer = (document.querySelector('[data-testid="logs-popover-container"]') ||
-        document.querySelector('.MuiPopper-root')) as HTMLElement | null
-      const isDrawerOpen = !!drawer && drawer.offsetWidth > 0 && drawer.offsetHeight > 0
+      const drawer = getLogsHistoryDrawer()
+      const isDrawerOpen = !!drawer
       if (isDrawerOpen !== lastDrawerOpen) {
         lastDrawerOpen = isDrawerOpen
         fitView(true)
