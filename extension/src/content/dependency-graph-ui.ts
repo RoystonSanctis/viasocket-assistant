@@ -326,6 +326,7 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 /* Native viaSocket Card Style (JSON Crack-inspired property tables) */
 .vs-graph-card {
   position: absolute;
+  z-index: 5;
   width: 360px;
   background-color: rgb(21, 27, 35);
   border: 1.5px solid rgba(255, 255, 255, 0.1);
@@ -342,11 +343,13 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 .vs-graph-card:hover {
   border-color: rgba(255, 255, 255, 0.24);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+  z-index: 7;
 }
 
 .vs-graph-card.selected {
   border-color: #58a6ff;
   box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.25);
+  z-index: 8;
 }
 
 /* Header */
@@ -785,6 +788,7 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   border-radius: 10px;
   padding: 16px 20px;
   z-index: 1;
+  pointer-events: none;
 }
 
 .vs-graph-lane-header {
@@ -799,6 +803,7 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   display: flex;
   align-items: center;
   gap: 6px;
+  pointer-events: auto;
 }
 
 /* Tooltip floating bubble */
@@ -1559,7 +1564,15 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
   function setupCanvasInteractions(viewport: HTMLElement): void {
     viewport.addEventListener('mousedown', (e) => {
-      if ((e.target as HTMLElement).closest('.vs-graph-card') || (e.target as HTMLElement).closest('button')) return
+      const target = e.target as HTMLElement | null
+      if (
+        !target ||
+        target.closest('.vs-graph-card') ||
+        target.closest('.vs-graph-independent-lane') ||
+        target.closest('.vs-graph-modal-backdrop') ||
+        target.closest('button') ||
+        target.closest('.vs-graph-top-bar')
+      ) return
       isDragging = true
       dragStart = { x: e.clientX, y: e.clientY }
       panStart = { x: pan.x, y: pan.y }
