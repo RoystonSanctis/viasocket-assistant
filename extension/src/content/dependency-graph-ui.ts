@@ -829,30 +829,103 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 }
 
 .vs-graph-modal {
-  width: 560px;
-  max-width: 90vw;
-  max-height: 80vh;
+  width: 600px;
+  max-width: 92vw;
+  max-height: 82vh;
   background: #151b23;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85);
   overflow: hidden;
+  position: relative;
 }
 
 .vs-graph-modal-header {
-  padding: 12px 16px;
+  padding: 10px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  background: #161b22;
 }
 
 .vs-graph-modal-title {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 500;
   color: #f0f6fc;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.vs-graph-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.vs-graph-modal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  font-size: 11.5px;
+  font-weight: 500;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  color: #c9d1d9;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  line-height: 1.3;
+}
+
+.vs-graph-modal-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+}
+
+.vs-graph-modal-btn.copy {
+  color: #58a6ff;
+  border-color: rgba(88, 166, 255, 0.3);
+  background: rgba(88, 166, 255, 0.08);
+}
+
+.vs-graph-modal-btn.copy:hover {
+  background: rgba(88, 166, 255, 0.18);
+  border-color: rgba(88, 166, 255, 0.5);
+  color: #79c0ff;
+}
+
+.vs-graph-modal-btn.copied {
+  background: rgba(46, 160, 67, 0.15) !important;
+  border-color: rgba(46, 160, 67, 0.45) !important;
+  color: #3fb950 !important;
+}
+
+.vs-graph-modal-btn.close:hover {
+  background: rgba(248, 81, 73, 0.15);
+  border-color: rgba(248, 81, 73, 0.4);
+  color: #f85149;
+}
+
+.vs-graph-modal-body-wrapper {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .vs-graph-modal-body {
@@ -863,6 +936,9 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   line-height: 1.5;
   color: #c9d1d9;
   background: #0d1117;
+  margin: 0;
+  max-height: calc(82vh - 55px);
+  user-select: text;
 }
 `
 
@@ -997,28 +1073,134 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     titleEl.className = 'vs-graph-modal-title'
     titleEl.innerText = title
 
+    const actionsEl = document.createElement('div')
+    actionsEl.className = 'vs-graph-modal-actions'
+
+    // Formatted text representation for preview & clipboard copy
+    let textToDisplay = ''
+    try {
+      if (typeof data === 'string') {
+        const trimmed = data.trim()
+        if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+          try {
+            textToDisplay = JSON.stringify(JSON.parse(trimmed), null, 2)
+          } catch {
+            textToDisplay = data
+          }
+        } else {
+          textToDisplay = data
+        }
+      } else {
+        textToDisplay = JSON.stringify(data, null, 2)
+      }
+    } catch {
+      textToDisplay = String(data)
+    }
+
+    const copyBtn = document.createElement('button')
+    copyBtn.className = 'vs-graph-modal-btn copy'
+    copyBtn.type = 'button'
+    copyBtn.innerHTML = `
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+      </svg>
+      <span>Copy Value</span>
+    `
+    copyBtn.title = 'Copy value to clipboard'
+
+    let copyTimeout: ReturnType<typeof setTimeout> | undefined
+    const triggerCopy = async () => {
+      let copied = false
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(textToDisplay)
+          copied = true
+        }
+      } catch {
+        // Fallback to execCommand
+      }
+
+      if (!copied) {
+        try {
+          const ta = document.createElement('textarea')
+          ta.value = textToDisplay
+          ta.style.position = 'fixed'
+          ta.style.top = '0'
+          ta.style.left = '0'
+          ta.style.opacity = '0.01'
+          document.body.appendChild(ta)
+          ta.focus()
+          ta.select()
+          document.execCommand('copy')
+          ta.remove()
+        } catch {
+          // Ignore
+        }
+      }
+
+      copyBtn.classList.add('copied')
+      copyBtn.innerHTML = `
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>Copied!</span>
+      `
+      if (copyTimeout) clearTimeout(copyTimeout)
+      copyTimeout = setTimeout(() => {
+        copyBtn.classList.remove('copied')
+        copyBtn.innerHTML = `
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: middle;">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <span>Copy Value</span>
+        `
+      }, 1800)
+    }
+
+    copyBtn.onclick = triggerCopy
+
     const closeBtn = document.createElement('button')
-    closeBtn.className = 'vs-graph-back-btn'
+    closeBtn.className = 'vs-graph-modal-btn close'
+    closeBtn.type = 'button'
     closeBtn.innerText = '✕ Close'
-    closeBtn.onclick = () => backdrop.remove()
+
+    const closeModal = () => {
+      backdrop.remove()
+      document.removeEventListener('keydown', onKeyDown)
+    }
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeModal()
+      }
+    }
+    document.addEventListener('keydown', onKeyDown)
+
+    closeBtn.onclick = closeModal
+
+    actionsEl.appendChild(copyBtn)
+    actionsEl.appendChild(closeBtn)
 
     header.appendChild(titleEl)
-    header.appendChild(closeBtn)
+    header.appendChild(actionsEl)
+
+    const bodyWrapper = document.createElement('div')
+    bodyWrapper.className = 'vs-graph-modal-body-wrapper'
 
     const body = document.createElement('pre')
     body.className = 'vs-graph-modal-body'
-    try {
-      body.innerText = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
-    } catch {
-      body.innerText = String(data)
-    }
+    body.innerText = textToDisplay
+
+    bodyWrapper.appendChild(body)
 
     modal.appendChild(header)
-    modal.appendChild(body)
+    modal.appendChild(bodyWrapper)
     backdrop.appendChild(modal)
 
     backdrop.onclick = (e) => {
-      if (e.target === backdrop) backdrop.remove()
+      if (e.target === backdrop) closeModal()
     }
     document.body.appendChild(backdrop)
   }
