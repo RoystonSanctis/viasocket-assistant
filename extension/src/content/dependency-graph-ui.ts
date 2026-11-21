@@ -456,9 +456,46 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 10px;
+  padding: 5px 10px;
   background: rgba(0, 0, 0, 0.22);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.12s ease;
+}
+
+.vs-graph-section-header:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.vs-graph-section-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vs-graph-section-chevron {
+  font-size: 10px;
+  color: #8b949e;
+  line-height: 1;
+  display: inline-block;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.vs-graph-section-header:hover .vs-graph-section-chevron {
+  color: #f0f6fc;
+}
+
+.vs-graph-section.collapsed .vs-graph-section-chevron {
+  transform: rotate(-90deg);
+}
+
+.vs-graph-section.collapsed .vs-graph-section-header {
+  border-bottom: none;
+}
+
+.vs-graph-section.collapsed .vs-graph-rows-list {
+  display: none !important;
 }
 
 .vs-graph-section-tag {
@@ -468,6 +505,11 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   color: #8b949e;
   text-transform: uppercase;
   font-family: Inter, system-ui, sans-serif;
+  transition: color 0.12s ease;
+}
+
+.vs-graph-section-header:hover .vs-graph-section-tag {
+  color: #c9d1d9;
 }
 
 .vs-graph-section-count {
@@ -2214,10 +2256,22 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
       const secHeader = document.createElement('div')
       secHeader.className = 'vs-graph-section-header'
+      secHeader.setAttribute('role', 'button')
+      secHeader.setAttribute('aria-expanded', 'true')
+      secHeader.setAttribute('title', 'Click to collapse / expand inputs')
       secHeader.innerHTML = `
-        <span class="vs-graph-section-tag">With / Inputs</span>
+        <div class="vs-graph-section-header-left">
+          <span class="vs-graph-section-chevron">▾</span>
+          <span class="vs-graph-section-tag">With / Inputs</span>
+        </div>
         <span class="vs-graph-section-count">${node.inputs.length}</span>
       `
+      secHeader.addEventListener('click', (e) => {
+        e.stopPropagation()
+        const isCollapsed = inSection.classList.toggle('collapsed')
+        secHeader.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true')
+        reflowNodePositions()
+      })
       inSection.appendChild(secHeader)
 
       const rowsList = document.createElement('div')
@@ -2247,10 +2301,22 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
       const secHeader = document.createElement('div')
       secHeader.className = 'vs-graph-section-header'
+      secHeader.setAttribute('role', 'button')
+      secHeader.setAttribute('aria-expanded', 'true')
+      secHeader.setAttribute('title', 'Click to collapse / expand outputs')
       secHeader.innerHTML = `
-        <span class="vs-graph-section-tag">Outputs</span>
+        <div class="vs-graph-section-header-left">
+          <span class="vs-graph-section-chevron">▾</span>
+          <span class="vs-graph-section-tag">Outputs</span>
+        </div>
         <span class="vs-graph-section-count">${node.outputs.length}</span>
       `
+      secHeader.addEventListener('click', (e) => {
+        e.stopPropagation()
+        const isCollapsed = outSection.classList.toggle('collapsed')
+        secHeader.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true')
+        reflowNodePositions()
+      })
       outSection.appendChild(secHeader)
 
       const rowsList = document.createElement('div')
@@ -2294,11 +2360,29 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
       if (!fromEl || !toEl) continue
 
-      const fromRect = fromEl.getBoundingClientRect()
-      const toRect = toEl.getBoundingClientRect()
+      let fromTargetEl: HTMLElement = fromEl
+      let toTargetEl: HTMLElement = toEl
 
-      const isFromDot = fromEl.classList.contains('vs-graph-port-dot')
-      const isToDot = toEl.classList.contains('vs-graph-port-dot')
+      const fromCollapsed = fromEl.offsetParent === null
+      const toCollapsed = toEl.offsetParent === null
+
+      if (fromCollapsed) {
+        const fromCard = fromEl.closest('.vs-graph-card')
+        const outHeader = (fromCard?.querySelector('.output-section .vs-graph-section-header') || fromCard) as HTMLElement | null
+        if (outHeader) fromTargetEl = outHeader
+      }
+
+      if (toCollapsed) {
+        const toCard = toEl.closest('.vs-graph-card')
+        const inHeader = (toCard?.querySelector('.vs-graph-section:not(.output-section) .vs-graph-section-header') || toCard) as HTMLElement | null
+        if (inHeader) toTargetEl = inHeader
+      }
+
+      const fromRect = fromTargetEl.getBoundingClientRect()
+      const toRect = toTargetEl.getBoundingClientRect()
+
+      const isFromDot = !fromCollapsed && fromTargetEl.classList.contains('vs-graph-port-dot')
+      const isToDot = !toCollapsed && toTargetEl.classList.contains('vs-graph-port-dot')
 
       const fromX = isFromDot ? fromRect.left + fromRect.width / 2 - layerRect.left : fromRect.right - layerRect.left
       const toX = isToDot ? toRect.left + toRect.width / 2 - layerRect.left : toRect.left - layerRect.left
