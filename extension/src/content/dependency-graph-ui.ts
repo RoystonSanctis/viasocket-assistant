@@ -1785,10 +1785,13 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       const indepSectionY = maxGraphY + 40
       lane.style.top = `${indepSectionY}px`
       const indepCards = Array.from(nodesLayer.querySelectorAll<HTMLElement>('.vs-graph-card[data-independent="true"]'))
-      const indepY = indepSectionY + 26
+      const indepY = indepSectionY + 36
+      let maxIndepHeight = 0
       for (const card of indepCards) {
         card.style.top = `${indepY}px`
+        maxIndepHeight = Math.max(maxIndepHeight, card.offsetHeight)
       }
+      lane.style.height = `${Math.max(260, maxIndepHeight + 56)}px`
     }
 
     requestAnimationFrame(() => {

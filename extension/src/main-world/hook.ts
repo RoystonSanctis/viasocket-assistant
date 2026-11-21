@@ -965,6 +965,20 @@ function install(): void {
         usedVars = obj(flowState.usedVariables)
       }
 
+      const tryParse = (val: unknown): unknown => {
+        if (typeof val === 'string') {
+          try {
+            return JSON.parse(val)
+          } catch {
+            return val
+          }
+        }
+        return val
+      }
+
+      const stepRequestSnapshot = obj(tryParse(invData.stepRequestSnapshot))
+      const rawInputData = obj(tryParse(invData.inputData))
+
       function evalExpr(expr: string): unknown {
         if (!expr || typeof expr !== 'string') return undefined
         let clean = expr.trim()
@@ -1077,8 +1091,9 @@ function install(): void {
         const upstreamSlugsSet = new Set<string>()
         const seenInputKeys = new Set<string>()
 
-        // Collect expressions from function / plugin
+        // Collect expressions and literal inputs from function / plugin
         const exprList: Array<{ key: string; expr: string }> = []
+        const literalInputs: Array<{ key: string; value: unknown }> = []
 
         if (stepType === 'function') {
           const list = Array.isArray(funcsMap[slug]) ? (funcsMap[slug] as string[]) : []
@@ -1096,12 +1111,63 @@ function install(): void {
         } else if (stepType === 'plugin') {
           const pVars = obj(pluginMap[slug])
           for (const [k, v] of Object.entries(pVars)) {
+            if (k.startsWith('_') || k.endsWith('-Type') || k.endsWith('_Type')) continue
+            const normalizedKey = k
+              .replace(/\[["']_?(.*?)["']\]/g, '.$1')
+              .replace(/\._/g, '.')
+              .replace(/^\.+/, '')
+
             if (typeof v === 'string' && v.includes('${')) {
-              const normalizedKey = k
-                .replace(/\[["']_?(.*?)["']\]/g, '.$1')
-                .replace(/\._/g, '.')
-                .replace(/^\.+/, '')
               exprList.push({ key: normalizedKey, expr: v })
+            } else if (v !== undefined && v !== null && v !== '') {
+              literalInputs.push({ key: normalizedKey, value: v })
+            }
+          }
+        }
+
+        // Also check stepRequestSnapshot, rawInputData, and stepsDataV3
+        const stepId = typeof block.id === 'string' ? block.id : ''
+        const reqSnap = obj(tryParse(stepRequestSnapshot[slug] ?? (stepId ? stepRequestSnapshot[stepId] : undefined)))
+        if (isObj(reqSnap) && Object.keys(reqSnap).length > 0) {
+          for (const [k, v] of Object.entries(reqSnap)) {
+            if (k.startsWith('_') || k.endsWith('-Type') || k.endsWith('_Type')) continue
+            if (v !== undefined && v !== null && v !== '') {
+              literalInputs.push({ key: k, value: v })
+            }
+          }
+        }
+
+        const rawInput = obj(tryParse(rawInputData[slug] ?? (stepId ? rawInputData[stepId] : undefined)))
+        if (isObj(rawInput) && Object.keys(rawInput).length > 0) {
+          for (const [k, v] of Object.entries(rawInput)) {
+            if (k.startsWith('_') || k.endsWith('-Type') || k.endsWith('_Type')) continue
+            if (v !== undefined && v !== null && v !== '') {
+              literalInputs.push({ key: k, value: v })
+            }
+          }
+        }
+
+        const stepEntry = obj(obj(state.stepsDataV3)[scriptId])[stepId] ?? obj(obj(state.stepsDataV3)[scriptId])[slug]
+        const draft = obj(isObj(stepEntry) ? stepEntry.draft || stepEntry : {})
+        const pluginData = obj(draft.pluginData)
+        const selVals = obj(isObj(pluginData.selectedValues) ? pluginData.selectedValues : draft.selectedValues)
+        const draftInputs = obj(selVals.inputData)
+        if (isObj(draftInputs) && Object.keys(draftInputs).length > 0) {
+          for (const [k, v] of Object.entries(draftInputs)) {
+            if (k.startsWith('_') || k.endsWith('-Type') || k.endsWith('_Type')) continue
+            if (v !== undefined && v !== null && v !== '') {
+              literalInputs.push({ key: k, value: v })
+            }
+          }
+        }
+
+        const blockSelVals = obj(block.selectedValues)
+        const blockInputs = obj(blockSelVals.inputData || block.data)
+        if (isObj(blockInputs) && Object.keys(blockInputs).length > 0) {
+          for (const [k, v] of Object.entries(blockInputs)) {
+            if (k.startsWith('_') || k.endsWith('-Type') || k.endsWith('_Type')) continue
+            if (v !== undefined && v !== null && v !== '' && typeof v !== 'function') {
+              literalInputs.push({ key: k, value: v })
             }
           }
         }
@@ -1162,6 +1228,18 @@ function install(): void {
               valuePreview: formatVal(val),
             })
           }
+        }
+
+        // Add literal / standalone inputs (especially on independent steps)
+        for (const { key, value } of literalInputs) {
+          if (seenInputKeys.has(key)) continue
+          seenInputKeys.add(key)
+          inputs.push({
+            id: `in-${slug}-${key}`,
+            key,
+            value,
+            displayValue: formatVal(value),
+          })
         }
 
         // Collect outputs from responseSnapshot
