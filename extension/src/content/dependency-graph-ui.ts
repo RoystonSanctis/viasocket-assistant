@@ -85,6 +85,13 @@ const CSS = `
   color: rgb(240, 246, 252);
 }
 
+/* Ensure step edit sliders and drawers sit above the graph canvas */
+#flow-page-box .pointer-events-auto.absolute.right-0,
+#flow-page-box .MuiDrawer-root,
+#flow-page-box [class*="slider"] {
+  z-index: 100 !important;
+}
+
 /* viaSocket dot grid canvas background */
 .vs-graph-canvas-bg {
   position: absolute;
@@ -2661,6 +2668,22 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       setTimeout(() => {
         if (isGraphActive) fitView(true)
       }, 350)
+    }
+
+    const actionBtn = target?.closest('button')
+    if (actionBtn) {
+      const text = actionBtn.textContent?.trim().toLowerCase() || ''
+      if (text === 'save' || text === 'update' || text.includes('save &') || text === 'dry run') {
+        setTimeout(() => {
+          if (isGraphActive) void refresh()
+        }, 300)
+        setTimeout(() => {
+          if (isGraphActive) void refresh()
+        }, 700)
+        setTimeout(() => {
+          if (isGraphActive) void refresh()
+        }, 1400)
+      }
     }
   }
   document.addEventListener('click', onDocClick, true)

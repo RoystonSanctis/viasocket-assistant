@@ -233,6 +233,22 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
       case 'observed': {
         const event = sanitizeObserved(inner.event)
         if (event && allowEvent()) opts.onObserved(event)
+        if (
+          event &&
+          (event.kind === 'step-saved' ||
+            event.kind === 'step-tested' ||
+            event.kind === 'trigger-saved' ||
+            event.kind === 'step-created' ||
+            event.kind === 'step-deleted')
+        ) {
+          for (const cb of flowGraphChangedListeners) {
+            try {
+              cb()
+            } catch {
+              // ignore
+            }
+          }
+        }
         break
       }
       case 'navigated':

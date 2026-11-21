@@ -1091,155 +1091,160 @@ function install(): void {
         const upstreamSlugsSet = new Set<string>()
         const seenInputKeys = new Set<string>()
 
-        // Collect expressions and literal inputs from function / plugin
-        const exprList: Array<{ key: string; expr: string }> = []
-        const literalInputs: Array<{ key: string; value: unknown }> = []
-
-        if (stepType === 'function') {
-          const list = Array.isArray(funcsMap[slug]) ? (funcsMap[slug] as string[]) : []
-          for (const item of list) {
-            if (typeof item === 'string') {
-              const cleanKey = item
-                .replace(/context\.req\.body\b/g, '')
-                .replace(/req\.body\b/g, '')
-                .replace(/context\.res\.[^.]+\b/g, '')
-                .replace(/\[["'](.*?)["']\]/g, '$1')
-                .replace(/^\.+/, '')
-              exprList.push({ key: cleanKey || item, expr: item })
-            }
-          }
-        } else if (stepType === 'plugin') {
-          const pVars = obj(pluginMap[slug])
-          for (const [k, v] of Object.entries(pVars)) {
-            if (k.startsWith('_') || k.endsWith('-Type') || k.endsWith('_Type')) continue
-            const normalizedKey = k
-              .replace(/\[["']_?(.*?)["']\]/g, '.$1')
-              .replace(/\._/g, '.')
-              .replace(/^\.+/, '')
-
-            if (typeof v === 'string' && v.includes('${')) {
-              exprList.push({ key: normalizedKey, expr: v })
-            } else if (v !== undefined && v !== null && v !== '') {
-              literalInputs.push({ key: normalizedKey, value: v })
-            }
-          }
-        }
-
-        // Also check stepRequestSnapshot, rawInputData, and stepsDataV3
         const stepId = typeof block.id === 'string' ? block.id : ''
-        const reqSnap = obj(tryParse(stepRequestSnapshot[slug] ?? (stepId ? stepRequestSnapshot[stepId] : undefined)))
-        if (isObj(reqSnap) && Object.keys(reqSnap).length > 0) {
-          for (const [k, v] of Object.entries(reqSnap)) {
-            if (k.startsWith('_') || k.endsWith('-Type') || k.endsWith('_Type')) continue
-            if (v !== undefined && v !== null && v !== '') {
-              literalInputs.push({ key: k, value: v })
-            }
-          }
-        }
-
-        const rawInput = obj(tryParse(rawInputData[slug] ?? (stepId ? rawInputData[stepId] : undefined)))
-        if (isObj(rawInput) && Object.keys(rawInput).length > 0) {
-          for (const [k, v] of Object.entries(rawInput)) {
-            if (k.startsWith('_') || k.endsWith('-Type') || k.endsWith('_Type')) continue
-            if (v !== undefined && v !== null && v !== '') {
-              literalInputs.push({ key: k, value: v })
-            }
-          }
-        }
-
         const stepEntry = obj(obj(state.stepsDataV3)[scriptId])[stepId] ?? obj(obj(state.stepsDataV3)[scriptId])[slug]
         const draft = obj(isObj(stepEntry) ? stepEntry.draft || stepEntry : {})
         const pluginData = obj(draft.pluginData)
         const selVals = obj(isObj(pluginData.selectedValues) ? pluginData.selectedValues : draft.selectedValues)
         const draftInputs = obj(selVals.inputData)
-        if (isObj(draftInputs) && Object.keys(draftInputs).length > 0) {
-          for (const [k, v] of Object.entries(draftInputs)) {
-            if (k.startsWith('_') || k.endsWith('-Type') || k.endsWith('_Type')) continue
-            if (v !== undefined && v !== null && v !== '') {
-              literalInputs.push({ key: k, value: v })
-            }
+
+        const rawInputsMap = new Map<string, { value: unknown; expr?: string }>()
+
+        const registerInput = (k: string, v: unknown) => {
+          if (!k || typeof k !== 'string') return
+          if (k.startsWith('_') || k.endsWith('-Type') || k.endsWith('_Type')) return
+          if (v === undefined || v === null || v === '' || typeof v === 'function') return
+          const normalizedKey = k
+            .replace(/\[["']_?(.*?)["']\]/g, '.$1')
+            .replace(/\._/g, '.')
+            .replace(/^\.+/, '')
+          if (!normalizedKey) return
+
+          if (
+            typeof v === 'string' &&
+            (v.includes('${') ||
+              v.startsWith('context.req') ||
+              v.startsWith('context.res') ||
+              v.startsWith('req.') ||
+              v.startsWith('res.') ||
+              v.startsWith('steps.'))
+          ) {
+            rawInputsMap.set(normalizedKey, { value: undefined, expr: v })
+          } else {
+            rawInputsMap.set(normalizedKey, { value: v })
           }
         }
 
+        // 1. Invocation snapshots (lowest priority fallback)
+        const reqSnap = obj(tryParse(stepRequestSnapshot[slug] ?? (stepId ? stepRequestSnapshot[stepId] : undefined)))
+        for (const [k, v] of Object.entries(reqSnap)) registerInput(k, v)
+
+        const rawInput = obj(tryParse(rawInputData[slug] ?? (stepId ? rawInputData[stepId] : undefined)))
+        for (const [k, v] of Object.entries(rawInput)) registerInput(k, v)
+
+        // 2. Used variables / functions
+        if (stepType === 'function') {
+          const codeStr = typeof draft.code === 'string' ? draft.code : (typeof block.data === 'string' ? block.data : '')
+          const list = Array.isArray(funcsMap[slug]) ? (funcsMap[slug] as string[]) : []
+          if (codeStr) {
+            for (const item of list) {
+              if (typeof item === 'string') {
+                const propName = item.split('.').pop()?.replace(/[[\]"']/g, '') || ''
+                if (codeStr.includes(item) || (propName && codeStr.includes(propName))) {
+                  registerInput(item, item)
+                }
+              }
+            }
+            const matches = codeStr.matchAll(/context(?:\.|\?\.)(?:req(?:(?:\.|\?\.)body)?|res(?:\.|\?\.)[a-zA-Z0-9_-]+|steps(?:\.|\?\.)[a-zA-Z0-9_-]+)(?:(?:\.|\?\.)[a-zA-Z0-9_$-]+|\[["'][a-zA-Z0-9_$-]+["']\])*/g)
+            for (const m of matches) {
+              const cleaned = m[0].replace(/\?\./g, '.')
+              registerInput(cleaned, cleaned)
+            }
+          } else {
+            for (const item of list) {
+              if (typeof item === 'string') {
+                registerInput(item, item)
+              }
+            }
+          }
+        } else if (stepType === 'plugin') {
+          const pVars = obj(pluginMap[slug])
+          for (const [k, v] of Object.entries(pVars)) {
+            registerInput(k, v)
+          }
+        }
+
+        // 3. Saved block configuration in flowJson.blocks
         const blockSelVals = obj(block.selectedValues)
         const blockInputs = obj(blockSelVals.inputData || block.data)
-        if (isObj(blockInputs) && Object.keys(blockInputs).length > 0) {
+        if (isObj(blockInputs)) {
           for (const [k, v] of Object.entries(blockInputs)) {
-            if (k.startsWith('_') || k.endsWith('-Type') || k.endsWith('_Type')) continue
-            if (v !== undefined && v !== null && v !== '' && typeof v !== 'function') {
-              literalInputs.push({ key: k, value: v })
-            }
+            registerInput(k, v)
           }
         }
 
-        const seenExpressions = new Set<string>()
-        for (const { key, expr } of exprList) {
-          if (seenExpressions.has(expr) || seenInputKeys.has(key)) continue
-          seenExpressions.add(expr)
-          seenInputKeys.add(key)
+        // 4. Active / draft inputs in stepsDataV3 (highest priority - user's direct edits & saves)
+        const parsedDraftCode = typeof draft.code === 'string' ? obj(tryParse(draft.code)) : obj(draft.code)
+        const draftCodeInputs = obj(obj(parsedDraftCode.selectedValues).inputData)
+        for (const [k, v] of Object.entries(draftCodeInputs)) {
+          registerInput(k, v)
+        }
+        for (const [k, v] of Object.entries(draftInputs)) {
+          registerInput(k, v)
+        }
 
-          const val = evalExpr(expr)
-          let sourceSlug: string | undefined = undefined
-          let sourceField: string | undefined = undefined
-
-          if (expr.includes('req.body') || expr.includes('req.')) {
-            sourceSlug = 'trigger'
-            sourceField = expr
-              .replace(/context\.req\.body\b/g, '')
-              .replace(/req\.body\b/g, '')
-              .replace(/context\.req\b/g, '')
-              .replace(/\[["'](.*?)["']\]/g, '$1')
-              .replace(/^\.+/, '')
-          } else if (expr.includes('res.') || expr.includes('steps.')) {
-            const m = /(?:res|steps)\.([a-zA-Z0-9_-]+)\??\.(.+)/.exec(expr)
-            if (m) {
-              sourceSlug = m[1]
-              sourceField = m[2]?.replace(/[}].*$/, '')?.replace(/\?.*$/, '')
-            }
-          }
-
-          if (sourceSlug && sourceSlug !== slug) {
-            upstreamSlugsSet.add(sourceSlug)
-          }
-
+        // Convert rawInputsMap to FlowGraphPort[] inputs & connections
+        for (const [key, inputInfo] of rawInputsMap.entries()) {
           const portId = `in-${slug}-${key}`
-          inputs.push({
-            id: portId,
-            key,
-            expression: expr,
-            sourceSlug,
-            sourceField,
-            value: val,
-            displayValue: formatVal(val),
-          })
+          if (inputInfo.expr) {
+            const expr = inputInfo.expr
+            const val = evalExpr(expr)
+            let sourceSlug: string | undefined = undefined
+            let sourceField: string | undefined = undefined
 
-          if (sourceSlug && sourceField) {
-            connections.push({
-              id: `conn-${sourceSlug}-${sourceField}-${slug}-${key}`,
-              fromNodeId: sourceSlug,
-              fromSlug: sourceSlug,
-              fromPortId: sourceSlug === 'trigger' ? `trigger-out-${sourceField}` : `out-${sourceSlug}-${sourceField}`,
-              fromField: sourceField,
-              toNodeId: slug,
-              toSlug: slug,
-              toPortId: portId,
-              toField: key,
+            if (expr.includes('req.body') || expr.includes('req.')) {
+              sourceSlug = 'trigger'
+              sourceField = expr
+                .replace(/context\.req\.body\b/g, '')
+                .replace(/req\.body\b/g, '')
+                .replace(/context\.req\b/g, '')
+                .replace(/\[["'](.*?)["']\]/g, '$1')
+                .replace(/^\.+/, '')
+            } else if (expr.includes('res.') || expr.includes('steps.')) {
+              const m = /(?:res|steps)\.([a-zA-Z0-9_-]+)\??\.(.+)/.exec(expr)
+              if (m) {
+                sourceSlug = m[1]
+                sourceField = m[2]?.replace(/[}].*$/, '')?.replace(/\?.*$/, '')
+              }
+            }
+
+            if (sourceSlug && sourceSlug !== slug) {
+              upstreamSlugsSet.add(sourceSlug)
+            }
+
+            inputs.push({
+              id: portId,
+              key,
               expression: expr,
-              valuePreview: formatVal(val),
+              sourceSlug,
+              sourceField,
+              value: val,
+              displayValue: formatVal(val),
+            })
+
+            if (sourceSlug && sourceField) {
+              connections.push({
+                id: `conn-${sourceSlug}-${sourceField}-${slug}-${key}`,
+                fromNodeId: sourceSlug,
+                fromSlug: sourceSlug,
+                fromPortId: sourceSlug === 'trigger' ? `trigger-out-${sourceField}` : `out-${sourceSlug}-${sourceField}`,
+                fromField: sourceField,
+                toNodeId: slug,
+                toSlug: slug,
+                toPortId: portId,
+                toField: key,
+                expression: expr,
+                valuePreview: formatVal(val),
+              })
+            }
+          } else {
+            inputs.push({
+              id: portId,
+              key,
+              value: inputInfo.value,
+              displayValue: formatVal(inputInfo.value),
             })
           }
-        }
-
-        // Add literal / standalone inputs (especially on independent steps)
-        for (const { key, value } of literalInputs) {
-          if (seenInputKeys.has(key)) continue
-          seenInputKeys.add(key)
-          inputs.push({
-            id: `in-${slug}-${key}`,
-            key,
-            value,
-            displayValue: formatVal(value),
-          })
         }
 
         // Collect outputs from responseSnapshot
@@ -1266,11 +1271,16 @@ function install(): void {
           })
         }
 
+        const stepTitle =
+          (typeof block.name === 'string' && block.name) ||
+          (typeof block.title === 'string' && block.title) ||
+          (typeof draft.title === 'string' && draft.title) ||
+          slug.replace(/_/g, ' ')
         const upstreamSlugs = Array.from(upstreamSlugsSet)
         stepNodes.push({
           id: slug,
           slugName: slug,
-          title: slug.replace(/_/g, ' '),
+          title: stepTitle,
           type: stepType,
           iconUrl,
           depth: 1,
@@ -1344,10 +1354,49 @@ function install(): void {
     }
   }
 
+  function computeFlowSignature(state: Record<string, unknown>, scriptId: string): string {
+    const asObj = (v: unknown): Record<string, unknown> => (isObj(v) ? (v as Record<string, unknown>) : {})
+    const flowState = asObj(asObj(state.flowJsonV2)[scriptId])
+    const flowJson = asObj(flowState.flowJson)
+    const blocks = asObj(flowJson.blocks)
+    const rawStepOrder = Array.isArray(flowState.stepOrder)
+      ? (flowState.stepOrder as string[])
+      : Array.isArray(asObj(flowJson.order).root)
+        ? (asObj(flowJson.order).root as string[])
+        : Object.keys(blocks)
+
+    const usedVars = asObj(flowState.usedVariables)
+    const funcs = JSON.stringify(usedVars.functions || '')
+    const plugins = JSON.stringify(usedVars.plugin || '')
+
+    const stepsData = asObj(asObj(state.stepsDataV3)[scriptId])
+    const stepDrafts: string[] = []
+    for (const [sId, entry] of Object.entries(stepsData)) {
+      if (!isObj(entry)) continue
+      const e = entry as Record<string, unknown>
+      const draft = asObj(e.draft || e)
+      const pData = asObj(draft.pluginData)
+      const sel = asObj(pData.selectedValues || draft.selectedValues)
+      const inData = asObj(sel.inputData)
+      const code = typeof draft.code === 'string' ? draft.code : ''
+      const title = typeof draft.title === 'string' ? draft.title : ''
+      stepDrafts.push(`${sId}:${title}:${code}:${JSON.stringify(inData)}`)
+    }
+
+    const blockInputs: string[] = []
+    for (const [bKey, bVal] of Object.entries(blocks)) {
+      if (!isObj(bVal)) continue
+      const b = bVal as Record<string, unknown>
+      const bSel = asObj(b.selectedValues)
+      blockInputs.push(`${bKey}:${b.name || b.title || ''}:${JSON.stringify(bSel.inputData || b.data || '')}`)
+    }
+
+    return `${rawStepOrder.join(',')}|${Object.keys(blocks).sort().join(',')}|${funcs}|${plugins}|${stepDrafts.sort().join(';')}|${blockInputs.sort().join(';')}`
+  }
+
   let lastFlowSignature = ''
   function checkFlowChange(): void {
     try {
-      const asObj = (v: unknown): Record<string, unknown> => (isObj(v) ? (v as Record<string, unknown>) : {})
       const store = findReduxStore()
       if (!store) return
       const state = store.getState()
@@ -1355,16 +1404,8 @@ function install(): void {
         extractScriptId(location.pathname) ||
         (isObj(state.appInfo) && typeof state.appInfo.currentScriptId === 'string' ? state.appInfo.currentScriptId : undefined)
       if (!scriptId) return
-      const flowState = asObj(asObj(state.flowJsonV2)[scriptId])
-      const flowJson = asObj(flowState.flowJson)
-      const blocks = asObj(flowJson.blocks)
-      const rawStepOrder = Array.isArray(flowState.stepOrder)
-        ? (flowState.stepOrder as string[])
-        : Array.isArray(asObj(flowJson.order).root)
-          ? (asObj(flowJson.order).root as string[])
-          : Object.keys(blocks)
 
-      const sig = `${rawStepOrder.join(',')}|${Object.keys(blocks).sort().join(',')}`
+      const sig = computeFlowSignature(state, scriptId)
       if (lastFlowSignature && sig !== lastFlowSignature) {
         lastFlowSignature = sig
         post({ type: 'flow-graph-changed' })
@@ -2004,6 +2045,12 @@ function install(): void {
         if (text) event.errorText = text
       }
       report(event)
+      if (httpOk && (c.kind === 'step-saved' || c.kind === 'step-tested' || c.kind === 'trigger-saved' || c.kind === 'step-created' || c.kind === 'step-deleted')) {
+        post({ type: 'flow-graph-changed' })
+        setTimeout(checkFlowChange, 50)
+        setTimeout(checkFlowChange, 250)
+        setTimeout(checkFlowChange, 600)
+      }
     }
 
     if (c.kind === 'step-created' && httpOk && !slugName) {
