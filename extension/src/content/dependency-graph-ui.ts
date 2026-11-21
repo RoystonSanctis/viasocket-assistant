@@ -481,12 +481,19 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   flex-direction: column;
 }
 
-/* Individual Variable Row (JSON Crack property row) */
+/* Individual Variable Row & Tree Item (JSON Crack style expandable hierarchy) */
+.vs-graph-tree-item,
+.vs-graph-nested-tree-item {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
 .vs-graph-row {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   padding: 5px 10px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 11px;
@@ -510,6 +517,88 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   background-color: rgba(88, 166, 255, 0.18);
 }
 
+/* Expand / Collapse Button matching JSON Crack */
+.vs-graph-expand-btn {
+  width: 14px;
+  height: 14px;
+  min-width: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  color: #8b949e;
+  font-size: 11px;
+  line-height: 1;
+  font-family: ui-monospace, monospace;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  margin-right: 2px;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.vs-graph-expand-btn:hover {
+  background: rgba(88, 166, 255, 0.2);
+  border-color: rgba(88, 166, 255, 0.4);
+  color: #ffffff;
+}
+
+.vs-graph-expand-placeholder {
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+
+/* Nested Container with JSON tree guide lines */
+.vs-graph-nested-container {
+  display: flex;
+  flex-direction: column;
+  margin-left: 14px;
+  padding-left: 6px;
+  border-left: 1.5px solid rgba(110, 118, 129, 0.25);
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 0 0 4px 4px;
+  transition: border-color 0.15s ease;
+}
+
+.vs-graph-nested-container:hover {
+  border-left-color: rgba(88, 166, 255, 0.5);
+}
+
+.vs-graph-nested-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3.5px 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 10.5px;
+  line-height: 1.35;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+  user-select: text;
+}
+
+.vs-graph-nested-row:last-child {
+  border-bottom: none;
+}
+
+.vs-graph-nested-row:hover,
+.vs-graph-nested-row.highlighted {
+  background-color: rgba(88, 166, 255, 0.1);
+}
+
+.vs-graph-nested-row.highlighted-source {
+  background-color: rgba(88, 166, 255, 0.16);
+}
+
 .vs-graph-row-key {
   color: #79c0ff;
   font-weight: 500;
@@ -518,6 +607,17 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   text-overflow: ellipsis;
   max-width: 140px;
   flex-shrink: 0;
+}
+
+.vs-graph-nested-row .vs-graph-row-key {
+  max-width: 120px;
+  font-size: 10.5px;
+}
+
+.vs-row-index {
+  color: #a5d6ff;
+  font-weight: 500;
+  opacity: 0.9;
 }
 
 .vs-graph-row-colon {
@@ -538,6 +638,49 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
+}
+
+.vs-graph-row-inspect-btn {
+  opacity: 0;
+  background: transparent;
+  border: none;
+  color: #8b949e;
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 10px;
+  line-height: 1;
+  transition: opacity 0.12s ease, color 0.12s ease;
+  margin-left: 4px;
+  flex-shrink: 0;
+}
+
+.vs-graph-row:hover .vs-graph-row-inspect-btn,
+.vs-graph-nested-row:hover .vs-graph-row-inspect-btn {
+  opacity: 0.7;
+}
+
+.vs-graph-row-inspect-btn:hover {
+  opacity: 1 !important;
+  color: #58a6ff;
+}
+
+.vs-graph-show-more-row {
+  padding: 4px 10px;
+  font-size: 10px;
+  color: #58a6ff;
+  cursor: pointer;
+  font-family: ui-monospace, monospace;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+  transition: color 0.12s ease, background-color 0.12s ease;
+}
+
+.vs-graph-show-more-row:hover {
+  color: #79c0ff;
+  background-color: rgba(88, 166, 255, 0.08);
 }
 
 /* Syntax highlighted value types (inspired by JSON Crack & GitHub dark) */
@@ -581,6 +724,16 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   background: rgba(110, 118, 129, 0.18);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: #c9d1d9;
+}
+
+.vs-val-badge.expandable {
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+
+.vs-val-badge.expandable:hover {
+  background-color: rgba(88, 166, 255, 0.2);
+  border-color: rgba(88, 166, 255, 0.4);
 }
 
 .vs-val-array {
@@ -1374,6 +1527,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
       for (const node of colNodes) {
         const card = createNodeCard(node)
+        card.setAttribute('data-col', String(colIndex))
         card.style.left = `${colX}px`
         card.style.top = `${currentY}px`
         nodesLayer.appendChild(card)
@@ -1409,10 +1563,49 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       const indepY = indepSectionY + 26
       for (const step of independentSteps) {
         const card = createNodeCard(step)
+        card.setAttribute('data-independent', 'true')
         card.style.left = `${indepX}px`
         card.style.top = `${indepY}px`
         nodesLayer.appendChild(card)
         indepX += 380
+      }
+    }
+
+    reflowNodePositions()
+  }
+
+  function reflowNodePositions(): void {
+    if (!overlayEl || !currentGraphData) return
+    const nodesLayer = overlayEl.querySelector('#vs-graph-nodes-layer') as HTMLElement | null
+    if (!nodesLayer) return
+
+    const colCardsMap = new Map<number, HTMLElement[]>()
+    const cards = Array.from(nodesLayer.querySelectorAll<HTMLElement>('.vs-graph-card[data-col]'))
+    for (const card of cards) {
+      const col = parseInt(card.getAttribute('data-col') || '0', 10)
+      if (!colCardsMap.has(col)) colCardsMap.set(col, [])
+      colCardsMap.get(col)!.push(card)
+    }
+
+    let maxGraphY = 80
+
+    for (const [, colCards] of colCardsMap.entries()) {
+      let currentY = 80
+      for (const card of colCards) {
+        card.style.top = `${currentY}px`
+        currentY += card.offsetHeight + 32
+      }
+      maxGraphY = Math.max(maxGraphY, currentY)
+    }
+
+    const lane = nodesLayer.querySelector<HTMLElement>('.vs-graph-independent-lane')
+    if (lane) {
+      const indepSectionY = maxGraphY + 40
+      lane.style.top = `${indepSectionY}px`
+      const indepCards = Array.from(nodesLayer.querySelectorAll<HTMLElement>('.vs-graph-card[data-independent="true"]'))
+      const indepY = indepSectionY + 26
+      for (const card of indepCards) {
+        card.style.top = `${indepY}px`
       }
     }
 
@@ -1451,16 +1644,19 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     }
     if (Array.isArray(rawVal)) {
       const len = rawVal.length
+      const isEmpty = len === 0
       return {
-        html: `<span class="vs-val-badge vs-val-array">[${len} ${len === 1 ? 'item' : 'items'}]</span>`,
+        html: `<span class="vs-val-badge vs-val-array ${isEmpty ? '' : 'expandable'}">[${len} ${len === 1 ? 'item' : 'items'}]</span>`,
         text: `[${len} items]`,
       }
     }
     if (typeof rawVal === 'object') {
       const keys = Object.keys(rawVal as Record<string, unknown>)
+      const len = keys.length
+      const isEmpty = len === 0
       return {
-        html: `<span class="vs-val-badge vs-val-obj">{${keys.length} ${keys.length === 1 ? 'key' : 'keys'}}</span>`,
-        text: `{${keys.length} keys}`,
+        html: `<span class="vs-val-badge vs-val-obj ${isEmpty ? '' : 'expandable'}">{${len} ${len === 1 ? 'key' : 'keys'}}</span>`,
+        text: `{${len} keys}`,
       }
     }
 
@@ -1470,7 +1666,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     // Hex color swatch (signature JSON Crack feature)
     if (/^#[0-9a-fA-F]{3,8}$/.test(trimmed)) {
       return {
-        html: `<span class="vs-val-swatch" style="background-color:${escapeHtml(trimmed)};"></span><span class="vs-val-str">${escapeHtml(trimmed)}</span>`,
+        html: `<span class="vs-val-swatch" style="background-color:${escapeHtml(trimmed)};"></span><span class="vs-val-str">"${escapeHtml(trimmed)}"</span>`,
         text: trimmed,
       }
     }
@@ -1505,9 +1701,276 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
     const truncated = trimmed.length > 28 ? trimmed.slice(0, 26) + '…' : trimmed
     return {
-      html: `<span class="vs-val-str">${escapeHtml(truncated)}</span>`,
+      html: `<span class="vs-val-str">"${escapeHtml(truncated)}"</span>`,
       text: str,
     }
+  }
+
+  interface ComplexValueInfo {
+    isComplex: boolean
+    isArray: boolean
+    data: unknown
+    count: number
+  }
+
+  function parseComplexValue(val: unknown): ComplexValueInfo {
+    let target = val
+    if (typeof target === 'string') {
+      const trimmed = target.trim()
+      if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+        try {
+          target = JSON.parse(trimmed)
+        } catch {
+          // not valid json
+        }
+      }
+    }
+    if (target !== null && typeof target === 'object') {
+      if (Array.isArray(target)) {
+        return { isComplex: true, isArray: true, data: target, count: target.length }
+      }
+      const keys = Object.keys(target as Record<string, unknown>)
+      return { isComplex: true, isArray: false, data: target, count: keys.length }
+    }
+    return { isComplex: false, isArray: false, data: target, count: 0 }
+  }
+
+  function createPropertyTreeItem(params: {
+    key: string
+    value: unknown
+    node: FlowGraphNode
+    isInput: boolean
+    depth: number
+    portId?: string
+    expression?: string
+    isIndex?: boolean
+    parentPath?: string
+  }): HTMLElement {
+    const { key, value, node, isInput, depth, portId, expression, isIndex, parentPath } = params
+    const itemWrapper = document.createElement('div')
+    itemWrapper.className = depth === 0 ? 'vs-graph-tree-item' : 'vs-graph-nested-tree-item'
+
+    const currentPath = parentPath ? (isIndex ? `${parentPath}[${key}]` : `${parentPath}.${key}`) : key
+
+    const row = document.createElement('div')
+    row.className = depth === 0 ? 'vs-graph-row' : 'vs-graph-nested-row'
+    if (portId) {
+      row.setAttribute('data-port-id', portId)
+    }
+    row.setAttribute('data-node-id', node.id)
+
+    const complex = parseComplexValue(value)
+    const canExpand = complex.isComplex && complex.count > 0
+    let isExpanded = false
+
+    const formatted = formatJsonCrackValue(complex.isComplex ? complex.data : value)
+    const tooltipText = expression ? `${expression} = ${formatted.text}` : `${currentPath} = ${formatted.text}`
+    row.title = canExpand ? `${tooltipText} (Click to expand/collapse)` : `${tooltipText} (Click to inspect)`
+
+    // Left port dot (if input and has connection)
+    if (isInput && portId) {
+      const hasIncomingConn = currentGraphData?.connections.some((c) => c.toPortId === portId)
+      if (hasIncomingConn) {
+        const dot = document.createElement('div')
+        dot.className = 'vs-graph-port-dot port-in'
+        dot.setAttribute('data-port-id', portId)
+        row.appendChild(dot)
+      }
+    }
+
+    // Expand toggle button or placeholder spacer
+    let expandBtn: HTMLButtonElement | null = null
+    if (canExpand) {
+      expandBtn = document.createElement('button')
+      expandBtn.className = 'vs-graph-expand-btn'
+      expandBtn.type = 'button'
+      expandBtn.textContent = '+'
+      expandBtn.setAttribute('aria-label', `Toggle ${key}`)
+      expandBtn.title = 'Click to expand'
+      row.appendChild(expandBtn)
+    } else if (depth > 0) {
+      const placeholder = document.createElement('div')
+      placeholder.className = 'vs-graph-expand-placeholder'
+      row.appendChild(placeholder)
+    }
+
+    // Key element
+    const keyEl = document.createElement('div')
+    keyEl.className = `vs-graph-row-key ${isIndex ? 'vs-row-index' : ''}`
+    keyEl.textContent = isIndex ? `[${key}]` : key
+
+    // Colon
+    const colonEl = document.createElement('div')
+    colonEl.className = 'vs-graph-row-colon'
+    colonEl.textContent = ':'
+
+    // Value element
+    const valEl = document.createElement('div')
+    valEl.className = 'vs-graph-row-val'
+    valEl.innerHTML = formatted.html
+
+    // Inspect button (opens full JSON modal)
+    const inspectBtn = document.createElement('button')
+    inspectBtn.className = 'vs-graph-row-inspect-btn'
+    inspectBtn.type = 'button'
+    inspectBtn.title = 'Inspect in modal'
+    inspectBtn.innerHTML = '↗'
+    inspectBtn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      showDetailsModal(`${node.title} → ${currentPath}`, complex.isComplex ? complex.data : value)
+    })
+    valEl.appendChild(inspectBtn)
+
+    row.appendChild(keyEl)
+    row.appendChild(colonEl)
+    row.appendChild(valEl)
+
+    // Right port dot (if output and has connection)
+    if (!isInput && portId) {
+      const hasOutgoingConn = currentGraphData?.connections.some((c) => c.fromPortId === portId)
+      if (hasOutgoingConn) {
+        const dot = document.createElement('div')
+        dot.className = 'vs-graph-port-dot port-out'
+        dot.setAttribute('data-port-id', portId)
+        row.appendChild(dot)
+      }
+    }
+
+    itemWrapper.appendChild(row)
+
+    // Nested children container
+    let nestedContainer: HTMLElement | null = null
+    if (canExpand) {
+      nestedContainer = document.createElement('div')
+      nestedContainer.className = 'vs-graph-nested-container'
+      nestedContainer.style.display = 'none'
+      itemWrapper.appendChild(nestedContainer)
+
+      let renderedChildren = false
+      let visibleCount = 8
+
+      const populateChildren = () => {
+        if (!nestedContainer) return
+        nestedContainer.innerHTML = ''
+
+        if (complex.isArray) {
+          const arr = complex.data as unknown[]
+          const count = arr.length
+          const limit = Math.min(visibleCount, count)
+
+          for (let i = 0; i < limit; i++) {
+            const childItem = createPropertyTreeItem({
+              key: String(i),
+              value: arr[i],
+              node,
+              isInput,
+              depth: depth + 1,
+              isIndex: true,
+              parentPath: currentPath,
+            })
+            nestedContainer.appendChild(childItem)
+          }
+
+          if (count > limit) {
+            const showMore = document.createElement('div')
+            showMore.className = 'vs-graph-show-more-row'
+            showMore.textContent = `+ Show ${count - limit} more items (${count} total)`
+            showMore.addEventListener('click', (e) => {
+              e.stopPropagation()
+              visibleCount += 20
+              populateChildren()
+              reflowNodePositions()
+            })
+            nestedContainer.appendChild(showMore)
+          } else if (count > 8) {
+            const showLess = document.createElement('div')
+            showLess.className = 'vs-graph-show-more-row'
+            showLess.textContent = '− Show less'
+            showLess.addEventListener('click', (e) => {
+              e.stopPropagation()
+              visibleCount = 8
+              populateChildren()
+              reflowNodePositions()
+            })
+            nestedContainer.appendChild(showLess)
+          }
+        } else {
+          // Object
+          const objData = complex.data as Record<string, unknown>
+          const entries = Object.entries(objData)
+
+          for (const [childKey, childVal] of entries) {
+            const childItem = createPropertyTreeItem({
+              key: childKey,
+              value: childVal,
+              node,
+              isInput,
+              depth: depth + 1,
+              isIndex: false,
+              parentPath: currentPath,
+            })
+            nestedContainer.appendChild(childItem)
+          }
+        }
+        renderedChildren = true
+      }
+
+      const toggleExpand = () => {
+        isExpanded = !isExpanded
+        if (isExpanded) {
+          if (expandBtn) {
+            expandBtn.textContent = '−'
+            expandBtn.title = 'Click to collapse'
+          }
+          nestedContainer!.style.display = 'flex'
+          if (!renderedChildren) {
+            populateChildren()
+          }
+        } else {
+          if (expandBtn) {
+            expandBtn.textContent = '+'
+            expandBtn.title = 'Click to expand'
+          }
+          nestedContainer!.style.display = 'none'
+        }
+        reflowNodePositions()
+      }
+
+      if (expandBtn) {
+        expandBtn.addEventListener('click', (e) => {
+          e.stopPropagation()
+          toggleExpand()
+        })
+      }
+
+      const badge = valEl.querySelector('.vs-val-badge.expandable')
+      if (badge) {
+        badge.addEventListener('click', (e) => {
+          e.stopPropagation()
+          toggleExpand()
+        })
+      }
+
+      row.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('.vs-graph-row-inspect-btn')) return
+        toggleExpand()
+      })
+    } else {
+      // Not expandable: clicking opens modal
+      row.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('.vs-graph-row-inspect-btn')) return
+        e.stopPropagation()
+        showDetailsModal(`${node.title} → ${currentPath}`, complex.isComplex ? complex.data : value)
+      })
+    }
+
+    // Hover highlights for port curves
+    if (portId) {
+      row.addEventListener('mouseenter', () => highlightPortAndCurves(portId, isInput ? 'input' : 'output'))
+      row.addEventListener('mouseleave', clearHighlights)
+    }
+
+    return itemWrapper
   }
 
   function createNodeCard(node: FlowGraphNode): HTMLElement {
@@ -1563,47 +2026,16 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       rowsList.className = 'vs-graph-rows-list'
 
       for (const input of node.inputs) {
-        const row = document.createElement('div')
-        row.className = 'vs-graph-row'
-        row.setAttribute('data-port-id', input.id)
-        row.setAttribute('data-node-id', node.id)
-
-        const formatted = formatJsonCrackValue(input.value)
-        row.title = `${input.expression || input.key} = ${formatted.text} (Click to inspect)`
-
-        const hasIncomingConn = currentGraphData?.connections.some((c) => c.toPortId === input.id)
-        if (hasIncomingConn) {
-          const dot = document.createElement('div')
-          dot.className = 'vs-graph-port-dot port-in'
-          dot.setAttribute('data-port-id', input.id)
-          row.appendChild(dot)
-        }
-
-        const keyEl = document.createElement('div')
-        keyEl.className = 'vs-graph-row-key'
-        keyEl.textContent = input.key
-
-        const colonEl = document.createElement('div')
-        colonEl.className = 'vs-graph-row-colon'
-        colonEl.textContent = ':'
-
-        const valEl = document.createElement('div')
-        valEl.className = 'vs-graph-row-val'
-        valEl.innerHTML = formatted.html
-
-        row.appendChild(keyEl)
-        row.appendChild(colonEl)
-        row.appendChild(valEl)
-
-        row.addEventListener('click', (e) => {
-          e.stopPropagation()
-          showDetailsModal(`${node.title} → Input: ${input.key}`, input.value)
+        const item = createPropertyTreeItem({
+          key: input.key,
+          value: input.value,
+          node,
+          isInput: true,
+          depth: 0,
+          portId: input.id,
+          expression: input.expression,
         })
-
-        row.addEventListener('mouseenter', () => highlightPortAndCurves(input.id, 'input'))
-        row.addEventListener('mouseleave', clearHighlights)
-
-        rowsList.appendChild(row)
+        rowsList.appendChild(item)
       }
 
       inSection.appendChild(rowsList)
@@ -1627,47 +2059,15 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       rowsList.className = 'vs-graph-rows-list'
 
       for (const output of node.outputs) {
-        const row = document.createElement('div')
-        row.className = 'vs-graph-row'
-        row.setAttribute('data-port-id', output.id)
-        row.setAttribute('data-node-id', node.id)
-
-        const formatted = formatJsonCrackValue(output.value)
-        row.title = `${output.key} = ${formatted.text} (Click to inspect)`
-
-        const keyEl = document.createElement('div')
-        keyEl.className = 'vs-graph-row-key'
-        keyEl.textContent = output.key
-
-        const colonEl = document.createElement('div')
-        colonEl.className = 'vs-graph-row-colon'
-        colonEl.textContent = ':'
-
-        const valEl = document.createElement('div')
-        valEl.className = 'vs-graph-row-val'
-        valEl.innerHTML = formatted.html
-
-        row.appendChild(keyEl)
-        row.appendChild(colonEl)
-        row.appendChild(valEl)
-
-        const hasOutgoingConn = currentGraphData?.connections.some((c) => c.fromPortId === output.id)
-        if (hasOutgoingConn) {
-          const dot = document.createElement('div')
-          dot.className = 'vs-graph-port-dot port-out'
-          dot.setAttribute('data-port-id', output.id)
-          row.appendChild(dot)
-        }
-
-        row.addEventListener('click', (e) => {
-          e.stopPropagation()
-          showDetailsModal(`${node.title} → Output: ${output.key}`, output.value)
+        const item = createPropertyTreeItem({
+          key: output.key,
+          value: output.value,
+          node,
+          isInput: false,
+          depth: 0,
+          portId: output.id,
         })
-
-        row.addEventListener('mouseenter', () => highlightPortAndCurves(output.id, 'output'))
-        row.addEventListener('mouseleave', clearHighlights)
-
-        rowsList.appendChild(row)
+        rowsList.appendChild(item)
       }
 
       outSection.appendChild(rowsList)
@@ -1688,9 +2088,11 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
     for (const conn of currentGraphData.connections) {
       const fromEl = (transformLayer.querySelector(`.port-out[data-port-id="${conn.fromPortId}"]`) ||
-        transformLayer.querySelector(`.vs-graph-row[data-port-id="${conn.fromPortId}"]`)) as HTMLElement | null
+        transformLayer.querySelector(`.vs-graph-row[data-port-id="${conn.fromPortId}"]`) ||
+        transformLayer.querySelector(`.vs-graph-nested-row[data-port-id="${conn.fromPortId}"]`)) as HTMLElement | null
       const toEl = (transformLayer.querySelector(`.port-in[data-port-id="${conn.toPortId}"]`) ||
-        transformLayer.querySelector(`.vs-graph-row[data-port-id="${conn.toPortId}"]`)) as HTMLElement | null
+        transformLayer.querySelector(`.vs-graph-row[data-port-id="${conn.toPortId}"]`) ||
+        transformLayer.querySelector(`.vs-graph-nested-row[data-port-id="${conn.toPortId}"]`)) as HTMLElement | null
 
       if (!fromEl || !toEl) continue
 
@@ -1760,12 +2162,12 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       if ((type === 'output' && fromPort === portId) || (type === 'input' && toPort === portId)) {
         p.classList.add('highlighted', 'pulse-anim')
         if (fromPort) {
-          const fromRow = overlayEl.querySelector(`.vs-graph-row[data-port-id="${fromPort}"]`)
+          const fromRow = overlayEl.querySelector(`.vs-graph-row[data-port-id="${fromPort}"], .vs-graph-nested-row[data-port-id="${fromPort}"]`)
           fromRow?.classList.add('highlighted-source')
           fromRow?.querySelector('.port-out')?.classList.add('highlighted')
         }
         if (toPort) {
-          const toRow = overlayEl.querySelector(`.vs-graph-row[data-port-id="${toPort}"]`)
+          const toRow = overlayEl.querySelector(`.vs-graph-row[data-port-id="${toPort}"], .vs-graph-nested-row[data-port-id="${toPort}"]`)
           toRow?.classList.add('highlighted')
           toRow?.querySelector('.port-in')?.classList.add('highlighted')
         }
@@ -1775,11 +2177,11 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
   function highlightConnectedPorts(fromPortId: string, toPortId: string): void {
     if (!overlayEl) return
-    const fromRow = overlayEl.querySelector(`.vs-graph-row[data-port-id="${fromPortId}"]`)
+    const fromRow = overlayEl.querySelector(`.vs-graph-row[data-port-id="${fromPortId}"], .vs-graph-nested-row[data-port-id="${fromPortId}"]`)
     fromRow?.classList.add('highlighted-source')
     fromRow?.querySelector('.port-out')?.classList.add('highlighted')
 
-    const toRow = overlayEl.querySelector(`.vs-graph-row[data-port-id="${toPortId}"]`)
+    const toRow = overlayEl.querySelector(`.vs-graph-row[data-port-id="${toPortId}"], .vs-graph-nested-row[data-port-id="${toPortId}"]`)
     toRow?.classList.add('highlighted')
     toRow?.querySelector('.port-in')?.classList.add('highlighted')
   }
@@ -1787,7 +2189,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   function clearHighlights(): void {
     if (!overlayEl) return
     overlayEl.querySelectorAll('.vs-graph-path').forEach((p) => p.classList.remove('highlighted', 'pulse-anim'))
-    overlayEl.querySelectorAll('.vs-graph-row').forEach((r) => r.classList.remove('highlighted', 'highlighted-source'))
+    overlayEl.querySelectorAll('.vs-graph-row, .vs-graph-nested-row').forEach((r) => r.classList.remove('highlighted', 'highlighted-source'))
     overlayEl.querySelectorAll('.vs-graph-port-dot').forEach((d) => d.classList.remove('highlighted'))
   }
 
