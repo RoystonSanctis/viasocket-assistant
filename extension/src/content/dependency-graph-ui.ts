@@ -17,6 +17,62 @@ const CSS = `
   display: inline-flex;
 }
 
+/* Material-UI Navbar Tab Tooltip styles (100% match with Flow, Published, Log) */
+.MuiPopper-root.vs-tab-tooltip-popper {
+  z-index: 1500;
+  pointer-events: none;
+  position: fixed;
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 200ms cubic-bezier(0.4, 0, 0.2, 1), transform 133ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.MuiPopper-root.vs-tab-tooltip-popper.show {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.MuiTooltip-tooltip.vs-tab-tooltip-body {
+  background-color: rgba(97, 97, 97, 0.92) !important;
+  border-radius: 8px !important;
+  color: rgb(255, 255, 255) !important;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif !important;
+  padding: 4px 8px !important;
+  font-size: 0.6875rem !important;
+  line-height: 1.4 !important;
+  max-width: 300px !important;
+  overflow-wrap: break-word !important;
+  font-weight: 500 !important;
+  position: relative !important;
+  margin: 0px !important;
+  margin-top: 14px !important;
+  box-shadow: none !important;
+  text-align: center !important;
+  box-sizing: border-box !important;
+}
+
+.MuiTooltip-arrow.vs-tab-tooltip-arrow {
+  overflow: hidden !important;
+  position: absolute !important;
+  top: 0px !important;
+  margin-top: -0.71em !important;
+  width: 1em !important;
+  height: 0.71em !important;
+  box-sizing: border-box !important;
+  color: rgba(97, 97, 97, 0.92) !important;
+}
+
+.MuiTooltip-arrow.vs-tab-tooltip-arrow::before {
+  content: "" !important;
+  margin: auto !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  background-color: currentColor !important;
+  transform: rotate(45deg) !important;
+  transform-origin: 0px 100% !important;
+}
+
 #${OVERLAY_ID} {
   position: absolute;
   inset: 0;
@@ -702,21 +758,17 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
     const popper = document.createElement('div')
     popper.setAttribute('role', 'tooltip')
-    popper.className = 'MuiPopper-root MuiTooltip-popper MuiTooltip-popperInteractive MuiTooltip-popperArrow'
+    popper.className =
+      'MuiPopper-root MuiTooltip-popper MuiTooltip-popperInteractive MuiTooltip-popperArrow css-1y1ein3 vs-tab-tooltip-popper'
     popper.setAttribute('data-popper-placement', 'bottom')
-    popper.style.position = 'fixed'
-    popper.style.zIndex = '1500'
-    popper.style.pointerEvents = 'none'
-    popper.style.opacity = '0'
-    popper.style.transition = 'opacity 150ms cubic-bezier(0.4, 0, 0.2, 1)'
 
     const tooltip = document.createElement('div')
-    tooltip.className = 'MuiTooltip-tooltip MuiTooltip-tooltipArrow MuiTooltip-tooltipPlacementBottom'
+    tooltip.className =
+      'MuiTooltip-tooltip MuiTooltip-tooltipArrow MuiTooltip-tooltipPlacementBottom css-v4npsm vs-tab-tooltip-body'
     tooltip.innerText = text
 
     const arrow = document.createElement('span')
-    arrow.className = 'MuiTooltip-arrow'
-    arrow.style.position = 'absolute'
+    arrow.className = 'MuiTooltip-arrow css-6exv95 vs-tab-tooltip-arrow'
 
     tooltip.appendChild(arrow)
     popper.appendChild(tooltip)
@@ -725,14 +777,19 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
     const tooltipRect = tooltip.getBoundingClientRect()
     const left = rect.left + rect.width / 2 - tooltipRect.width / 2
-    const top = rect.bottom + 8
-    popper.style.left = `${Math.max(8, left)}px`
-    popper.style.top = `${top}px`
-    arrow.style.left = `${tooltipRect.width / 2 - 5.5}px`
+    const maxLeft = window.innerWidth - tooltipRect.width - 12
+    const clampedLeft = Math.max(12, Math.min(left, maxLeft))
+
+    popper.style.left = `${Math.round(clampedLeft)}px`
+    popper.style.top = `${Math.round(rect.bottom)}px`
+
+    const arrowX = rect.left + rect.width / 2 - clampedLeft - 5.5
+    arrow.style.left = '0px'
+    arrow.style.transform = `translate3d(${Math.round(arrowX)}px, 0px, 0px)`
 
     requestAnimationFrame(() => {
       if (tabTooltipEl === popper) {
-        popper.style.opacity = '1'
+        popper.classList.add('show')
       }
     })
   }
@@ -743,8 +800,12 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       tabTooltipTimer = undefined
     }
     if (tabTooltipEl) {
-      tabTooltipEl.remove()
+      const el = tabTooltipEl
       tabTooltipEl = null
+      el.classList.remove('show')
+      setTimeout(() => {
+        el.remove()
+      }, 150)
     }
   }
 
@@ -833,14 +894,20 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
       span.appendChild(graphBtn)
 
-      span.addEventListener('mouseenter', () => {
+      const onEnter = () => {
+        clearTimeout(tabTooltipTimer)
         tabTooltipTimer = setTimeout(() => {
           showTabTooltip(graphBtn!, 'View dependency graph with inputs and outputs.')
-        }, 120)
-      })
-      span.addEventListener('mouseleave', () => {
+        }, 100)
+      }
+      const onLeave = () => {
         hideTabTooltip()
-      })
+      }
+
+      span.addEventListener('mouseenter', onEnter)
+      span.addEventListener('mouseleave', onLeave)
+      graphBtn.addEventListener('mouseenter', onEnter)
+      graphBtn.addEventListener('mouseleave', onLeave)
 
       // Convert previous last button to middle button
       const logBtn = tabsContainer.querySelector('[data-testid="workflow-log-view-tab"]')
