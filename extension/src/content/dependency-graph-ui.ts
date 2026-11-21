@@ -20,7 +20,7 @@ const CSS = `
 #${OVERLAY_ID} {
   position: absolute;
   inset: 0;
-  z-index: 45;
+  z-index: 8;
   background-color: #0d1117;
   display: flex;
   flex-direction: column;
@@ -688,6 +688,9 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   let dragStart = { x: 0, y: 0 }
   let panStart = { x: 0, y: 0 }
 
+  let lastDrawerOpen = false
+  let lastFlowHitId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('flowhitid') || '' : ''
+
   let tooltipEl: HTMLElement | null = null
   let tabTooltipEl: HTMLElement | null = null
   let tabTooltipTimer: ReturnType<typeof setTimeout> | undefined
@@ -939,6 +942,11 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     }
 
     currentGraphData = data
+    lastFlowHitId = new URLSearchParams(window.location.search).get('flowhitid') || ''
+    const initDrawer = (document.querySelector('[data-testid="logs-popover-container"]') ||
+      document.querySelector('.MuiPopper-root')) as HTMLElement | null
+    lastDrawerOpen = !!initDrawer && initDrawer.offsetWidth > 0 && initDrawer.offsetHeight > 0
+
     renderView()
     requestAnimationFrame(() => {
       fitView()
@@ -998,6 +1006,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
     const { summary, timestamp } = currentGraphData
     const displayTimestamp = timestamp ? formatRunTimestamp(timestamp) : ''
+    const hasNativeChip = !!document.querySelector('[data-testid="workflow-navbar-logs-time-chip-container"]')
 
     overlayEl.innerHTML = `
       <div class="vs-graph-canvas-bg"></div>
@@ -1005,10 +1014,12 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       <!-- Top Floating Controls -->
       <div class="vs-graph-top-bar">
         <div class="vs-graph-top-left">
-          <div class="vs-graph-run-chip">
-            <span class="vs-graph-run-dot"></span>
-            <span>Showing data from ${displayTimestamp ? `run ${displayTimestamp}` : 'latest run'}</span>
-          </div>
+          ${hasNativeChip ? '' : `
+            <div class="vs-graph-run-chip" id="vs-fallback-run-chip" title="Click to open or close logs history">
+              <span class="vs-graph-run-dot"></span>
+              <span>Showing data from ${displayTimestamp ? `run ${displayTimestamp}` : 'latest run'}</span>
+            </div>
+          `}
         </div>
 
         <div class="vs-graph-top-center">
@@ -1080,9 +1091,15 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     overlayEl.querySelector('#vs-zoom-in')?.addEventListener('click', () => setZoom(zoom * 1.15))
     overlayEl.querySelector('#vs-zoom-out')?.addEventListener('click', () => setZoom(zoom / 1.15))
     overlayEl.querySelector('#vs-zoom-reset')?.addEventListener('click', () => {
-      fitView()
+      fitView(true)
     })
-    overlayEl.querySelector('#vs-zoom-fit')?.addEventListener('click', fitView)
+    overlayEl.querySelector('#vs-zoom-fit')?.addEventListener('click', () => {
+      fitView(true)
+    })
+    overlayEl.querySelector('#vs-fallback-run-chip')?.addEventListener('click', () => {
+      const nativeChip = document.querySelector('[data-testid="logs-data-time-chip"]') as HTMLElement | null
+      nativeChip?.click()
+    })
 
     const viewport = overlayEl.querySelector('#vs-graph-viewport') as HTMLElement
     setupCanvasInteractions(viewport)
@@ -1150,7 +1167,17 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     )
   }
 
-  function fitView(): void {
+  function animateTransform(durationMs = 250): void {
+    const layer = overlayEl?.querySelector('#vs-graph-transform-layer') as HTMLElement | null
+    if (!layer) return
+    layer.style.transition = `transform ${durationMs}ms cubic-bezier(0.16, 1, 0.3, 1)`
+    updateTransform()
+    setTimeout(() => {
+      if (layer) layer.style.transition = ''
+    }, durationMs + 20)
+  }
+
+  function fitView(animated = false): void {
     const viewport = overlayEl?.querySelector('#vs-graph-viewport') as HTMLElement | null
     if (!viewport || !currentGraphData) return
 
@@ -1181,11 +1208,13 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     const graphHeight = maxY - minY
     if (graphWidth <= 0 || graphHeight <= 0) return
 
-    const historyDrawer = document.querySelector('input[placeholder*="History"]')?.closest('.w-\\[240px\\], .MuiBox-root') as HTMLElement | null
-    const isHistoryDrawerOpen = !!historyDrawer && historyDrawer.offsetWidth > 0 && !!document.querySelector('.MuiPopper-root')
+    const historyDrawer = (document.querySelector('[data-testid="logs-popover-container"]') ||
+      document.querySelector('.MuiPopper-root') ||
+      document.querySelector('input[placeholder*="History"]')?.closest('.MuiPaper-root, .MuiBox-root')) as HTMLElement | null
+    const isHistoryDrawerOpen = !!historyDrawer && historyDrawer.offsetWidth > 0 && historyDrawer.offsetHeight > 0
     const drawerRight = isHistoryDrawerOpen ? historyDrawer.getBoundingClientRect().right : 0
-    const availableLeft = drawerRight > 0 ? drawerRight + 20 : 0
-    const availableWidth = rect.width - availableLeft
+    const availableLeft = drawerRight > 0 ? drawerRight + 24 : 0
+    const availableWidth = Math.max(300, rect.width - availableLeft)
 
     const scaleX = (availableWidth - padding * 2) / graphWidth
     const scaleY = (rect.height - padding * 2) / graphHeight
@@ -1195,7 +1224,11 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     pan.x = availableLeft + (availableWidth - graphWidth * zoom) / 2 - minX * zoom
     pan.y = (rect.height - graphHeight * zoom) / 2 - minY * zoom
 
-    updateTransform()
+    if (animated) {
+      animateTransform(250)
+    } else {
+      updateTransform()
+    }
   }
 
   function layoutAndRenderNodes(): void {
@@ -1656,11 +1689,69 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     overlayEl.querySelectorAll('.vs-graph-port-dot').forEach((d) => d.classList.remove('highlighted'))
   }
 
-  const interval = setInterval(ensureTabButton, 750)
+  const onDocClick = (e: MouseEvent): void => {
+    if (!isGraphActive) return
+    const target = e.target as HTMLElement | null
+    if (
+      target?.closest('[data-testid="logs-data-time-chip"]') ||
+      target?.closest('[data-testid="workflow-navbar-logs-time-chip-container"]') ||
+      target?.closest('.vs-graph-run-chip')
+    ) {
+      setTimeout(() => {
+        if (isGraphActive) fitView(true)
+      }, 150)
+      setTimeout(() => {
+        if (isGraphActive) fitView(true)
+      }, 350)
+    }
+  }
+  document.addEventListener('click', onDocClick)
+
+  const interval = setInterval(() => {
+    ensureTabButton()
+
+    if (isGraphActive) {
+      const drawer = (document.querySelector('[data-testid="logs-popover-container"]') ||
+        document.querySelector('.MuiPopper-root')) as HTMLElement | null
+      const isDrawerOpen = !!drawer && drawer.offsetWidth > 0 && drawer.offsetHeight > 0
+      if (isDrawerOpen !== lastDrawerOpen) {
+        lastDrawerOpen = isDrawerOpen
+        fitView(true)
+      }
+
+      const currentFlowHitId = new URLSearchParams(window.location.search).get('flowhitid') || ''
+      if (currentFlowHitId !== lastFlowHitId) {
+        lastFlowHitId = currentFlowHitId
+        bridge.getFlowGraphData().then((data) => {
+          if (data && isGraphActive) {
+            currentGraphData = data
+            renderView()
+            requestAnimationFrame(() => fitView(true))
+          }
+        })
+      }
+    }
+  }, 350)
 
   const onPopState = (): void => {
     hideTabTooltip()
-    if (isGraphActive) close()
+    if (isGraphActive) {
+      if (window.location.pathname.includes('/workflow/') && window.location.pathname.endsWith('/draft')) {
+        const currentFlowHitId = new URLSearchParams(window.location.search).get('flowhitid') || ''
+        if (currentFlowHitId !== lastFlowHitId) {
+          lastFlowHitId = currentFlowHitId
+          bridge.getFlowGraphData().then((data) => {
+            if (data && isGraphActive) {
+              currentGraphData = data
+              renderView()
+              requestAnimationFrame(() => fitView(true))
+            }
+          })
+        }
+      } else {
+        close()
+      }
+    }
     ensureTabButton()
   }
   window.addEventListener('popstate', onPopState)
@@ -1677,6 +1768,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     close,
     destroy() {
       clearInterval(interval)
+      document.removeEventListener('click', onDocClick)
       window.removeEventListener('popstate', onPopState)
       window.removeEventListener('resize', onResize)
       hideTabTooltip()
