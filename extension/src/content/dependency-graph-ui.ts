@@ -15,6 +15,97 @@ const WEBHOOK_ICON_URL = 'https://stuff.thingsofbrand.com/viasocket.com/images/i
 const CSS = `
 .vs-graph-tab-wrapper {
   display: inline-flex;
+  align-items: center;
+  height: 100%;
+}
+
+/* Material-UI Navbar Graph View Tab (100% match with Flow, Published, Log in light and dark mode) */
+[data-testid="${TAB_BUTTON_TESTID}"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  box-sizing: border-box !important;
+  outline: 0px !important;
+  margin: 0px !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  vertical-align: middle !important;
+  appearance: none !important;
+  text-decoration: none !important;
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  line-height: 22.75px !important;
+  letter-spacing: 0px !important;
+  text-transform: none !important;
+  padding: 4px 14px !important;
+  height: 31px !important;
+  border: 0px !important;
+  border-radius: 0px 4px 4px 0px !important;
+  background-color: transparent !important;
+  color: rgb(63, 63, 58) !important;
+  transition: background-color 300ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1), color 300ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Light mode tab button */
+html:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"],
+body:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"],
+[data-testid="${TAB_BUTTON_TESTID}"].vs-theme-light {
+  color: rgb(63, 63, 58) !important;
+  background-color: transparent !important;
+}
+
+html:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"]:hover,
+body:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"]:hover,
+[data-testid="${TAB_BUTTON_TESTID}"].vs-theme-light:hover {
+  text-decoration: none !important;
+  background-color: rgba(26, 27, 25, 0.04) !important;
+  color: rgb(26, 27, 25) !important;
+}
+
+html:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
+html:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"][aria-pressed="true"],
+body:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
+body:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"][aria-pressed="true"],
+[data-testid="${TAB_BUTTON_TESTID}"].vs-theme-light.Mui-selected {
+  background-color: rgb(255, 255, 255) !important;
+  color: rgb(26, 27, 25) !important;
+  font-weight: 600 !important;
+  box-shadow: rgba(0, 0, 0, 0.19) 0px 1px 2px !important;
+}
+
+/* Dark mode tab button */
+html.dark [data-testid="${TAB_BUTTON_TESTID}"],
+body.dark [data-testid="${TAB_BUTTON_TESTID}"],
+html[data-theme="dark"] [data-testid="${TAB_BUTTON_TESTID}"],
+body[data-theme="dark"] [data-testid="${TAB_BUTTON_TESTID}"],
+[data-testid="${TAB_BUTTON_TESTID}"].vs-theme-dark {
+  color: rgb(168, 168, 162) !important;
+  background-color: transparent !important;
+}
+
+html.dark [data-testid="${TAB_BUTTON_TESTID}"]:hover,
+body.dark [data-testid="${TAB_BUTTON_TESTID}"]:hover,
+html[data-theme="dark"] [data-testid="${TAB_BUTTON_TESTID}"]:hover,
+body[data-theme="dark"] [data-testid="${TAB_BUTTON_TESTID}"]:hover,
+[data-testid="${TAB_BUTTON_TESTID}"].vs-theme-dark:hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+}
+
+html.dark [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
+html.dark [data-testid="${TAB_BUTTON_TESTID}"][aria-pressed="true"],
+body.dark [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
+body.dark [data-testid="${TAB_BUTTON_TESTID}"][aria-pressed="true"],
+html[data-theme="dark"] [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
+body[data-theme="dark"] [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
+[data-testid="${TAB_BUTTON_TESTID}"].vs-theme-dark.Mui-selected,
+[data-testid="${TAB_BUTTON_TESTID}"].vs-theme-dark[aria-pressed="true"] {
+  background-color: #21262d !important;
+  color: rgb(240, 246, 252) !important;
+  font-weight: 600 !important;
+  box-shadow: rgba(0, 0, 0, 0.35) 0px 1px 2px !important;
 }
 
 /* Material-UI Navbar Tab Tooltip styles (100% match with Flow, Published, Log) */
@@ -73,31 +164,175 @@ const CSS = `
   transform-origin: 0px 100% !important;
 }
 
+/* Theme tokens: Dark theme (default) */
+#${OVERLAY_ID},
+#${OVERLAY_ID}.vs-theme-dark {
+  --vs-g-bg: #0d1117;
+  --vs-g-dot: rgba(255, 255, 255, 0.08);
+  --vs-g-card-bg: rgb(21, 27, 35);
+  --vs-g-card-border: rgba(255, 255, 255, 0.1);
+  --vs-g-card-border-hover: rgba(255, 255, 255, 0.24);
+  --vs-g-card-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --vs-g-text-primary: rgb(240, 246, 252);
+  --vs-g-text-secondary: #8b949e;
+  --vs-g-text-muted: #6e7681;
+  --vs-g-header-bg: rgba(255, 255, 255, 0.02);
+  --vs-g-header-border: rgba(255, 255, 255, 0.06);
+  --vs-g-section-bg: rgba(0, 0, 0, 0.22);
+  --vs-g-section-border: rgba(255, 255, 255, 0.05);
+  --vs-g-section-hover: rgba(255, 255, 255, 0.06);
+  --vs-g-row-border: rgba(255, 255, 255, 0.04);
+  --vs-g-row-hover: rgba(88, 166, 255, 0.12);
+  --vs-g-nested-bg: rgba(0, 0, 0, 0.15);
+  --vs-g-nested-border: rgba(110, 118, 129, 0.25);
+  --vs-g-topbar-bg: rgba(21, 27, 35, 0.92);
+  --vs-g-topbar-border: rgba(255, 255, 255, 0.15);
+  --vs-g-topbar-text: #c9d1d9;
+  --vs-g-filter-active-bg: rgba(255, 255, 255, 0.1);
+  --vs-g-filter-active-text: #ffffff;
+  --vs-g-back-btn-hover: #21262d;
+  --vs-g-key: #79c0ff;
+  --vs-g-str: #7ee787;
+  --vs-g-num: #ffa657;
+  --vs-g-bool: #58a6ff;
+  --vs-g-null: #d2a8ff;
+  --vs-g-badge-bg: rgba(88, 166, 255, 0.15);
+  --vs-g-badge-text: #79c0ff;
+  --vs-g-badge-border: rgba(88, 166, 255, 0.3);
+  --vs-g-path: #58a6ff;
+  --vs-g-path-hl: #79c0ff;
+  --vs-g-port-border: rgba(255, 255, 255, 0.3);
+  --vs-g-port-bg: rgb(21, 27, 35);
+  --vs-g-indep-border: rgba(255, 255, 255, 0.15);
+  --vs-g-modal-bg: #151b23;
+  --vs-g-modal-header-bg: #161b22;
+  --vs-g-modal-border: rgba(255, 255, 255, 0.12);
+  --vs-g-modal-title: #f0f6fc;
+}
+
+/* Theme tokens: Light theme */
+html:not(.dark) #${OVERLAY_ID},
+body:not(.dark) #${OVERLAY_ID},
+#${OVERLAY_ID}.vs-theme-light {
+  --vs-g-bg: #f8fafc;
+  --vs-g-dot: rgba(0, 0, 0, 0.09);
+  --vs-g-card-bg: #ffffff;
+  --vs-g-card-border: rgba(0, 0, 0, 0.12);
+  --vs-g-card-border-hover: rgba(0, 0, 0, 0.28);
+  --vs-g-card-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  --vs-g-text-primary: #1f2328;
+  --vs-g-text-secondary: #656d76;
+  --vs-g-text-muted: #8c959f;
+  --vs-g-header-bg: rgba(0, 0, 0, 0.02);
+  --vs-g-header-border: rgba(0, 0, 0, 0.08);
+  --vs-g-section-bg: rgba(0, 0, 0, 0.03);
+  --vs-g-section-border: rgba(0, 0, 0, 0.06);
+  --vs-g-section-hover: rgba(0, 0, 0, 0.05);
+  --vs-g-row-border: rgba(0, 0, 0, 0.05);
+  --vs-g-row-hover: rgba(9, 105, 218, 0.05);
+  --vs-g-nested-bg: rgba(0, 0, 0, 0.025);
+  --vs-g-nested-border: rgba(0, 0, 0, 0.14);
+  --vs-g-topbar-bg: rgba(255, 255, 255, 0.95);
+  --vs-g-topbar-border: rgba(0, 0, 0, 0.14);
+  --vs-g-topbar-text: #1f2328;
+  --vs-g-filter-active-bg: rgba(0, 0, 0, 0.08);
+  --vs-g-filter-active-text: #1f2328;
+  --vs-g-back-btn-hover: #f3f4f6;
+  --vs-g-key: #0550ae;
+  --vs-g-str: #0a3069;
+  --vs-g-num: #cf222e;
+  --vs-g-bool: #953800;
+  --vs-g-null: #8250df;
+  --vs-g-badge-bg: rgba(9, 105, 218, 0.08);
+  --vs-g-badge-text: #0969da;
+  --vs-g-badge-border: rgba(9, 105, 218, 0.2);
+  --vs-g-path: #0969da;
+  --vs-g-path-hl: #0550ae;
+  --vs-g-port-border: rgba(0, 0, 0, 0.3);
+  --vs-g-port-bg: #ffffff;
+  --vs-g-indep-border: rgba(0, 0, 0, 0.18);
+  --vs-g-modal-bg: #ffffff;
+  --vs-g-modal-header-bg: #f6f8fa;
+  --vs-g-modal-border: rgba(0, 0, 0, 0.12);
+  --vs-g-modal-title: #1f2328;
+}
+
+/* Explicit override when dark class is present */
+html.dark #${OVERLAY_ID},
+body.dark #${OVERLAY_ID},
+html[data-theme="dark"] #${OVERLAY_ID},
+body[data-theme="dark"] #${OVERLAY_ID} {
+  --vs-g-bg: #0d1117;
+  --vs-g-dot: rgba(255, 255, 255, 0.08);
+  --vs-g-card-bg: rgb(21, 27, 35);
+  --vs-g-card-border: rgba(255, 255, 255, 0.1);
+  --vs-g-card-border-hover: rgba(255, 255, 255, 0.24);
+  --vs-g-card-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --vs-g-text-primary: rgb(240, 246, 252);
+  --vs-g-text-secondary: #8b949e;
+  --vs-g-text-muted: #6e7681;
+  --vs-g-header-bg: rgba(255, 255, 255, 0.02);
+  --vs-g-header-border: rgba(255, 255, 255, 0.06);
+  --vs-g-section-bg: rgba(0, 0, 0, 0.22);
+  --vs-g-section-border: rgba(255, 255, 255, 0.05);
+  --vs-g-section-hover: rgba(255, 255, 255, 0.06);
+  --vs-g-row-border: rgba(255, 255, 255, 0.04);
+  --vs-g-row-hover: rgba(88, 166, 255, 0.12);
+  --vs-g-nested-bg: rgba(0, 0, 0, 0.15);
+  --vs-g-nested-border: rgba(110, 118, 129, 0.25);
+  --vs-g-topbar-bg: rgba(21, 27, 35, 0.92);
+  --vs-g-topbar-border: rgba(255, 255, 255, 0.15);
+  --vs-g-topbar-text: #c9d1d9;
+  --vs-g-filter-active-bg: rgba(255, 255, 255, 0.1);
+  --vs-g-filter-active-text: #ffffff;
+  --vs-g-back-btn-hover: #21262d;
+  --vs-g-key: #79c0ff;
+  --vs-g-str: #7ee787;
+  --vs-g-num: #ffa657;
+  --vs-g-bool: #58a6ff;
+  --vs-g-null: #d2a8ff;
+  --vs-g-badge-bg: rgba(88, 166, 255, 0.15);
+  --vs-g-badge-text: #79c0ff;
+  --vs-g-badge-border: rgba(88, 166, 255, 0.3);
+  --vs-g-path: #58a6ff;
+  --vs-g-path-hl: #79c0ff;
+  --vs-g-port-border: rgba(255, 255, 255, 0.3);
+  --vs-g-port-bg: rgb(21, 27, 35);
+  --vs-g-indep-border: rgba(255, 255, 255, 0.15);
+  --vs-g-modal-bg: #151b23;
+  --vs-g-modal-header-bg: #161b22;
+  --vs-g-modal-border: rgba(255, 255, 255, 0.12);
+  --vs-g-modal-title: #f0f6fc;
+}
+
 #${OVERLAY_ID} {
   position: absolute;
   inset: 0;
-  z-index: 8;
-  background-color: #0d1117;
+  z-index: 200 !important;
+  background-color: var(--vs-g-bg, #0d1117);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   font-family: Inter, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
-  color: rgb(240, 246, 252);
+  color: var(--vs-g-text-primary, rgb(240, 246, 252));
 }
 
 /* Ensure step edit sliders and drawers sit above the graph canvas */
+#flow-page-box .customSliderParent,
+#flow-page-box .custom_slider,
+#flow-page-box .sliderChild,
 #flow-page-box .pointer-events-auto.absolute.right-0,
-#flow-page-box .MuiDrawer-root,
-#flow-page-box [class*="slider"] {
-  z-index: 100 !important;
+#flow-page-box .pointer-events-auto.absolute.inset-y-0.right-0,
+#flow-page-box .MuiDrawer-root {
+  z-index: 1200 !important;
 }
 
 /* viaSocket dot grid canvas background */
 .vs-graph-canvas-bg {
   position: absolute;
   inset: 0;
-  background-color: #0d1117;
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.08) 1.2px, transparent 1.2px);
+  background-color: var(--vs-g-bg, #0d1117);
+  background-image: radial-gradient(circle, var(--vs-g-dot, rgba(255, 255, 255, 0.08)) 1.2px, transparent 1.2px);
   background-size: 20px 20px;
   pointer-events: none;
 }
@@ -131,12 +366,12 @@ const CSS = `
   gap: 8px;
   padding: 6px 12px;
   border-radius: 8px;
-  border: 1px solid var(--col-border, rgba(213, 217, 220, 0.24));
-  background: rgba(21, 27, 35, 0.92);
+  border: 1px solid var(--vs-g-topbar-border, rgba(213, 217, 220, 0.24));
+  background: var(--vs-g-topbar-bg, rgba(21, 27, 35, 0.92));
   backdrop-filter: blur(8px);
   font-size: 12px;
-  color: #8b949e;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  color: var(--vs-g-text-secondary, #8b949e);
+  box-shadow: var(--vs-g-card-shadow, 0 1px 3px rgba(0, 0, 0, 0.3));
   user-select: none;
 }
 
@@ -152,18 +387,18 @@ const CSS = `
   display: flex;
   align-items: center;
   border-radius: 8px;
-  border: 1px solid var(--col-border, rgba(213, 217, 220, 0.24));
-  background: rgba(21, 27, 35, 0.92);
+  border: 1px solid var(--vs-g-topbar-border, rgba(213, 217, 220, 0.24));
+  background: var(--vs-g-topbar-bg, rgba(21, 27, 35, 0.92));
   backdrop-filter: blur(8px);
   padding: 2px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--vs-g-card-shadow, 0 1px 3px rgba(0, 0, 0, 0.3));
   user-select: none;
 }
 
 .vs-graph-filter-btn {
   background: transparent;
   border: none;
-  color: #8b949e;
+  color: var(--vs-g-text-secondary, #8b949e);
   font-size: 12px;
   font-weight: 500;
   padding: 5px 12px;
@@ -174,12 +409,12 @@ const CSS = `
 }
 
 .vs-graph-filter-btn:hover {
-  color: #f0f6fc;
+  color: var(--vs-g-text-primary, #f0f6fc);
 }
 
 .vs-graph-filter-btn.active {
-  background: rgba(255, 255, 255, 0.1);
-  color: #ffffff;
+  background: var(--vs-g-filter-active-bg, rgba(255, 255, 255, 0.1));
+  color: var(--vs-g-filter-active-text, #ffffff);
   font-weight: 600;
 }
 
@@ -190,23 +425,22 @@ const CSS = `
   gap: 6px;
   padding: 6px 14px;
   border-radius: 8px;
-  border: 1px solid var(--col-border, rgba(213, 217, 220, 0.24));
-  background: rgba(21, 27, 35, 0.92);
+  border: 1px solid var(--vs-g-topbar-border, rgba(213, 217, 220, 0.24));
+  background: var(--vs-g-topbar-bg, rgba(21, 27, 35, 0.92));
   backdrop-filter: blur(8px);
   font-size: 12px;
   font-weight: 500;
-  color: #c9d1d9;
+  color: var(--vs-g-topbar-text, #c9d1d9);
   cursor: pointer;
   transition: all 0.15s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--vs-g-card-shadow, 0 1px 3px rgba(0, 0, 0, 0.3));
   font-family: inherit;
   user-select: none;
 }
 
 .vs-graph-back-btn:hover {
-  background: #21262d;
-  color: #ffffff;
-  border-color: rgba(255, 255, 255, 0.25);
+  background: var(--vs-g-back-btn-hover, #21262d);
+  color: var(--vs-g-text-primary, #ffffff);
 }
 
 /* Floating bottom zoom controls */
@@ -297,21 +531,21 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 
 .vs-graph-path {
   fill: none;
-  stroke: #58a6ff;
+  stroke: var(--vs-g-path, #58a6ff);
   stroke-width: 2px;
   stroke-linecap: round;
   pointer-events: stroke;
   cursor: pointer;
   transition: stroke 0.15s ease, stroke-width 0.15s ease, opacity 0.15s ease;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .vs-graph-path:hover,
 .vs-graph-path.highlighted {
-  stroke: #79c0ff !important;
+  stroke: var(--vs-g-path-hl, #79c0ff) !important;
   stroke-width: 3.2px !important;
   opacity: 1 !important;
-  filter: drop-shadow(0 0 5px rgba(88, 166, 255, 0.75));
+  filter: drop-shadow(0 0 5px var(--vs-g-path, rgba(88, 166, 255, 0.75)));
 }
 
 .vs-graph-path.pulse-anim {
@@ -335,11 +569,11 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   position: absolute;
   z-index: 5;
   width: 360px;
-  background-color: rgb(21, 27, 35);
-  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  background-color: var(--vs-g-card-bg, rgb(21, 27, 35));
+  border: 1.5px solid var(--vs-g-card-border, rgba(255, 255, 255, 0.1));
   border-radius: 8px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
-  color: rgb(240, 246, 252);
+  box-shadow: var(--vs-g-card-shadow, 0 4px 14px rgba(0, 0, 0, 0.45));
+  color: var(--vs-g-text-primary, rgb(240, 246, 252));
   display: flex;
   flex-direction: column;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -348,13 +582,13 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 }
 
 .vs-graph-card:hover {
-  border-color: rgba(255, 255, 255, 0.24);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+  border-color: var(--vs-g-card-border-hover, rgba(255, 255, 255, 0.24));
+  box-shadow: var(--vs-g-card-shadow, 0 6px 18px rgba(0, 0, 0, 0.55));
   z-index: 7;
 }
 
 .vs-graph-card.selected {
-  border-color: #58a6ff;
+  border-color: var(--vs-g-path, #58a6ff);
   box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.25);
   z-index: 8;
 }
@@ -365,8 +599,8 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.02);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--vs-g-header-bg, rgba(255, 255, 255, 0.02));
+  border-bottom: 1px solid var(--vs-g-header-border, rgba(255, 255, 255, 0.06));
   border-top-left-radius: 7px;
   border-top-right-radius: 7px;
 }
@@ -380,7 +614,7 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #161b22;
+  background: var(--vs-g-header-bg, #161b22);
 }
 
 .vs-graph-card-avatar img {
@@ -397,7 +631,7 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 .vs-graph-card-title {
   font-size: 13px;
   font-weight: 600;
-  color: rgb(240, 246, 252);
+  color: var(--vs-g-text-primary, rgb(240, 246, 252));
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -406,7 +640,7 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 
 .vs-graph-card-url {
   font-size: 11px;
-  color: #8b949e;
+  color: var(--vs-g-text-secondary, #8b949e);
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -425,8 +659,8 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   font-weight: 500;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #8b949e;
+  background: var(--vs-g-header-bg, rgba(255, 255, 255, 0.08));
+  color: var(--vs-g-text-secondary, #8b949e);
 }
 
 .vs-graph-card-badge.indep {
@@ -439,7 +673,7 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 .vs-graph-menu-btn {
   background: transparent;
   border: none;
-  color: #8b949e;
+  color: var(--vs-g-text-secondary, #8b949e);
   cursor: pointer;
   padding: 3px;
   border-radius: 4px;
@@ -451,8 +685,8 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 
 .vs-graph-edit-btn:hover,
 .vs-graph-menu-btn:hover {
-  color: #f0f6fc;
-  background-color: rgba(255, 255, 255, 0.08);
+  color: var(--vs-g-text-primary, #f0f6fc);
+  background-color: var(--vs-g-section-hover, rgba(255, 255, 255, 0.08));
 }
 
 /* JSON Crack-style Structured Node Table */
@@ -461,7 +695,7 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 }
 
 .vs-graph-section.output-section {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--vs-g-section-border, rgba(255, 255, 255, 0.08));
 }
 
 .vs-graph-section-header {
@@ -469,15 +703,15 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   align-items: center;
   justify-content: space-between;
   padding: 5px 10px;
-  background: rgba(0, 0, 0, 0.22);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--vs-g-section-bg, rgba(0, 0, 0, 0.22));
+  border-bottom: 1px solid var(--vs-g-section-border, rgba(255, 255, 255, 0.05));
   cursor: pointer;
   user-select: none;
   transition: background-color 0.12s ease;
 }
 
 .vs-graph-section-header:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--vs-g-section-hover, rgba(255, 255, 255, 0.06));
 }
 
 .vs-graph-section-header-left {
@@ -488,14 +722,14 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 
 .vs-graph-section-chevron {
   font-size: 10px;
-  color: #8b949e;
+  color: var(--vs-g-text-secondary, #8b949e);
   line-height: 1;
   display: inline-block;
   transition: transform 0.15s ease, color 0.15s ease;
 }
 
 .vs-graph-section-header:hover .vs-graph-section-chevron {
-  color: #f0f6fc;
+  color: var(--vs-g-text-primary, #f0f6fc);
 }
 
 .vs-graph-section.collapsed .vs-graph-section-chevron {
@@ -514,22 +748,22 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.06em;
-  color: #8b949e;
+  color: var(--vs-g-text-secondary, #8b949e);
   text-transform: uppercase;
   font-family: Inter, system-ui, sans-serif;
   transition: color 0.12s ease;
 }
 
 .vs-graph-section-header:hover .vs-graph-section-tag {
-  color: #c9d1d9;
+  color: var(--vs-g-text-primary, #c9d1d9);
 }
 
 .vs-graph-section-count {
   font-size: 10px;
   padding: 0 5px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #8b949e;
+  background: var(--vs-g-header-bg, rgba(255, 255, 255, 0.06));
+  color: var(--vs-g-text-secondary, #8b949e);
   font-family: ui-monospace, monospace;
 }
 
@@ -555,7 +789,7 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 11px;
   line-height: 1.4;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--vs-g-row-border, rgba(255, 255, 255, 0.04));
   cursor: pointer;
   transition: background-color 0.12s ease, border-color 0.12s ease;
   user-select: text;
@@ -567,11 +801,11 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 
 .vs-graph-row:hover,
 .vs-graph-row.highlighted {
-  background-color: rgba(88, 166, 255, 0.12);
+  background-color: var(--vs-g-row-hover, rgba(88, 166, 255, 0.12));
 }
 
 .vs-graph-row.highlighted-source {
-  background-color: rgba(88, 166, 255, 0.18);
+  background-color: var(--vs-g-row-hover, rgba(88, 166, 255, 0.18));
 }
 
 /* Expand / Collapse Button matching JSON Crack */
@@ -582,10 +816,10 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--vs-g-header-bg, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--vs-g-section-border, rgba(255, 255, 255, 0.12));
   border-radius: 3px;
-  color: #8b949e;
+  color: var(--vs-g-text-secondary, #8b949e);
   font-size: 11px;
   line-height: 1;
   font-family: ui-monospace, monospace;
@@ -599,9 +833,9 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 }
 
 .vs-graph-expand-btn:hover {
-  background: rgba(88, 166, 255, 0.2);
-  border-color: rgba(88, 166, 255, 0.4);
-  color: #ffffff;
+  background: var(--vs-g-badge-bg, rgba(88, 166, 255, 0.2));
+  border-color: var(--vs-g-badge-border, rgba(88, 166, 255, 0.4));
+  color: var(--vs-g-text-primary, #ffffff);
 }
 
 .vs-graph-expand-placeholder {
@@ -618,14 +852,14 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   flex-direction: column;
   margin-left: 14px;
   padding-left: 6px;
-  border-left: 1.5px solid rgba(110, 118, 129, 0.25);
-  background: rgba(0, 0, 0, 0.15);
+  border-left: 1.5px solid var(--vs-g-nested-border, rgba(110, 118, 129, 0.25));
+  background: var(--vs-g-nested-bg, rgba(0, 0, 0, 0.15));
   border-radius: 0 0 4px 4px;
   transition: border-color 0.15s ease;
 }
 
 .vs-graph-nested-container:hover {
-  border-left-color: rgba(88, 166, 255, 0.5);
+  border-left-color: var(--vs-g-path, rgba(88, 166, 255, 0.5));
 }
 
 .vs-graph-nested-row {
@@ -637,7 +871,7 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-size: 10.5px;
   line-height: 1.35;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--vs-g-row-border, rgba(255, 255, 255, 0.03));
   cursor: pointer;
   transition: background-color 0.12s ease;
   user-select: text;
@@ -649,15 +883,15 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 
 .vs-graph-nested-row:hover,
 .vs-graph-nested-row.highlighted {
-  background-color: rgba(88, 166, 255, 0.1);
+  background-color: var(--vs-g-row-hover, rgba(88, 166, 255, 0.1));
 }
 
 .vs-graph-nested-row.highlighted-source {
-  background-color: rgba(88, 166, 255, 0.16);
+  background-color: var(--vs-g-row-hover, rgba(88, 166, 255, 0.16));
 }
 
 .vs-graph-row-key {
-  color: #79c0ff;
+  color: var(--vs-g-key, #79c0ff);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -672,13 +906,13 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 }
 
 .vs-row-index {
-  color: #a5d6ff;
+  color: var(--vs-g-path, #a5d6ff);
   font-weight: 500;
   opacity: 0.9;
 }
 
 .vs-graph-row-colon {
-  color: #6e7681;
+  color: var(--vs-g-text-muted, #6e7681);
   font-weight: 400;
   flex-shrink: 0;
 }
@@ -701,7 +935,7 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   opacity: 0;
   background: transparent;
   border: none;
-  color: #8b949e;
+  color: var(--vs-g-text-secondary, #8b949e);
   cursor: pointer;
   padding: 0 2px;
   font-size: 10px;
@@ -718,13 +952,13 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 
 .vs-graph-row-inspect-btn:hover {
   opacity: 1 !important;
-  color: #58a6ff;
+  color: var(--vs-g-path, #58a6ff);
 }
 
 .vs-graph-show-more-row {
   padding: 4px 10px;
   font-size: 10px;
-  color: #58a6ff;
+  color: var(--vs-g-path, #58a6ff);
   cursor: pointer;
   font-family: ui-monospace, monospace;
   font-weight: 500;
@@ -736,30 +970,30 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 }
 
 .vs-graph-show-more-row:hover {
-  color: #79c0ff;
-  background-color: rgba(88, 166, 255, 0.08);
+  color: var(--vs-g-path-hl, #79c0ff);
+  background-color: var(--vs-g-row-hover, rgba(88, 166, 255, 0.08));
 }
 
 /* Syntax highlighted value types (inspired by JSON Crack & GitHub dark) */
 .vs-val-str {
-  color: #7ee787;
+  color: var(--vs-g-str, #7ee787);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .vs-val-num {
-  color: #ffa657;
+  color: var(--vs-g-num, #ffa657);
   font-weight: 500;
 }
 
 .vs-val-bool {
-  color: #58a6ff;
+  color: var(--vs-g-bool, #58a6ff);
   font-weight: 600;
 }
 
 .vs-val-null {
-  color: #8b949e;
+  color: var(--vs-g-null, #8b949e);
   font-style: italic;
 }
 
@@ -768,7 +1002,7 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   height: 10px;
   border-radius: 2px;
   display: inline-block;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--vs-g-card-border, rgba(255, 255, 255, 0.2));
   flex-shrink: 0;
 }
 
@@ -778,9 +1012,9 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   border-radius: 4px;
   font-size: 10px;
   font-weight: 500;
-  background: rgba(110, 118, 129, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: #c9d1d9;
+  background: var(--vs-g-header-bg, rgba(110, 118, 129, 0.18));
+  border: 1px solid var(--vs-g-section-border, rgba(255, 255, 255, 0.08));
+  color: var(--vs-g-text-secondary, #c9d1d9);
 }
 
 .vs-val-badge.expandable {
@@ -789,20 +1023,20 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 }
 
 .vs-val-badge.expandable:hover {
-  background-color: rgba(88, 166, 255, 0.2);
-  border-color: rgba(88, 166, 255, 0.4);
+  background-color: var(--vs-g-badge-bg, rgba(88, 166, 255, 0.2));
+  border-color: var(--vs-g-badge-border, rgba(88, 166, 255, 0.4));
 }
 
 .vs-val-array {
-  color: #d2a8ff;
-  border-color: rgba(210, 168, 255, 0.25);
-  background: rgba(210, 168, 255, 0.08);
+  color: var(--vs-g-null, #d2a8ff);
+  border-color: var(--vs-g-badge-border, rgba(210, 168, 255, 0.25));
+  background: var(--vs-g-badge-bg, rgba(210, 168, 255, 0.08));
 }
 
 .vs-val-obj {
-  color: #a5d6ff;
-  border-color: rgba(165, 214, 255, 0.25);
-  background: rgba(165, 214, 255, 0.08);
+  color: var(--vs-g-key, #a5d6ff);
+  border-color: var(--vs-g-badge-border, rgba(165, 214, 255, 0.25));
+  background: var(--vs-g-badge-bg, rgba(165, 214, 255, 0.08));
 }
 
 /* Minimal port connection dots anchored directly on row */
@@ -811,8 +1045,8 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #151b23;
-  border: 1.5px solid #58a6ff;
+  background-color: var(--vs-g-port-bg, #151b23);
+  border: 1.5px solid var(--vs-g-path, #58a6ff);
   transition: all 0.15s ease;
   z-index: 5;
   top: 50%;
@@ -829,16 +1063,16 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 
 .vs-graph-port-dot:hover,
 .vs-graph-port-dot.highlighted {
-  background-color: #58a6ff;
-  box-shadow: 0 0 8px #58a6ff;
+  background-color: var(--vs-g-path, #58a6ff);
+  box-shadow: 0 0 8px var(--vs-g-path, #58a6ff);
   transform: translateY(-50%) scale(1.35);
 }
 
 /* Independent lane */
 .vs-graph-independent-lane {
   position: absolute;
-  border: 1px dashed rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.015);
+  border: 1px dashed var(--vs-g-indep-border, rgba(255, 255, 255, 0.14));
+  background: var(--vs-g-header-bg, rgba(255, 255, 255, 0.015));
   border-radius: 10px;
   padding: 16px 20px;
   z-index: 1;
@@ -849,11 +1083,11 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   position: absolute;
   top: -11px;
   left: 18px;
-  background: #0d1117;
+  background: var(--vs-g-bg, #0d1117);
   padding: 0 8px;
   font-size: 11px;
   font-weight: 500;
-  color: #8b949e;
+  color: var(--vs-g-text-secondary, #8b949e);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -891,30 +1125,30 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   width: 600px;
   max-width: 92vw;
   max-height: 82vh;
-  background: #151b23;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--vs-g-modal-bg, #151b23);
+  border: 1px solid var(--vs-g-modal-border, rgba(255, 255, 255, 0.12));
   border-radius: 8px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.85);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
   overflow: hidden;
   position: relative;
 }
 
 .vs-graph-modal-header {
   padding: 10px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--vs-g-modal-border, rgba(255, 255, 255, 0.08));
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  background: #161b22;
+  background: var(--vs-g-modal-header-bg, #161b22);
 }
 
 .vs-graph-modal-title {
   font-size: 13px;
   font-weight: 500;
-  color: #f0f6fc;
+  color: var(--vs-g-modal-title, #f0f6fc);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -938,9 +1172,9 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   font-size: 11.5px;
   font-weight: 500;
   font-family: Inter, system-ui, -apple-system, sans-serif;
-  color: #c9d1d9;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--vs-g-topbar-text, #c9d1d9);
+  background: var(--vs-g-header-bg, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--vs-g-modal-border, rgba(255, 255, 255, 0.14));
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -949,21 +1183,21 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 }
 
 .vs-graph-modal-btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.28);
-  color: #ffffff;
+  background: var(--vs-g-back-btn-hover, rgba(255, 255, 255, 0.12));
+  border-color: var(--vs-g-card-border-hover, rgba(255, 255, 255, 0.28));
+  color: var(--vs-g-text-primary, #ffffff);
 }
 
 .vs-graph-modal-btn.copy {
-  color: #58a6ff;
-  border-color: rgba(88, 166, 255, 0.3);
-  background: rgba(88, 166, 255, 0.08);
+  color: var(--vs-g-path, #58a6ff);
+  border-color: var(--vs-g-badge-border, rgba(88, 166, 255, 0.3));
+  background: var(--vs-g-badge-bg, rgba(88, 166, 255, 0.08));
 }
 
 .vs-graph-modal-btn.copy:hover {
-  background: rgba(88, 166, 255, 0.18);
-  border-color: rgba(88, 166, 255, 0.5);
-  color: #79c0ff;
+  background: var(--vs-g-badge-bg, rgba(88, 166, 255, 0.18));
+  border-color: var(--vs-g-path-hl, rgba(88, 166, 255, 0.5));
+  color: var(--vs-g-path-hl, #79c0ff);
 }
 
 .vs-graph-modal-btn.copied {
@@ -993,8 +1227,8 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 11.5px;
   line-height: 1.5;
-  color: #c9d1d9;
-  background: #0d1117;
+  color: var(--vs-g-modal-title, #c9d1d9);
+  background: var(--vs-g-bg, #0d1117);
   margin: 0;
   max-height: calc(82vh - 55px);
   user-select: text;
@@ -1042,6 +1276,62 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   let tooltipEl: HTMLElement | null = null
   let tabTooltipEl: HTMLElement | null = null
   let tabTooltipTimer: ReturnType<typeof setTimeout> | undefined
+
+  function isDarkMode(): boolean {
+    if (document.documentElement.classList.contains('dark') || document.body.classList.contains('dark')) return true
+    if (
+      document.documentElement.getAttribute('data-theme') === 'dark' ||
+      document.body.getAttribute('data-theme') === 'dark'
+    )
+      return true
+    const body = document.body
+    if (body) {
+      const color = window.getComputedStyle(body).color || ''
+      const match = color.match(/\d+/g)
+      if (match && match.length >= 3) {
+        const lum = 0.299 * Number(match[0]) + 0.587 * Number(match[1]) + 0.114 * Number(match[2])
+        if (lum > 150) return true
+        if (lum < 100) return false
+      }
+    }
+    return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches
+  }
+
+  function updateGraphTheme(): void {
+    const isDark = isDarkMode()
+    const targetThemeClass = isDark ? 'vs-theme-dark' : 'vs-theme-light'
+    const removeThemeClass = isDark ? 'vs-theme-light' : 'vs-theme-dark'
+
+    if (overlayEl) {
+      overlayEl.classList.remove(removeThemeClass)
+      overlayEl.classList.add(targetThemeClass)
+    }
+
+    const tabsContainer = document.querySelector('[data-testid="workflow-view-tabs"]')
+    const graphBtn = tabsContainer?.querySelector(`[data-testid="${TAB_BUTTON_TESTID}"]`)
+    if (graphBtn) {
+      graphBtn.classList.remove(removeThemeClass)
+      graphBtn.classList.add(targetThemeClass)
+    }
+  }
+
+  const themeObserver = new MutationObserver(() => {
+    updateGraphTheme()
+  })
+  if (typeof document !== 'undefined') {
+    if (document.documentElement) {
+      themeObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'data-theme', 'style'],
+      })
+    }
+    if (document.body) {
+      themeObserver.observe(document.body, {
+        attributes: true,
+        attributeFilter: ['class', 'data-theme', 'style'],
+      })
+    }
+  }
 
   function showTabTooltip(target: HTMLElement, text: string): void {
     hideTabTooltip()
@@ -1273,6 +1563,21 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     const tabsContainer = document.querySelector('[data-testid="workflow-view-tabs"]')
     if (!tabsContainer) return
 
+    // Dynamically retrieve Emotion class from sibling buttons to match 100%
+    const siblingBtn =
+      tabsContainer.querySelector<HTMLButtonElement>('button[data-testid="workflow-flow-view-tab"]') ||
+      tabsContainer.querySelector<HTMLButtonElement>('button')
+    const emotionClass =
+      Array.from(siblingBtn?.classList || []).find((c) => c.startsWith('css-')) || 'css-1yn0bbm'
+
+    // Convert previous last button to middle button
+    const logBtn = tabsContainer.querySelector<HTMLButtonElement>('[data-testid="workflow-log-view-tab"]')
+    if (logBtn) {
+      logBtn.classList.remove('MuiToggleButtonGroup-lastButton')
+      logBtn.classList.add('MuiToggleButtonGroup-middleButton')
+      logBtn.style.borderRadius = '0px'
+    }
+
     let graphBtn = tabsContainer.querySelector(`[data-testid="${TAB_BUTTON_TESTID}"]`) as HTMLButtonElement | null
     if (!graphBtn) {
       const span = document.createElement('span')
@@ -1280,8 +1585,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       span.setAttribute('aria-label', 'View dependency graph with inputs and outputs.')
 
       graphBtn = document.createElement('button')
-      graphBtn.className =
-        'MuiButtonBase-root MuiToggleButtonGroup-grouped MuiToggleButtonGroup-groupedHorizontal MuiToggleButton-root MuiToggleButton-sizeSmall MuiToggleButton-standard MuiToggleButtonGroup-grouped MuiToggleButtonGroup-groupedHorizontal MuiToggleButtonGroup-lastButton css-3zrywm'
+      graphBtn.className = `MuiButtonBase-root MuiToggleButtonGroup-grouped MuiToggleButtonGroup-groupedHorizontal MuiToggleButton-root MuiToggleButton-sizeSmall MuiToggleButton-standard MuiToggleButtonGroup-lastButton ${emotionClass}`
       graphBtn.tabIndex = 0
       graphBtn.type = 'button'
       graphBtn.value = 'graph'
@@ -1289,6 +1593,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       if (isGraphActive) graphBtn.classList.add('Mui-selected')
       graphBtn.setAttribute('data-testid', TAB_BUTTON_TESTID)
       graphBtn.innerText = 'Graph'
+      graphBtn.style.borderRadius = '0px 4px 4px 0px'
 
       span.appendChild(graphBtn)
 
@@ -1307,22 +1612,29 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       graphBtn.addEventListener('mouseenter', onEnter)
       graphBtn.addEventListener('mouseleave', onLeave)
 
-      // Convert previous last button to middle button
-      const logBtn = tabsContainer.querySelector('[data-testid="workflow-log-view-tab"]')
-      if (logBtn) {
-        logBtn.classList.remove('MuiToggleButtonGroup-lastButton')
-        logBtn.classList.add('MuiToggleButtonGroup-middleButton')
-      }
-
-      tabsContainer.appendChild(span)
-
-      graphBtn.addEventListener('click', (e) => {
+      const handleTabClick = (e: MouseEvent) => {
         e.preventDefault()
         e.stopPropagation()
         hideTabTooltip()
-        open()
-      })
+        void open()
+      }
+      span.addEventListener('click', handleTabClick)
+      graphBtn.addEventListener('click', handleTabClick)
+
+      tabsContainer.appendChild(span)
+    } else {
+      // Sync classes and border radius
+      if (!graphBtn.classList.contains(emotionClass)) {
+        Array.from(graphBtn.classList)
+          .filter((c) => c.startsWith('css-') && c !== emotionClass)
+          .forEach((c) => graphBtn!.classList.remove(c))
+        graphBtn.classList.add(emotionClass)
+      }
+      graphBtn.classList.add('MuiToggleButtonGroup-lastButton')
+      graphBtn.style.borderRadius = '0px 4px 4px 0px'
     }
+
+    updateGraphTheme()
 
     // Attach listeners on other buttons to close graph view when clicked
     const otherButtons = tabsContainer.querySelectorAll<HTMLButtonElement>(
@@ -1362,12 +1674,14 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       graphBtn?.classList.remove('Mui-selected')
       graphBtn?.setAttribute('aria-pressed', 'false')
     }
+    updateGraphTheme()
   }
 
   async function open(): Promise<void> {
     isGraphActive = true
     document.body.classList.add('vs-graph-active')
     updateTabButtonsState()
+    updateGraphTheme()
 
     const nativeZoomP = document.querySelector('[data-testid="zoom-controls"] p')
     if (nativeZoomP && !savedNativeZoomText) {
@@ -2814,6 +3128,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     close,
     refresh,
     destroy() {
+      themeObserver.disconnect()
       clearInterval(interval)
       document.removeEventListener('click', onDocClick, true)
       document.body.classList.remove('vs-graph-active')
