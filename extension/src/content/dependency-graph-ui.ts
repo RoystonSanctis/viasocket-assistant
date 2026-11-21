@@ -268,27 +268,30 @@ const CSS = `
   z-index: 3;
 }
 
-/* Native viaSocket Card Style (matches StepNode) */
+/* Native viaSocket Card Style (JSON Crack-inspired property tables) */
 .vs-graph-card {
   position: absolute;
-  width: 330px;
+  width: 360px;
   background-color: rgb(21, 27, 35);
-  border: 2px solid rgba(255, 255, 255, 0.08);
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  box-shadow: 0px 1px 2px #00000080;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
   color: rgb(240, 246, 252);
   display: flex;
   flex-direction: column;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   user-select: none;
+  overflow: visible;
 }
 
 .vs-graph-card:hover {
-  border-color: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.24);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
 }
 
 .vs-graph-card.selected {
-  border-color: #1f6feb;
+  border-color: #58a6ff;
+  box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.25);
 }
 
 /* Header */
@@ -296,7 +299,11 @@ const CSS = `
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-top-left-radius: 7px;
+  border-top-right-radius: 7px;
 }
 
 .vs-graph-card-avatar {
@@ -323,8 +330,8 @@ const CSS = `
 }
 
 .vs-graph-card-title {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   color: rgb(240, 246, 252);
   margin: 0;
   white-space: nowrap;
@@ -378,96 +385,188 @@ const CSS = `
   color: #f0f6fc;
 }
 
-/* Sections: With / Inputs and Output */
-.vs-graph-card-content {
-  padding: 6px 12px 10px 12px;
-}
-
-.vs-graph-card-output-section {
+/* JSON Crack-style Structured Node Table */
+.vs-graph-section {
   width: 100%;
-  border-top: 1px solid #374151;
-  padding: 6px 12px 10px 12px;
 }
 
-.vs-graph-chips-wrap {
+.vs-graph-section.output-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.vs-graph-section-header {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
+  justify-content: space-between;
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.22);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.vs-graph-section-label {
-  font-size: 12px;
+.vs-graph-section-tag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   color: #8b949e;
-  margin: 0;
-  margin-right: 2px;
+  text-transform: uppercase;
+  font-family: Inter, system-ui, sans-serif;
 }
 
-/* Chips matching viaSocket's MuiChip-filled */
-.vs-graph-chip-container {
+.vs-graph-section-count {
+  font-size: 10px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #8b949e;
+  font-family: ui-monospace, monospace;
+}
+
+.vs-graph-rows-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Individual Variable Row (JSON Crack property row) */
+.vs-graph-row {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+  user-select: text;
 }
 
-.vs-graph-chip {
-  background-color: #21262d;
-  color: #c9d1d9;
-  border-radius: 16px;
-  font-size: 11px;
-  height: 24px;
-  padding: 0 9px;
-  display: inline-flex;
+.vs-graph-row:last-child {
+  border-bottom: none;
+}
+
+.vs-graph-row:hover,
+.vs-graph-row.highlighted {
+  background-color: rgba(88, 166, 255, 0.12);
+}
+
+.vs-graph-row.highlighted-source {
+  background-color: rgba(88, 166, 255, 0.18);
+}
+
+.vs-graph-row-key {
+  color: #79c0ff;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+  flex-shrink: 0;
+}
+
+.vs-graph-row-colon {
+  color: #6e7681;
+  font-weight: 400;
+  flex-shrink: 0;
+}
+
+.vs-graph-row-val {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+  font-weight: 400;
+  display: flex;
   align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  font-family: inherit;
-  max-width: 250px;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+/* Syntax highlighted value types (inspired by JSON Crack & GitHub dark) */
+.vs-val-str {
+  color: #7ee787;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.vs-graph-chip:hover,
-.vs-graph-chip.highlighted {
-  background-color: #30363d;
-  color: #f0f6fc;
-  border-color: #58a6ff;
+.vs-val-num {
+  color: #ffa657;
+  font-weight: 500;
 }
 
-.vs-graph-chip.highlighted-source {
-  background-color: #1f6feb22;
-  border-color: #58a6ff;
-  color: #79c0ff;
+.vs-val-bool {
+  color: #58a6ff;
+  font-weight: 600;
 }
 
-/* Minimal port connection dots */
+.vs-val-null {
+  color: #8b949e;
+  font-style: italic;
+}
+
+.vs-val-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+}
+
+.vs-val-badge {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  background: rgba(110, 118, 129, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #c9d1d9;
+}
+
+.vs-val-array {
+  color: #d2a8ff;
+  border-color: rgba(210, 168, 255, 0.25);
+  background: rgba(210, 168, 255, 0.08);
+}
+
+.vs-val-obj {
+  color: #a5d6ff;
+  border-color: rgba(165, 214, 255, 0.25);
+  background: rgba(165, 214, 255, 0.08);
+}
+
+/* Minimal port connection dots anchored directly on row */
 .vs-graph-port-dot {
   position: absolute;
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background-color: #151b23;
   border: 1.5px solid #58a6ff;
   transition: all 0.15s ease;
   z-index: 5;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
 .vs-graph-port-dot.port-in {
-  left: -4px;
+  left: -5px;
 }
 
 .vs-graph-port-dot.port-out {
-  right: -4px;
+  right: -5px;
 }
 
 .vs-graph-port-dot:hover,
 .vs-graph-port-dot.highlighted {
   background-color: #58a6ff;
-  box-shadow: 0 0 6px #58a6ff;
-  transform: scale(1.3);
+  box-shadow: 0 0 8px #58a6ff;
+  transform: translateY(-50%) scale(1.35);
 }
 
 /* Independent lane */
@@ -1115,10 +1214,10 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     const dependentSteps = visibleSteps.filter((s) => !s.isIndependent)
     const independentSteps = visibleSteps.filter((s) => s.isIndependent)
 
-    const COLUMN_WIDTH = 410
+    const COLUMN_WIDTH = 450
     const START_X = 60
     const START_Y = 80
-    const CARD_GAP_Y = 40
+    const CARD_GAP_Y = 32
 
     const columns: Map<number, FlowGraphNode[]> = new Map()
     if (trigger && currentFilter !== 'independent') {
@@ -1144,7 +1243,9 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         card.style.top = `${currentY}px`
         nodesLayer.appendChild(card)
 
-        const estimatedHeight = Math.max(140, (node.inputs.length + node.outputs.length) * 28 + 90)
+        const inHeight = node.inputs.length > 0 ? 25 + node.inputs.length * 27 : 0
+        const outHeight = node.outputs.length > 0 ? 25 + node.outputs.length * 27 : 0
+        const estimatedHeight = Math.max(90, 48 + inHeight + outHeight)
         currentY += estimatedHeight + CARD_GAP_Y
       }
 
@@ -1153,7 +1254,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
     if (independentSteps.length > 0) {
       const indepSectionY = maxGraphY + 40
-      const sectionWidth = Math.max(750, independentSteps.length * (COLUMN_WIDTH - 30) + 40)
+      const sectionWidth = Math.max(750, independentSteps.length * (COLUMN_WIDTH - 50) + 40)
       const sectionHeight = 320
 
       const lane = document.createElement('div')
@@ -1176,13 +1277,102 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         card.style.left = `${indepX}px`
         card.style.top = `${indepY}px`
         nodesLayer.appendChild(card)
-        indepX += 350
+        indepX += 380
       }
     }
 
     requestAnimationFrame(() => {
       renderConnections()
     })
+  }
+
+  function escapeHtml(str: string): string {
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+  }
+
+  function formatJsonCrackValue(rawVal: unknown): { html: string; text: string } {
+    if (rawVal === null) {
+      return { html: '<span class="vs-val-null">null</span>', text: 'null' }
+    }
+    if (rawVal === undefined) {
+      return { html: '<span class="vs-val-null">undefined</span>', text: 'undefined' }
+    }
+    if (typeof rawVal === 'boolean') {
+      return {
+        html: `<span class="vs-val-bool">${rawVal}</span>`,
+        text: String(rawVal),
+      }
+    }
+    if (typeof rawVal === 'number') {
+      return {
+        html: `<span class="vs-val-num">${rawVal}</span>`,
+        text: String(rawVal),
+      }
+    }
+    if (Array.isArray(rawVal)) {
+      const len = rawVal.length
+      return {
+        html: `<span class="vs-val-badge vs-val-array">[${len} ${len === 1 ? 'item' : 'items'}]</span>`,
+        text: `[${len} items]`,
+      }
+    }
+    if (typeof rawVal === 'object') {
+      const keys = Object.keys(rawVal as Record<string, unknown>)
+      return {
+        html: `<span class="vs-val-badge vs-val-obj">{${keys.length} ${keys.length === 1 ? 'key' : 'keys'}}</span>`,
+        text: `{${keys.length} keys}`,
+      }
+    }
+
+    const str = String(rawVal)
+    const trimmed = str.trim()
+
+    // Hex color swatch (signature JSON Crack feature)
+    if (/^#[0-9a-fA-F]{3,8}$/.test(trimmed)) {
+      return {
+        html: `<span class="vs-val-swatch" style="background-color:${escapeHtml(trimmed)};"></span><span class="vs-val-str">${escapeHtml(trimmed)}</span>`,
+        text: trimmed,
+      }
+    }
+    // Number encoded as string
+    if (/^-?\d+(\.\d+)?$/.test(trimmed) && trimmed.length <= 12) {
+      return {
+        html: `<span class="vs-val-num">${escapeHtml(trimmed)}</span>`,
+        text: trimmed,
+      }
+    }
+    if (trimmed === 'true' || trimmed === 'false') {
+      return {
+        html: `<span class="vs-val-bool">${trimmed}</span>`,
+        text: trimmed,
+      }
+    }
+    if (trimmed === 'null') {
+      return {
+        html: '<span class="vs-val-null">null</span>',
+        text: 'null',
+      }
+    }
+    // Check if JSON object/array string
+    if ((trimmed.startsWith('[') && trimmed.endsWith(']')) || (trimmed.startsWith('{') && trimmed.endsWith('}'))) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        return formatJsonCrackValue(parsed)
+      } catch {
+        // keep as string
+      }
+    }
+
+    const truncated = trimmed.length > 28 ? trimmed.slice(0, 26) + '…' : trimmed
+    return {
+      html: `<span class="vs-val-str">${escapeHtml(truncated)}</span>`,
+      text: str,
+    }
   }
 
   function createNodeCard(node: FlowGraphNode): HTMLElement {
@@ -1204,126 +1394,149 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     const subtitle = isWebhook ? 'https://flow.sokt.io/func/scriwknFmRIS' : ''
 
     card.innerHTML = `
-      <div class="MuiButtonBase-root MuiCardActionArea-root h-full">
-        <!-- Header -->
-        <div class="vs-graph-card-header">
-          <div class="vs-graph-card-avatar">
-            <img alt="" src="${iconSrc}" />
-          </div>
-          <div class="vs-graph-card-title-box">
-            <p class="vs-graph-card-title">${node.title}</p>
-            ${subtitle ? `<p class="vs-graph-card-url">${subtitle}</p>` : ''}
-          </div>
-          <div class="vs-graph-card-actions">
-            ${node.isIndependent ? `<span class="vs-graph-card-badge indep">Independent</span>` : ''}
-            <button class="vs-graph-menu-btn" aria-label="More actions" type="button">
-              <svg class="MuiSvgIcon-root" viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2m0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2m0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2"></path></svg>
-            </button>
-          </div>
+      <div class="vs-graph-card-header">
+        <div class="vs-graph-card-avatar">
+          <img alt="" src="${iconSrc}" />
+        </div>
+        <div class="vs-graph-card-title-box">
+          <p class="vs-graph-card-title">${escapeHtml(node.title)}</p>
+          ${subtitle ? `<p class="vs-graph-card-url">${escapeHtml(subtitle)}</p>` : ''}
+        </div>
+        <div class="vs-graph-card-actions">
+          ${node.isIndependent ? `<span class="vs-graph-card-badge indep">Independent</span>` : ''}
+          <button class="vs-graph-menu-btn" aria-label="More actions" type="button">
+            <svg class="MuiSvgIcon-root" viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2m0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2m0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2"></path></svg>
+          </button>
         </div>
       </div>
     `
 
-    // Inputs (With) section
+    // Inputs (With) section - structured table rows
     if (node.inputs.length > 0) {
-      const inContent = document.createElement('div')
-      inContent.className = 'MuiCardContent-root vs-graph-card-content'
+      const inSection = document.createElement('div')
+      inSection.className = 'vs-graph-section'
 
-      const chipsWrap = document.createElement('div')
-      chipsWrap.className = 'vs-graph-chips-wrap'
+      const secHeader = document.createElement('div')
+      secHeader.className = 'vs-graph-section-header'
+      secHeader.innerHTML = `
+        <span class="vs-graph-section-tag">With / Inputs</span>
+        <span class="vs-graph-section-count">${node.inputs.length}</span>
+      `
+      inSection.appendChild(secHeader)
 
-      const withLabel = document.createElement('p')
-      withLabel.className = 'vs-graph-section-label'
-      withLabel.innerText = 'With '
-      chipsWrap.appendChild(withLabel)
+      const rowsList = document.createElement('div')
+      rowsList.className = 'vs-graph-rows-list'
 
       for (const input of node.inputs) {
-        const chipContainer = document.createElement('div')
-        chipContainer.className = 'vs-graph-chip-container'
-        chipContainer.setAttribute('data-port-id', input.id)
-        chipContainer.setAttribute('data-node-id', node.id)
+        const row = document.createElement('div')
+        row.className = 'vs-graph-row'
+        row.setAttribute('data-port-id', input.id)
+        row.setAttribute('data-node-id', node.id)
+
+        const formatted = formatJsonCrackValue(input.value)
+        row.title = `${input.expression || input.key} = ${formatted.text} (Click to inspect)`
 
         const hasIncomingConn = currentGraphData?.connections.some((c) => c.toPortId === input.id)
         if (hasIncomingConn) {
           const dot = document.createElement('div')
           dot.className = 'vs-graph-port-dot port-in'
           dot.setAttribute('data-port-id', input.id)
-          chipContainer.appendChild(dot)
+          row.appendChild(dot)
         }
 
-        const chip = document.createElement('div')
-        chip.className = 'MuiChip-root MuiChip-filled MuiChip-sizeSmall MuiChip-colorDefault vs-graph-chip'
-        chip.title = `${input.expression || input.key} (Click to inspect)`
+        const keyEl = document.createElement('div')
+        keyEl.className = 'vs-graph-row-key'
+        keyEl.textContent = input.key
 
-        const cleanDisplay = `${input.key} - ${input.displayValue}`
-        chip.innerHTML = `<span class="MuiChip-label MuiChip-labelSmall">${cleanDisplay}</span>`
+        const colonEl = document.createElement('div')
+        colonEl.className = 'vs-graph-row-colon'
+        colonEl.textContent = ':'
 
-        chip.addEventListener('click', (e) => {
+        const valEl = document.createElement('div')
+        valEl.className = 'vs-graph-row-val'
+        valEl.innerHTML = formatted.html
+
+        row.appendChild(keyEl)
+        row.appendChild(colonEl)
+        row.appendChild(valEl)
+
+        row.addEventListener('click', (e) => {
           e.stopPropagation()
           showDetailsModal(`${node.title} → Input: ${input.key}`, input.value)
         })
 
-        chipContainer.appendChild(chip)
+        row.addEventListener('mouseenter', () => highlightPortAndCurves(input.id, 'input'))
+        row.addEventListener('mouseleave', clearHighlights)
 
-        chipContainer.addEventListener('mouseenter', () => highlightPortAndCurves(input.id, 'input'))
-        chipContainer.addEventListener('mouseleave', clearHighlights)
-
-        chipsWrap.appendChild(chipContainer)
+        rowsList.appendChild(row)
       }
 
-      inContent.appendChild(chipsWrap)
-      card.appendChild(inContent)
+      inSection.appendChild(rowsList)
+      card.appendChild(inSection)
     }
 
-    // Outputs section
+    // Outputs section - structured table rows
     if (node.outputs.length > 0) {
-      const outContent = document.createElement('div')
-      outContent.className = 'vs-graph-card-output-section'
+      const outSection = document.createElement('div')
+      outSection.className = 'vs-graph-section output-section'
 
-      const chipsWrap = document.createElement('div')
-      chipsWrap.className = 'vs-graph-chips-wrap'
+      const secHeader = document.createElement('div')
+      secHeader.className = 'vs-graph-section-header'
+      secHeader.innerHTML = `
+        <span class="vs-graph-section-tag">Outputs</span>
+        <span class="vs-graph-section-count">${node.outputs.length}</span>
+      `
+      outSection.appendChild(secHeader)
 
-      const outLabel = document.createElement('p')
-      outLabel.className = 'vs-graph-section-label'
-      outLabel.innerText = 'Output '
-      chipsWrap.appendChild(outLabel)
+      const rowsList = document.createElement('div')
+      rowsList.className = 'vs-graph-rows-list'
 
       for (const output of node.outputs) {
-        const chipContainer = document.createElement('div')
-        chipContainer.className = 'vs-graph-chip-container'
-        chipContainer.setAttribute('data-port-id', output.id)
-        chipContainer.setAttribute('data-node-id', node.id)
+        const row = document.createElement('div')
+        row.className = 'vs-graph-row'
+        row.setAttribute('data-port-id', output.id)
+        row.setAttribute('data-node-id', node.id)
 
-        const chip = document.createElement('div')
-        chip.className = 'MuiChip-root MuiChip-filled MuiChip-sizeSmall MuiChip-colorDefault vs-graph-chip'
-        chip.title = `${output.key} (Click to inspect)`
+        const formatted = formatJsonCrackValue(output.value)
+        row.title = `${output.key} = ${formatted.text} (Click to inspect)`
 
-        const cleanDisplay = `${output.key} - ${output.displayValue}`
-        chip.innerHTML = `<span class="MuiChip-label MuiChip-labelSmall">${cleanDisplay}</span>`
+        const keyEl = document.createElement('div')
+        keyEl.className = 'vs-graph-row-key'
+        keyEl.textContent = output.key
 
-        chip.addEventListener('click', (e) => {
-          e.stopPropagation()
-          showDetailsModal(`${node.title} → Output: ${output.key}`, output.value)
-        })
+        const colonEl = document.createElement('div')
+        colonEl.className = 'vs-graph-row-colon'
+        colonEl.textContent = ':'
 
-        chipContainer.appendChild(chip)
+        const valEl = document.createElement('div')
+        valEl.className = 'vs-graph-row-val'
+        valEl.innerHTML = formatted.html
+
+        row.appendChild(keyEl)
+        row.appendChild(colonEl)
+        row.appendChild(valEl)
 
         const hasOutgoingConn = currentGraphData?.connections.some((c) => c.fromPortId === output.id)
         if (hasOutgoingConn) {
           const dot = document.createElement('div')
           dot.className = 'vs-graph-port-dot port-out'
           dot.setAttribute('data-port-id', output.id)
-          chipContainer.appendChild(dot)
+          row.appendChild(dot)
         }
 
-        chipContainer.addEventListener('mouseenter', () => highlightPortAndCurves(output.id, 'output'))
-        chipContainer.addEventListener('mouseleave', clearHighlights)
+        row.addEventListener('click', (e) => {
+          e.stopPropagation()
+          showDetailsModal(`${node.title} → Output: ${output.key}`, output.value)
+        })
 
-        chipsWrap.appendChild(chipContainer)
+        row.addEventListener('mouseenter', () => highlightPortAndCurves(output.id, 'output'))
+        row.addEventListener('mouseleave', clearHighlights)
+
+        rowsList.appendChild(row)
       }
 
-      outContent.appendChild(chipsWrap)
-      card.appendChild(outContent)
+      outSection.appendChild(rowsList)
+      card.appendChild(outSection)
     }
 
     return card
@@ -1340,9 +1553,9 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
     for (const conn of currentGraphData.connections) {
       const fromEl = (transformLayer.querySelector(`.port-out[data-port-id="${conn.fromPortId}"]`) ||
-        transformLayer.querySelector(`.vs-graph-chip-container[data-port-id="${conn.fromPortId}"]`)) as HTMLElement | null
+        transformLayer.querySelector(`.vs-graph-row[data-port-id="${conn.fromPortId}"]`)) as HTMLElement | null
       const toEl = (transformLayer.querySelector(`.port-in[data-port-id="${conn.toPortId}"]`) ||
-        transformLayer.querySelector(`.vs-graph-chip-container[data-port-id="${conn.toPortId}"]`)) as HTMLElement | null
+        transformLayer.querySelector(`.vs-graph-row[data-port-id="${conn.toPortId}"]`)) as HTMLElement | null
 
       if (!fromEl || !toEl) continue
 
@@ -1360,7 +1573,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       const x2 = toX / zoom
       const y2 = (toRect.top + toRect.height / 2 - layerRect.top) / zoom
 
-      const dx = Math.max(60, Math.abs(x2 - x1) * 0.5)
+      const dx = Math.max(50, Math.abs(x2 - x1) * 0.45)
       const pathD = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`
 
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
@@ -1412,14 +1625,14 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       if ((type === 'output' && fromPort === portId) || (type === 'input' && toPort === portId)) {
         p.classList.add('highlighted', 'pulse-anim')
         if (fromPort) {
-          const fromContainer = overlayEl.querySelector(`.vs-graph-chip-container[data-port-id="${fromPort}"]`)
-          fromContainer?.querySelector('.vs-graph-chip')?.classList.add('highlighted-source')
-          fromContainer?.querySelector('.port-out')?.classList.add('highlighted')
+          const fromRow = overlayEl.querySelector(`.vs-graph-row[data-port-id="${fromPort}"]`)
+          fromRow?.classList.add('highlighted-source')
+          fromRow?.querySelector('.port-out')?.classList.add('highlighted')
         }
         if (toPort) {
-          const toContainer = overlayEl.querySelector(`.vs-graph-chip-container[data-port-id="${toPort}"]`)
-          toContainer?.querySelector('.vs-graph-chip')?.classList.add('highlighted')
-          toContainer?.querySelector('.port-in')?.classList.add('highlighted')
+          const toRow = overlayEl.querySelector(`.vs-graph-row[data-port-id="${toPort}"]`)
+          toRow?.classList.add('highlighted')
+          toRow?.querySelector('.port-in')?.classList.add('highlighted')
         }
       }
     }
@@ -1427,19 +1640,19 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
   function highlightConnectedPorts(fromPortId: string, toPortId: string): void {
     if (!overlayEl) return
-    const fromContainer = overlayEl.querySelector(`.vs-graph-chip-container[data-port-id="${fromPortId}"]`)
-    fromContainer?.querySelector('.vs-graph-chip')?.classList.add('highlighted-source')
-    fromContainer?.querySelector('.port-out')?.classList.add('highlighted')
+    const fromRow = overlayEl.querySelector(`.vs-graph-row[data-port-id="${fromPortId}"]`)
+    fromRow?.classList.add('highlighted-source')
+    fromRow?.querySelector('.port-out')?.classList.add('highlighted')
 
-    const toContainer = overlayEl.querySelector(`.vs-graph-chip-container[data-port-id="${toPortId}"]`)
-    toContainer?.querySelector('.vs-graph-chip')?.classList.add('highlighted')
-    toContainer?.querySelector('.port-in')?.classList.add('highlighted')
+    const toRow = overlayEl.querySelector(`.vs-graph-row[data-port-id="${toPortId}"]`)
+    toRow?.classList.add('highlighted')
+    toRow?.querySelector('.port-in')?.classList.add('highlighted')
   }
 
   function clearHighlights(): void {
     if (!overlayEl) return
     overlayEl.querySelectorAll('.vs-graph-path').forEach((p) => p.classList.remove('highlighted', 'pulse-anim'))
-    overlayEl.querySelectorAll('.vs-graph-chip').forEach((c) => c.classList.remove('highlighted', 'highlighted-source'))
+    overlayEl.querySelectorAll('.vs-graph-row').forEach((r) => r.classList.remove('highlighted', 'highlighted-source'))
     overlayEl.querySelectorAll('.vs-graph-port-dot').forEach((d) => d.classList.remove('highlighted'))
   }
 
