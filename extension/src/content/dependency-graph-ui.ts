@@ -428,19 +428,24 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
+.vs-graph-edit-btn,
 .vs-graph-menu-btn {
   background: transparent;
   border: none;
   color: #8b949e;
   cursor: pointer;
-  padding: 2px;
-  display: flex;
+  padding: 3px;
+  border-radius: 4px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 
+.vs-graph-edit-btn:hover,
 .vs-graph-menu-btn:hover {
   color: #f0f6fc;
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
 /* JSON Crack-style Structured Node Table */
@@ -2213,6 +2218,85 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     return itemWrapper
   }
 
+  function selectCard(nodeId: string): void {
+    if (!overlayEl) return
+    overlayEl.querySelectorAll('.vs-graph-card').forEach((c) => {
+      if (c.getAttribute('data-node-id') === nodeId) {
+        c.classList.add('selected')
+      } else {
+        c.classList.remove('selected')
+      }
+    })
+  }
+
+  function openStepEditor(node: FlowGraphNode): void {
+    selectCard(node.id)
+
+    if (node.type === 'trigger' || node.id === 'webhook') {
+      const triggerEl =
+        document.querySelector<HTMLElement>('[data-testid="inflow-node-webhook"]') ||
+        document.querySelector<HTMLElement>('[id*="webhook" i]')
+      if (triggerEl) {
+        const area = triggerEl.querySelector<HTMLElement>('.MuiCardActionArea-root') || triggerEl
+        area.click()
+        return
+      }
+      const url = new URL(window.location.href)
+      url.searchParams.set('stepId', 'SET_TRIGGER')
+      url.searchParams.set('slugName', 'webhook')
+      window.history.pushState({}, '', url.toString())
+      window.dispatchEvent(new PopStateEvent('popstate'))
+      return
+    }
+
+    const nativeNode =
+      document.querySelector<HTMLElement>(`[data-testid="step-node-${node.id}"]`) ||
+      document.getElementById(node.id) ||
+      document.querySelector<HTMLElement>(`[id*="${node.id}"]`)
+    if (nativeNode) {
+      const target = nativeNode.querySelector<HTMLElement>('.MuiCardActionArea-root') || nativeNode
+      target.click()
+      return
+    }
+
+    const url = new URL(window.location.href)
+    url.searchParams.set('slugName', node.id)
+    window.history.pushState({}, '', url.toString())
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }
+
+  function openStepMenu(node: FlowGraphNode, menuBtn: HTMLElement): void {
+    const nativeBtn =
+      document.querySelector<HTMLElement>(`#${node.id}actionbutton button`) ||
+      document.querySelector<HTMLElement>(`[data-testid="step-node-${node.id}"] button[aria-label="More actions"]`) ||
+      document.querySelector<HTMLElement>(`#${node.id} button[aria-label="More actions"]`)
+
+    if (nativeBtn) {
+      nativeBtn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+      nativeBtn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }))
+      nativeBtn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+
+      const positionMenu = () => {
+        const menu = document.querySelector<HTMLElement>('.MuiMenu-root, .MuiPopover-root[role="presentation"]')
+        const menuPaper = menu?.querySelector<HTMLElement>('.MuiPaper-root')
+        if (menuPaper && menuBtn) {
+          const rect = menuBtn.getBoundingClientRect()
+          menuPaper.style.position = 'fixed'
+          menuPaper.style.top = `${rect.bottom + 4}px`
+          menuPaper.style.left = `${Math.max(10, rect.right - menuPaper.offsetWidth)}px`
+          menuPaper.style.zIndex = '1350'
+        }
+      }
+
+      requestAnimationFrame(positionMenu)
+      setTimeout(positionMenu, 60)
+      return
+    }
+
+    // Fallback if trigger or no native button: open editor
+    openStepEditor(node)
+  }
+
   function createNodeCard(node: FlowGraphNode): HTMLElement {
     const card = document.createElement('div')
     card.className = 'MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation1 MuiCard-root vs-graph-card'
@@ -2233,21 +2317,57 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
     card.innerHTML = `
       <div class="vs-graph-card-header">
-        <div class="vs-graph-card-avatar">
+        <div class="vs-graph-card-avatar" title="Click to edit ${escapeHtml(node.title)}">
           <img alt="" src="${iconSrc}" />
         </div>
-        <div class="vs-graph-card-title-box">
+        <div class="vs-graph-card-title-box" title="Click to edit ${escapeHtml(node.title)}">
           <p class="vs-graph-card-title">${escapeHtml(node.title)}</p>
           ${subtitle ? `<p class="vs-graph-card-url">${escapeHtml(subtitle)}</p>` : ''}
         </div>
         <div class="vs-graph-card-actions">
           ${node.isIndependent ? `<span class="vs-graph-card-badge indep">Independent</span>` : ''}
-          <button class="vs-graph-menu-btn" aria-label="More actions" type="button">
-            <svg class="MuiSvgIcon-root" viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2m0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2m0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2"></path></svg>
+          <button class="vs-graph-edit-btn" aria-label="Edit step" title="Edit step" type="button">
+            <svg class="MuiSvgIcon-root" viewBox="0 0 24 24" style="width:15px;height:15px;fill:currentColor;"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></path></svg>
+          </button>
+          <button class="vs-graph-menu-btn" aria-label="More actions" title="More actions" type="button">
+            <svg class="MuiSvgIcon-root" viewBox="0 0 24 24" style="width:17px;height:17px;fill:currentColor;"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2m0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2m0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2"></path></svg>
           </button>
         </div>
       </div>
     `
+
+    const editBtn = card.querySelector<HTMLButtonElement>('.vs-graph-edit-btn')
+    if (editBtn) {
+      editBtn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        openStepEditor(node)
+      })
+    }
+
+    const menuBtn = card.querySelector<HTMLButtonElement>('.vs-graph-menu-btn')
+    if (menuBtn) {
+      menuBtn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        openStepMenu(node, menuBtn)
+      })
+    }
+
+    const titleBox = card.querySelector<HTMLElement>('.vs-graph-card-title-box')
+    if (titleBox) {
+      titleBox.style.cursor = 'pointer'
+      titleBox.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('button')) return
+        openStepEditor(node)
+      })
+    }
+
+    const avatar = card.querySelector<HTMLElement>('.vs-graph-card-avatar')
+    if (avatar) {
+      avatar.style.cursor = 'pointer'
+      avatar.addEventListener('click', () => {
+        openStepEditor(node)
+      })
+    }
 
     // Inputs (With) section - structured table rows
     if (node.inputs.length > 0) {
