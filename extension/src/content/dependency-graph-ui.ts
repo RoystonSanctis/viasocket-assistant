@@ -204,13 +204,12 @@ const CSS = `
 
 /* Floating bottom zoom controls */
 .vs-graph-bottom-controls {
-  position: absolute;
-  bottom: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  pointer-events: auto;
-  z-index: 25;
-  user-select: none;
+  display: none !important;
+}
+
+/* Hide flow canvas help card when in graph view so it does not overlap Back to Flow */
+body.vs-graph-active [data-testid="build-flow-card"] {
+  display: none !important;
 }
 
 .vs-graph-zoom-group {
@@ -746,6 +745,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
   let lastDrawerOpen = false
   let lastFlowHitId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('flowhitid') || '' : ''
+  let savedNativeZoomText = ''
 
   let tooltipEl: HTMLElement | null = null
   let tabTooltipEl: HTMLElement | null = null
@@ -968,7 +968,13 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
   async function open(): Promise<void> {
     isGraphActive = true
+    document.body.classList.add('vs-graph-active')
     updateTabButtonsState()
+
+    const nativeZoomP = document.querySelector('[data-testid="zoom-controls"] p')
+    if (nativeZoomP && !savedNativeZoomText) {
+      savedNativeZoomText = nativeZoomP.textContent || ''
+    }
 
     const flowPageBox = document.getElementById('flow-page-box')
     const contentBox = flowPageBox?.children[1] as HTMLElement | null
@@ -1022,12 +1028,20 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
   function close(): void {
     isGraphActive = false
+    document.body.classList.remove('vs-graph-active')
     updateTabButtonsState()
     if (overlayEl) {
       overlayEl.style.display = 'none'
     }
     hideTooltip()
     hideTabTooltip()
+
+    if (savedNativeZoomText) {
+      const nativeZoomP = document.querySelector('[data-testid="zoom-controls"] p')
+      if (nativeZoomP) {
+        nativeZoomP.textContent = savedNativeZoomText
+      }
+    }
 
     // Reselect Flow tab if none is selected
     const flowBtn = document.querySelector('[data-testid="workflow-flow-view-tab"]') as HTMLButtonElement | null
@@ -1181,6 +1195,14 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       const ratio = clamped / zoom
       pan.x = originX - (originX - pan.x) * ratio
       pan.y = originY - (originY - pan.y) * ratio
+    } else {
+      const viewport = overlayEl?.querySelector('#vs-graph-viewport') as HTMLElement | null
+      const rect = viewport ? viewport.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight }
+      const cx = rect.width / 2
+      const cy = rect.height / 2
+      const ratio = clamped / zoom
+      pan.x = cx - (cx - pan.x) * ratio
+      pan.y = cy - (cy - pan.y) * ratio
     }
     zoom = clamped
     updateTransform()
@@ -1194,6 +1216,10 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     const zoomPill = overlayEl?.querySelector('#vs-zoom-level')
     if (zoomPill) {
       zoomPill.textContent = `${Math.round(zoom * 100)}%`
+    }
+    const nativeZoomP = document.querySelector('[data-testid="zoom-controls"] p')
+    if (nativeZoomP && isGraphActive) {
+      nativeZoomP.textContent = `${Math.round(zoom * 100)}%`
     }
   }
 
@@ -1759,6 +1785,31 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   const onDocClick = (e: MouseEvent): void => {
     if (!isGraphActive) return
     const target = e.target as HTMLElement | null
+
+    const zoomInBtn = target?.closest('[data-testid="zoom-in-button"]')
+    if (zoomInBtn) {
+      e.preventDefault()
+      e.stopPropagation()
+      setZoom(zoom * 1.15)
+      return
+    }
+
+    const zoomOutBtn = target?.closest('[data-testid="zoom-out-button"]')
+    if (zoomOutBtn) {
+      e.preventDefault()
+      e.stopPropagation()
+      setZoom(zoom / 1.15)
+      return
+    }
+
+    const zoomFitBtn = target?.closest('[data-testid="zoom-fit-button"]')
+    if (zoomFitBtn) {
+      e.preventDefault()
+      e.stopPropagation()
+      fitView(true)
+      return
+    }
+
     if (
       target?.closest('[data-testid="logs-data-time-chip"]') ||
       target?.closest('[data-testid="workflow-navbar-logs-time-chip-container"]') ||
@@ -1772,7 +1823,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       }, 350)
     }
   }
-  document.addEventListener('click', onDocClick)
+  document.addEventListener('click', onDocClick, true)
 
   const interval = setInterval(() => {
     ensureTabButton()
@@ -1835,7 +1886,8 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     close,
     destroy() {
       clearInterval(interval)
-      document.removeEventListener('click', onDocClick)
+      document.removeEventListener('click', onDocClick, true)
+      document.body.classList.remove('vs-graph-active')
       window.removeEventListener('popstate', onPopState)
       window.removeEventListener('resize', onResize)
       hideTabTooltip()
