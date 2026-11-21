@@ -576,6 +576,61 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   let panStart = { x: 0, y: 0 }
 
   let tooltipEl: HTMLElement | null = null
+  let tabTooltipEl: HTMLElement | null = null
+  let tabTooltipTimer: ReturnType<typeof setTimeout> | undefined
+
+  function showTabTooltip(target: HTMLElement, text: string): void {
+    hideTabTooltip()
+    const rect = target.getBoundingClientRect()
+    if (!rect.width || !rect.height) return
+
+    const popper = document.createElement('div')
+    popper.setAttribute('role', 'tooltip')
+    popper.className = 'MuiPopper-root MuiTooltip-popper MuiTooltip-popperInteractive MuiTooltip-popperArrow'
+    popper.setAttribute('data-popper-placement', 'bottom')
+    popper.style.position = 'fixed'
+    popper.style.zIndex = '1500'
+    popper.style.pointerEvents = 'none'
+    popper.style.opacity = '0'
+    popper.style.transition = 'opacity 150ms cubic-bezier(0.4, 0, 0.2, 1)'
+
+    const tooltip = document.createElement('div')
+    tooltip.className = 'MuiTooltip-tooltip MuiTooltip-tooltipArrow MuiTooltip-tooltipPlacementBottom'
+    tooltip.innerText = text
+
+    const arrow = document.createElement('span')
+    arrow.className = 'MuiTooltip-arrow'
+    arrow.style.position = 'absolute'
+
+    tooltip.appendChild(arrow)
+    popper.appendChild(tooltip)
+    document.body.appendChild(popper)
+    tabTooltipEl = popper
+
+    const tooltipRect = tooltip.getBoundingClientRect()
+    const left = rect.left + rect.width / 2 - tooltipRect.width / 2
+    const top = rect.bottom + 8
+    popper.style.left = `${Math.max(8, left)}px`
+    popper.style.top = `${top}px`
+    arrow.style.left = `${tooltipRect.width / 2 - 5.5}px`
+
+    requestAnimationFrame(() => {
+      if (tabTooltipEl === popper) {
+        popper.style.opacity = '1'
+      }
+    })
+  }
+
+  function hideTabTooltip(): void {
+    if (tabTooltipTimer) {
+      clearTimeout(tabTooltipTimer)
+      tabTooltipTimer = undefined
+    }
+    if (tabTooltipEl) {
+      tabTooltipEl.remove()
+      tabTooltipEl = null
+    }
+  }
 
   function getTooltip(): HTMLElement {
     if (!tooltipEl) {
@@ -662,6 +717,15 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
       span.appendChild(graphBtn)
 
+      span.addEventListener('mouseenter', () => {
+        tabTooltipTimer = setTimeout(() => {
+          showTabTooltip(graphBtn!, 'View dependency graph with inputs and outputs.')
+        }, 120)
+      })
+      span.addEventListener('mouseleave', () => {
+        hideTabTooltip()
+      })
+
       // Convert previous last button to middle button
       const logBtn = tabsContainer.querySelector('[data-testid="workflow-log-view-tab"]')
       if (logBtn) {
@@ -674,6 +738,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       graphBtn.addEventListener('click', (e) => {
         e.preventDefault()
         e.stopPropagation()
+        hideTabTooltip()
         open()
       })
     }
@@ -778,6 +843,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       overlayEl.style.display = 'none'
     }
     hideTooltip()
+    hideTabTooltip()
 
     // Reselect Flow tab if none is selected
     const flowBtn = document.querySelector('[data-testid="workflow-flow-view-tab"]') as HTMLButtonElement | null
@@ -1368,6 +1434,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
   // Route change listener
   const onPopState = (): void => {
+    hideTabTooltip()
     if (isGraphActive) close()
     ensureTabButton()
   }
@@ -1387,6 +1454,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       clearInterval(interval)
       window.removeEventListener('popstate', onPopState)
       window.removeEventListener('resize', onResize)
+      hideTabTooltip()
       close()
       overlayEl?.remove()
       overlayEl = null
