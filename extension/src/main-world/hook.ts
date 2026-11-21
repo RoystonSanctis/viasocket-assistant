@@ -1344,6 +1344,38 @@ function install(): void {
     }
   }
 
+  let lastFlowSignature = ''
+  function checkFlowChange(): void {
+    try {
+      const asObj = (v: unknown): Record<string, unknown> => (isObj(v) ? (v as Record<string, unknown>) : {})
+      const store = findReduxStore()
+      if (!store) return
+      const state = store.getState()
+      const scriptId =
+        extractScriptId(location.pathname) ||
+        (isObj(state.appInfo) && typeof state.appInfo.currentScriptId === 'string' ? state.appInfo.currentScriptId : undefined)
+      if (!scriptId) return
+      const flowState = asObj(asObj(state.flowJsonV2)[scriptId])
+      const flowJson = asObj(flowState.flowJson)
+      const blocks = asObj(flowJson.blocks)
+      const rawStepOrder = Array.isArray(flowState.stepOrder)
+        ? (flowState.stepOrder as string[])
+        : Array.isArray(asObj(flowJson.order).root)
+          ? (asObj(flowJson.order).root as string[])
+          : Object.keys(blocks)
+
+      const sig = `${rawStepOrder.join(',')}|${Object.keys(blocks).sort().join(',')}`
+      if (lastFlowSignature && sig !== lastFlowSignature) {
+        lastFlowSignature = sig
+        post({ type: 'flow-graph-changed' })
+      } else if (!lastFlowSignature) {
+        lastFlowSignature = sig
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   function syncDraftToDom(): void {
     try {
       const store = findReduxStore()
@@ -2211,14 +2243,19 @@ function install(): void {
     }
   }
 
-  // Synchronize draft step state from Redux
+  // Synchronize draft step state from Redux and monitor flow structure changes
   let storeSubscribed = false
+  function onStoreUpdate(): void {
+    syncDraftToDom()
+    checkFlowChange()
+  }
+
   function ensureStoreSubscription(): void {
     if (storeSubscribed) return
     const store = findReduxStore()
     if (store && typeof (store as unknown as Record<string, unknown>).subscribe === 'function') {
       try {
-        ;(store as unknown as { subscribe: (fn: () => void) => void }).subscribe(syncDraftToDom)
+        ;(store as unknown as { subscribe: (fn: () => void) => void }).subscribe(onStoreUpdate)
         storeSubscribed = true
       } catch {
         // ignore
@@ -2229,7 +2266,8 @@ function install(): void {
   setInterval(() => {
     ensureStoreSubscription()
     syncDraftToDom()
-  }, 1000)
+    checkFlowChange()
+  }, 500)
 }
 
 function alreadyInstalled(): boolean {

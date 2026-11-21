@@ -54,6 +54,8 @@ export interface PageBridge {
   getStepInputData(scriptId?: string, stepId?: string, slugName?: string): Promise<StepInputDataResult | null>
   /** Full flow dependency graph data from Redux; null when unavailable */
   getFlowGraphData(scriptId?: string): Promise<FlowGraphData | null>
+  /** Listen for flow structure changes (steps added/removed/reordered) from Redux */
+  onFlowGraphChanged(callback: () => void): () => void
   /** Checks or beautifies the Monaco editor marked with EDITOR_ID_ATTR = editorId; null when the hook does not answer */
   editorAction(editorId: string, action: EditorAction): Promise<EditorActionResult | null>
   /** Gets full text from a Monaco editor or response viewer marked with EDITOR_ID_ATTR */
@@ -205,6 +207,7 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
   const pendingEditorInsert = new Map<string, (success: boolean) => void>()
   const pendingDynamicVar = new Map<string, (success: boolean) => void>()
   const pendingField = new Map<string, (res: { success: boolean; error?: string }) => void>()
+  const flowGraphChangedListeners = new Set<() => void>()
 
   function onMessage(ev: MessageEvent): void {
     if (ev.source !== window || ev.origin !== location.origin) return
@@ -217,6 +220,15 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
         hookReady = true
         clearInterval(retry)
         retry = undefined
+        break
+      case 'flow-graph-changed':
+        for (const cb of flowGraphChangedListeners) {
+          try {
+            cb()
+          } catch {
+            // ignore
+          }
+        }
         break
       case 'observed': {
         const event = sanitizeObserved(inner.event)
@@ -353,6 +365,12 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
         post({ type: 'get-flow-graph-data', requestId, scriptId })
       })
     },
+    onFlowGraphChanged(callback: () => void): () => void {
+      flowGraphChangedListeners.add(callback)
+      return () => {
+        flowGraphChangedListeners.delete(callback)
+      }
+    },
     editorAction(editorId, action) {
       if (!hookReady) return Promise.resolve(null)
       const requestId = makeNonce()
@@ -430,6 +448,7 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
       clearInterval(retry)
       retry = undefined
       window.removeEventListener('message', onMessage)
+      flowGraphChangedListeners.clear()
       for (const finish of [...pendingContext.values()]) finish(null)
       for (const finish of [...pendingInputData.values()]) finish(null)
       for (const finish of [...pendingEditor.values()]) finish(null)

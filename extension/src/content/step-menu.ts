@@ -354,6 +354,7 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
         // opens in its panel so its code can be written right away.
         const created = template && res.data?.slug && res.data.stepId ? { slug: res.data.slug, stepId: res.data.stepId } : undefined
         const refreshed = bumpEditorTimestamp(page.scriptId, created)
+        window.dispatchEvent(new CustomEvent('vs-step-pasted', { detail: res.data }))
         const note = res.data?.note || `"${res.data?.title || targetSlug}" pasted below "${targetSlug}"`
         showToast({
           title: template ? 'Added' : 'Pasted',
@@ -420,6 +421,7 @@ export function initStepMenu(opts: StepMenuOptions = {}): StepMenuController {
       if (res && res.ok) {
         const title = res.data?.title || slug
         bumpEditorAfterDelete(page.scriptId, slug, isSlider)
+        window.dispatchEvent(new CustomEvent('vs-step-deleted', { detail: { slug } }))
         showToast({
           title: 'Deleted',
           message: `"${title}" has been deleted`,

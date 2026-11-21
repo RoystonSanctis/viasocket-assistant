@@ -1007,6 +1007,7 @@ function ensureStyles(): void {
 export interface DependencyGraphController {
   open(): Promise<void>
   close(): void
+  refresh(): Promise<void>
   destroy(): void
 }
 
@@ -1026,6 +1027,9 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
   let lastDrawerOpen = false
   let lastFlowHitId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('flowhitid') || '' : ''
+  let lastTimestamp = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('timestamp') || '' : ''
+  const collapsedSections = new Set<string>()
+  const expandedPaths = new Set<string>()
   let savedNativeZoomText = ''
 
   let tooltipEl: HTMLElement | null = null
@@ -2006,7 +2010,8 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
     const complex = parseComplexValue(value)
     const canExpand = complex.isComplex && complex.count > 0
-    let isExpanded = false
+    const pathKey = `${node.id}:${isInput ? 'in' : 'out'}:${currentPath}`
+    let isExpanded = canExpand && expandedPaths.has(pathKey)
 
     const formatted = formatJsonCrackValue(complex.isComplex ? complex.data : value)
     const tooltipText = expression ? `${expression} = ${formatted.text}` : `${currentPath} = ${formatted.text}`
@@ -2029,9 +2034,9 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       expandBtn = document.createElement('button')
       expandBtn.className = 'vs-graph-expand-btn'
       expandBtn.type = 'button'
-      expandBtn.textContent = '+'
+      expandBtn.textContent = isExpanded ? '−' : '+'
       expandBtn.setAttribute('aria-label', `Toggle ${key}`)
-      expandBtn.title = 'Click to expand'
+      expandBtn.title = isExpanded ? 'Click to collapse' : 'Click to expand'
       row.appendChild(expandBtn)
     } else if (depth > 0) {
       const placeholder = document.createElement('div')
@@ -2088,7 +2093,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     if (canExpand) {
       nestedContainer = document.createElement('div')
       nestedContainer.className = 'vs-graph-nested-container'
-      nestedContainer.style.display = 'none'
+      nestedContainer.style.display = isExpanded ? 'flex' : 'none'
       itemWrapper.appendChild(nestedContainer)
 
       let renderedChildren = false
@@ -2160,9 +2165,14 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         renderedChildren = true
       }
 
+      if (isExpanded) {
+        populateChildren()
+      }
+
       const toggleExpand = () => {
         isExpanded = !isExpanded
         if (isExpanded) {
+          expandedPaths.add(pathKey)
           if (expandBtn) {
             expandBtn.textContent = '−'
             expandBtn.title = 'Click to collapse'
@@ -2172,6 +2182,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
             populateChildren()
           }
         } else {
+          expandedPaths.delete(pathKey)
           if (expandBtn) {
             expandBtn.textContent = '+'
             expandBtn.title = 'Click to expand'
@@ -2374,10 +2385,16 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       const inSection = document.createElement('div')
       inSection.className = 'vs-graph-section'
 
+      const inKey = `${node.id}:inputs`
+      const isInputsCollapsed = collapsedSections.has(inKey)
+      if (isInputsCollapsed) {
+        inSection.classList.add('collapsed')
+      }
+
       const secHeader = document.createElement('div')
       secHeader.className = 'vs-graph-section-header'
       secHeader.setAttribute('role', 'button')
-      secHeader.setAttribute('aria-expanded', 'true')
+      secHeader.setAttribute('aria-expanded', isInputsCollapsed ? 'false' : 'true')
       secHeader.setAttribute('title', 'Click to collapse / expand inputs')
       secHeader.innerHTML = `
         <div class="vs-graph-section-header-left">
@@ -2390,6 +2407,8 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         e.stopPropagation()
         const isCollapsed = inSection.classList.toggle('collapsed')
         secHeader.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true')
+        if (isCollapsed) collapsedSections.add(inKey)
+        else collapsedSections.delete(inKey)
         reflowNodePositions()
       })
       inSection.appendChild(secHeader)
@@ -2419,10 +2438,16 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       const outSection = document.createElement('div')
       outSection.className = 'vs-graph-section output-section'
 
+      const outKey = `${node.id}:outputs`
+      const isOutputsCollapsed = collapsedSections.has(outKey)
+      if (isOutputsCollapsed) {
+        outSection.classList.add('collapsed')
+      }
+
       const secHeader = document.createElement('div')
       secHeader.className = 'vs-graph-section-header'
       secHeader.setAttribute('role', 'button')
-      secHeader.setAttribute('aria-expanded', 'true')
+      secHeader.setAttribute('aria-expanded', isOutputsCollapsed ? 'false' : 'true')
       secHeader.setAttribute('title', 'Click to collapse / expand outputs')
       secHeader.innerHTML = `
         <div class="vs-graph-section-header-left">
@@ -2435,6 +2460,8 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         e.stopPropagation()
         const isCollapsed = outSection.classList.toggle('collapsed')
         secHeader.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true')
+        if (isCollapsed) collapsedSections.add(outKey)
+        else collapsedSections.delete(outKey)
         reflowNodePositions()
       })
       outSection.appendChild(secHeader)
@@ -2638,6 +2665,61 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   }
   document.addEventListener('click', onDocClick, true)
 
+  function updateFilterCounts(): void {
+    if (!overlayEl || !currentGraphData) return
+    const { summary } = currentGraphData
+    const allBtn = overlayEl.querySelector('.vs-graph-filter-btn[data-filter="all"]')
+    if (allBtn) allBtn.textContent = `All (${summary.totalSteps})`
+    const depBtn = overlayEl.querySelector('.vs-graph-filter-btn[data-filter="dependent"]')
+    if (depBtn) depBtn.textContent = `Dependent (${summary.dependentSteps})`
+    const indBtn = overlayEl.querySelector('.vs-graph-filter-btn[data-filter="independent"]')
+    if (indBtn) indBtn.textContent = `Independent (${summary.independentSteps})`
+  }
+
+  let isRefreshing = false
+  async function refresh(): Promise<void> {
+    if (!isGraphActive || isRefreshing) return
+    isRefreshing = true
+    try {
+      const data = await bridge.getFlowGraphData()
+      if (data && isGraphActive) {
+        currentGraphData = data
+        updateFilterCounts()
+        layoutAndRenderNodes()
+      }
+    } finally {
+      isRefreshing = false
+    }
+  }
+
+  const onStepPasted = (): void => {
+    if (isGraphActive) {
+      void refresh()
+      setTimeout(() => {
+        if (isGraphActive) void refresh()
+      }, 350)
+      setTimeout(() => {
+        if (isGraphActive) void refresh()
+      }, 800)
+    }
+  }
+  const onStepDeleted = (): void => {
+    if (isGraphActive) {
+      void refresh()
+      setTimeout(() => {
+        if (isGraphActive) void refresh()
+      }, 350)
+    }
+  }
+  window.addEventListener('vs-step-pasted', onStepPasted)
+  window.addEventListener('vs-step-deleted', onStepDeleted)
+
+  const unsubscribeFlowChanged = bridge.onFlowGraphChanged(() => {
+    if (isGraphActive) {
+      void refresh()
+    }
+  })
+
   const interval = setInterval(() => {
     ensureTabButton()
 
@@ -2660,6 +2742,12 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
           }
         })
       }
+
+      const currentTimestamp = new URLSearchParams(window.location.search).get('timestamp') || ''
+      if (currentTimestamp !== lastTimestamp) {
+        lastTimestamp = currentTimestamp
+        void refresh()
+      }
     }
   }, 350)
 
@@ -2677,6 +2765,11 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
               requestAnimationFrame(() => fitView(true))
             }
           })
+        }
+        const currentTimestamp = new URLSearchParams(window.location.search).get('timestamp') || ''
+        if (currentTimestamp !== lastTimestamp) {
+          lastTimestamp = currentTimestamp
+          void refresh()
         }
       } else {
         close()
@@ -2696,12 +2789,16 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   return {
     open,
     close,
+    refresh,
     destroy() {
       clearInterval(interval)
       document.removeEventListener('click', onDocClick, true)
       document.body.classList.remove('vs-graph-active')
       window.removeEventListener('popstate', onPopState)
       window.removeEventListener('resize', onResize)
+      window.removeEventListener('vs-step-pasted', onStepPasted)
+      window.removeEventListener('vs-step-deleted', onStepDeleted)
+      unsubscribeFlowChanged()
       hideTabTooltip()
       close()
       overlayEl?.remove()

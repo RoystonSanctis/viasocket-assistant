@@ -273,6 +273,7 @@ export type PageToContentMsg =
   | { type: 'navigated'; url: string }
   /** A navigation went ahead after waiting the maximum time for the page's own save, test or publish to finish */
   | { type: 'navigate-busy' }
+  | { type: 'flow-graph-changed' }
   | { type: 'step-context-response'; requestId: string; data: StepContextData | null }
   | { type: 'step-input-data-response'; requestId: string; data: StepInputDataResult | null }
   | { type: 'flow-graph-data-response'; requestId: string; data: FlowGraphData | null }
