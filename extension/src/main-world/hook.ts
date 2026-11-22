@@ -1142,7 +1142,6 @@ function install(): void {
         const iconUrl = typeof block.iconUrl === 'string' ? block.iconUrl : undefined
         const inputs: FlowGraphPort[] = []
         const upstreamSlugsSet = new Set<string>()
-        const seenInputKeys = new Set<string>()
 
         const stepId = typeof block.id === 'string' ? block.id : ''
         const stepIdentifier = typeof block.identifier === 'string' ? block.identifier : ''
@@ -1248,14 +1247,6 @@ function install(): void {
               if (typeof item === 'string') {
                 registerInput(item, item)
               }
-            }
-          }
-        } else if (stepType === 'plugin') {
-          for (const item of funcVars) {
-            if (typeof item === 'string' && (item.includes('res.') || item.includes('steps.') || item.includes('req.'))) {
-              const parts = item.split('.')
-              const field = parts[parts.length - 1] || 'input'
-              registerInput(field, `\${${item}}`)
             }
           }
         }
