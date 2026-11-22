@@ -44,47 +44,65 @@ const CSS = `
   border: 0px !important;
   border-radius: 0px 4px 4px 0px !important;
   background-color: transparent !important;
-  color: rgb(63, 63, 58) !important;
+  color: inherit !important;
   transition: background-color 300ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 300ms cubic-bezier(0.4, 0, 0.2, 1), color 300ms cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
 
-/* Light mode tab button */
-html:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"],
-body:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"],
+/* Base / Light mode tab button */
+.vs-theme-light [data-testid="${TAB_BUTTON_TESTID}"],
 [data-testid="${TAB_BUTTON_TESTID}"].vs-theme-light {
   color: rgb(63, 63, 58) !important;
   background-color: transparent !important;
 }
 
-html:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"]:hover,
-body:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"]:hover,
+.vs-theme-light [data-testid="${TAB_BUTTON_TESTID}"]:hover,
 [data-testid="${TAB_BUTTON_TESTID}"].vs-theme-light:hover {
   text-decoration: none !important;
   background-color: rgba(26, 27, 25, 0.04) !important;
   color: rgb(26, 27, 25) !important;
 }
 
-html:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
-html:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"][aria-pressed="true"],
-body:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
-body:not(.dark) [data-testid="${TAB_BUTTON_TESTID}"][aria-pressed="true"],
-[data-testid="${TAB_BUTTON_TESTID}"].vs-theme-light.Mui-selected {
+.vs-theme-light [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
+.vs-theme-light [data-testid="${TAB_BUTTON_TESTID}"][aria-pressed="true"],
+[data-testid="${TAB_BUTTON_TESTID}"].vs-theme-light.Mui-selected,
+[data-testid="${TAB_BUTTON_TESTID}"].vs-theme-light[aria-pressed="true"] {
   background-color: rgb(255, 255, 255) !important;
   color: rgb(26, 27, 25) !important;
   font-weight: 600 !important;
   box-shadow: rgba(0, 0, 0, 0.19) 0px 1px 2px !important;
 }
 
-/* Dark mode tab button */
+/* Dark mode tab button by system preference */
+@media (prefers-color-scheme: dark) {
+  [data-testid="${TAB_BUTTON_TESTID}"] {
+    color: rgb(213, 219, 227) !important;
+    background-color: transparent !important;
+  }
+  [data-testid="${TAB_BUTTON_TESTID}"]:hover {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+  }
+  [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
+  [data-testid="${TAB_BUTTON_TESTID}"][aria-pressed="true"] {
+    background-color: rgb(28, 33, 40) !important;
+    color: rgb(240, 246, 252) !important;
+    font-weight: 600 !important;
+    box-shadow: rgba(0, 0, 0, 0.5) 0px 1px 2px 0px !important;
+  }
+}
+
+/* Explicit Dark mode tab button */
+.vs-theme-dark [data-testid="${TAB_BUTTON_TESTID}"],
 html.dark [data-testid="${TAB_BUTTON_TESTID}"],
 body.dark [data-testid="${TAB_BUTTON_TESTID}"],
 html[data-theme="dark"] [data-testid="${TAB_BUTTON_TESTID}"],
 body[data-theme="dark"] [data-testid="${TAB_BUTTON_TESTID}"],
 [data-testid="${TAB_BUTTON_TESTID}"].vs-theme-dark {
-  color: rgb(168, 168, 162) !important;
+  color: rgb(213, 219, 227) !important;
   background-color: transparent !important;
 }
 
+.vs-theme-dark [data-testid="${TAB_BUTTON_TESTID}"]:hover,
 html.dark [data-testid="${TAB_BUTTON_TESTID}"]:hover,
 body.dark [data-testid="${TAB_BUTTON_TESTID}"]:hover,
 html[data-theme="dark"] [data-testid="${TAB_BUTTON_TESTID}"]:hover,
@@ -94,6 +112,8 @@ body[data-theme="dark"] [data-testid="${TAB_BUTTON_TESTID}"]:hover,
   color: #ffffff !important;
 }
 
+.vs-theme-dark [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
+.vs-theme-dark [data-testid="${TAB_BUTTON_TESTID}"][aria-pressed="true"],
 html.dark [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
 html.dark [data-testid="${TAB_BUTTON_TESTID}"][aria-pressed="true"],
 body.dark [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
@@ -102,10 +122,10 @@ html[data-theme="dark"] [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
 body[data-theme="dark"] [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
 [data-testid="${TAB_BUTTON_TESTID}"].vs-theme-dark.Mui-selected,
 [data-testid="${TAB_BUTTON_TESTID}"].vs-theme-dark[aria-pressed="true"] {
-  background-color: #21262d !important;
+  background-color: rgb(28, 33, 40) !important;
   color: rgb(240, 246, 252) !important;
   font-weight: 600 !important;
-  box-shadow: rgba(0, 0, 0, 0.35) 0px 1px 2px !important;
+  box-shadow: rgba(0, 0, 0, 0.5) 0px 1px 2px 0px !important;
 }
 
 /* Material-UI Navbar Tab Tooltip styles (100% match with Flow, Published, Log) */
@@ -164,55 +184,9 @@ body[data-theme="dark"] [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
   transform-origin: 0px 100% !important;
 }
 
-/* Theme tokens: Dark theme (default) */
+/* Theme tokens: Light theme (base default) */
 #${OVERLAY_ID},
-#${OVERLAY_ID}.vs-theme-dark {
-  --vs-g-bg: #0d1117;
-  --vs-g-dot: rgba(255, 255, 255, 0.08);
-  --vs-g-card-bg: rgb(21, 27, 35);
-  --vs-g-card-border: rgba(255, 255, 255, 0.1);
-  --vs-g-card-border-hover: rgba(255, 255, 255, 0.24);
-  --vs-g-card-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
-  --vs-g-text-primary: rgb(240, 246, 252);
-  --vs-g-text-secondary: #8b949e;
-  --vs-g-text-muted: #6e7681;
-  --vs-g-header-bg: rgba(255, 255, 255, 0.02);
-  --vs-g-header-border: rgba(255, 255, 255, 0.06);
-  --vs-g-section-bg: rgba(0, 0, 0, 0.22);
-  --vs-g-section-border: rgba(255, 255, 255, 0.05);
-  --vs-g-section-hover: rgba(255, 255, 255, 0.06);
-  --vs-g-row-border: rgba(255, 255, 255, 0.04);
-  --vs-g-row-hover: rgba(88, 166, 255, 0.12);
-  --vs-g-nested-bg: rgba(0, 0, 0, 0.15);
-  --vs-g-nested-border: rgba(110, 118, 129, 0.25);
-  --vs-g-topbar-bg: rgba(21, 27, 35, 0.92);
-  --vs-g-topbar-border: rgba(255, 255, 255, 0.15);
-  --vs-g-topbar-text: #c9d1d9;
-  --vs-g-filter-active-bg: rgba(255, 255, 255, 0.1);
-  --vs-g-filter-active-text: #ffffff;
-  --vs-g-back-btn-hover: #21262d;
-  --vs-g-key: #79c0ff;
-  --vs-g-str: #7ee787;
-  --vs-g-num: #ffa657;
-  --vs-g-bool: #58a6ff;
-  --vs-g-null: #d2a8ff;
-  --vs-g-badge-bg: rgba(88, 166, 255, 0.15);
-  --vs-g-badge-text: #79c0ff;
-  --vs-g-badge-border: rgba(88, 166, 255, 0.3);
-  --vs-g-path: #58a6ff;
-  --vs-g-path-hl: #79c0ff;
-  --vs-g-port-border: rgba(255, 255, 255, 0.3);
-  --vs-g-port-bg: rgb(21, 27, 35);
-  --vs-g-indep-border: rgba(255, 255, 255, 0.15);
-  --vs-g-modal-bg: #151b23;
-  --vs-g-modal-header-bg: #161b22;
-  --vs-g-modal-border: rgba(255, 255, 255, 0.12);
-  --vs-g-modal-title: #f0f6fc;
-}
-
-/* Theme tokens: Light theme */
-html:not(.dark) #${OVERLAY_ID},
-body:not(.dark) #${OVERLAY_ID},
+.vs-theme-light #${OVERLAY_ID},
 #${OVERLAY_ID}.vs-theme-light {
   --vs-g-bg: #f8fafc;
   --vs-g-dot: rgba(0, 0, 0, 0.09);
@@ -257,11 +231,60 @@ body:not(.dark) #${OVERLAY_ID},
   --vs-g-modal-title: #1f2328;
 }
 
-/* Explicit override when dark class is present */
+/* Theme tokens: Dark theme by system preference */
+@media (prefers-color-scheme: dark) {
+  #${OVERLAY_ID} {
+    --vs-g-bg: #0d1117;
+    --vs-g-dot: rgba(255, 255, 255, 0.08);
+    --vs-g-card-bg: rgb(21, 27, 35);
+    --vs-g-card-border: rgba(255, 255, 255, 0.1);
+    --vs-g-card-border-hover: rgba(255, 255, 255, 0.24);
+    --vs-g-card-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+    --vs-g-text-primary: rgb(240, 246, 252);
+    --vs-g-text-secondary: #8b949e;
+    --vs-g-text-muted: #6e7681;
+    --vs-g-header-bg: rgba(255, 255, 255, 0.02);
+    --vs-g-header-border: rgba(255, 255, 255, 0.06);
+    --vs-g-section-bg: rgba(0, 0, 0, 0.22);
+    --vs-g-section-border: rgba(255, 255, 255, 0.05);
+    --vs-g-section-hover: rgba(255, 255, 255, 0.06);
+    --vs-g-row-border: rgba(255, 255, 255, 0.04);
+    --vs-g-row-hover: rgba(88, 166, 255, 0.12);
+    --vs-g-nested-bg: rgba(0, 0, 0, 0.15);
+    --vs-g-nested-border: rgba(110, 118, 129, 0.25);
+    --vs-g-topbar-bg: rgba(21, 27, 35, 0.92);
+    --vs-g-topbar-border: rgba(255, 255, 255, 0.15);
+    --vs-g-topbar-text: #c9d1d9;
+    --vs-g-filter-active-bg: rgba(255, 255, 255, 0.1);
+    --vs-g-filter-active-text: #ffffff;
+    --vs-g-back-btn-hover: #21262d;
+    --vs-g-key: #79c0ff;
+    --vs-g-str: #7ee787;
+    --vs-g-num: #ffa657;
+    --vs-g-bool: #58a6ff;
+    --vs-g-null: #d2a8ff;
+    --vs-g-badge-bg: rgba(88, 166, 255, 0.15);
+    --vs-g-badge-text: #79c0ff;
+    --vs-g-badge-border: rgba(88, 166, 255, 0.3);
+    --vs-g-path: #58a6ff;
+    --vs-g-path-hl: #79c0ff;
+    --vs-g-port-border: rgba(255, 255, 255, 0.3);
+    --vs-g-port-bg: rgb(21, 27, 35);
+    --vs-g-indep-border: rgba(255, 255, 255, 0.15);
+    --vs-g-modal-bg: #151b23;
+    --vs-g-modal-header-bg: #161b22;
+    --vs-g-modal-border: rgba(255, 255, 255, 0.12);
+    --vs-g-modal-title: #f0f6fc;
+  }
+}
+
+/* Explicit Dark theme tokens */
+.vs-theme-dark #${OVERLAY_ID},
 html.dark #${OVERLAY_ID},
 body.dark #${OVERLAY_ID},
 html[data-theme="dark"] #${OVERLAY_ID},
-body[data-theme="dark"] #${OVERLAY_ID} {
+body[data-theme="dark"] #${OVERLAY_ID},
+#${OVERLAY_ID}.vs-theme-dark {
   --vs-g-bg: #0d1117;
   --vs-g-dot: rgba(255, 255, 255, 0.08);
   --vs-g-card-bg: rgb(21, 27, 35);
@@ -303,6 +326,52 @@ body[data-theme="dark"] #${OVERLAY_ID} {
   --vs-g-modal-header-bg: #161b22;
   --vs-g-modal-border: rgba(255, 255, 255, 0.12);
   --vs-g-modal-title: #f0f6fc;
+}
+
+/* Explicit Light theme tokens */
+.vs-theme-light #${OVERLAY_ID},
+#${OVERLAY_ID}.vs-theme-light {
+  --vs-g-bg: #f8fafc;
+  --vs-g-dot: rgba(0, 0, 0, 0.09);
+  --vs-g-card-bg: #ffffff;
+  --vs-g-card-border: rgba(0, 0, 0, 0.12);
+  --vs-g-card-border-hover: rgba(0, 0, 0, 0.28);
+  --vs-g-card-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  --vs-g-text-primary: #1f2328;
+  --vs-g-text-secondary: #656d76;
+  --vs-g-text-muted: #8c959f;
+  --vs-g-header-bg: rgba(0, 0, 0, 0.02);
+  --vs-g-header-border: rgba(0, 0, 0, 0.08);
+  --vs-g-section-bg: rgba(0, 0, 0, 0.03);
+  --vs-g-section-border: rgba(0, 0, 0, 0.06);
+  --vs-g-section-hover: rgba(0, 0, 0, 0.05);
+  --vs-g-row-border: rgba(0, 0, 0, 0.05);
+  --vs-g-row-hover: rgba(9, 105, 218, 0.05);
+  --vs-g-nested-bg: rgba(0, 0, 0, 0.025);
+  --vs-g-nested-border: rgba(0, 0, 0, 0.14);
+  --vs-g-topbar-bg: rgba(255, 255, 255, 0.95);
+  --vs-g-topbar-border: rgba(0, 0, 0, 0.14);
+  --vs-g-topbar-text: #1f2328;
+  --vs-g-filter-active-bg: rgba(0, 0, 0, 0.08);
+  --vs-g-filter-active-text: #1f2328;
+  --vs-g-back-btn-hover: #f3f4f6;
+  --vs-g-key: #0550ae;
+  --vs-g-str: #0a3069;
+  --vs-g-num: #cf222e;
+  --vs-g-bool: #953800;
+  --vs-g-null: #8250df;
+  --vs-g-badge-bg: rgba(9, 105, 218, 0.08);
+  --vs-g-badge-text: #0969da;
+  --vs-g-badge-border: rgba(9, 105, 218, 0.2);
+  --vs-g-path: #0969da;
+  --vs-g-path-hl: #0550ae;
+  --vs-g-port-border: rgba(0, 0, 0, 0.3);
+  --vs-g-port-bg: #ffffff;
+  --vs-g-indep-border: rgba(0, 0, 0, 0.18);
+  --vs-g-modal-bg: #ffffff;
+  --vs-g-modal-header-bg: #f6f8fa;
+  --vs-g-modal-border: rgba(0, 0, 0, 0.12);
+  --vs-g-modal-title: #1f2328;
 }
 
 #${OVERLAY_ID} {
@@ -600,12 +669,9 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   cursor: pointer;
 }
 
-html:not(.dark) .vs-graph-path:hover,
-html:not(.dark) .vs-graph-path.highlighted,
-html:not(.dark) .vs-graph-path.locked,
-body:not(.dark) .vs-graph-path:hover,
-body:not(.dark) .vs-graph-path.highlighted,
-body:not(.dark) .vs-graph-path.locked,
+.vs-theme-light .vs-graph-path:hover,
+.vs-theme-light .vs-graph-path.highlighted,
+.vs-theme-light .vs-graph-path.locked,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-path:hover,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.highlighted,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.locked {
@@ -639,12 +705,9 @@ body:not(.dark) .vs-graph-path.locked,
   stroke-dasharray: 8, 4;
 }
 
-html:not(.dark) .vs-graph-path.sequential:hover,
-html:not(.dark) .vs-graph-path.sequential.highlighted,
-html:not(.dark) .vs-graph-path.sequential.locked,
-body:not(.dark) .vs-graph-path.sequential:hover,
-body:not(.dark) .vs-graph-path.sequential.highlighted,
-body:not(.dark) .vs-graph-path.sequential.locked,
+.vs-theme-light .vs-graph-path.sequential:hover,
+.vs-theme-light .vs-graph-path.sequential.highlighted,
+.vs-theme-light .vs-graph-path.sequential.locked,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.sequential:hover,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.sequential.highlighted,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.sequential.locked {
@@ -659,16 +722,16 @@ body:not(.dark) .vs-graph-path.sequential.locked,
   transition: opacity 0.2s ease, stroke 0.15s ease;
 }
 
-html:not(.dark) .vs-graph-path.not-run,
-body:not(.dark) .vs-graph-path.not-run,
+.vs-theme-light .vs-graph-path.not-run,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.not-run {
   stroke: #9ca3af !important;
   opacity: 0.4 !important;
 }
 
+.vs-theme-dark .vs-graph-path.not-run,
 html.dark .vs-graph-path.not-run,
 body.dark .vs-graph-path.not-run,
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-path.not-run {
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-path.not-run {
   stroke: #4b5563 !important;
   opacity: 0.35 !important;
 }
@@ -792,40 +855,35 @@ body.dark .vs-graph-path.not-run,
 }
 
 /* Light Theme Chips */
-html:not(.dark) .vs-graph-status-chip.newly_added,
-body:not(.dark) .vs-graph-status-chip.newly_added,
+.vs-theme-light .vs-graph-status-chip.newly_added,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-status-chip.newly_added {
   background: rgba(46, 125, 50, 0.12);
   color: rgb(27, 94, 32);
   border: 1px solid rgba(46, 125, 50, 0.28);
 }
 
-html:not(.dark) .vs-graph-status-chip.modified,
-body:not(.dark) .vs-graph-status-chip.modified,
+.vs-theme-light .vs-graph-status-chip.modified,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-status-chip.modified {
   background: rgba(2, 136, 209, 0.12);
   color: rgb(2, 119, 189);
   border: 1px solid rgba(2, 136, 209, 0.28);
 }
 
-html:not(.dark) .vs-graph-status-chip.deleted,
-body:not(.dark) .vs-graph-status-chip.deleted,
+.vs-theme-light .vs-graph-status-chip.deleted,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-status-chip.deleted {
   background: rgba(211, 47, 47, 0.12);
   color: rgb(198, 40, 40);
   border: 1px solid rgba(211, 47, 47, 0.28);
 }
 
-html:not(.dark) .vs-graph-status-chip.paused,
-body:not(.dark) .vs-graph-status-chip.paused,
+.vs-theme-light .vs-graph-status-chip.paused,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-status-chip.paused {
   background: rgba(245, 127, 23, 0.14);
   color: rgb(217, 119, 6);
   border: 1px solid rgba(245, 127, 23, 0.3);
 }
 
-html:not(.dark) .vs-graph-status-chip.unsaved,
-body:not(.dark) .vs-graph-status-chip.unsaved,
+.vs-theme-light .vs-graph-status-chip.unsaved,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-status-chip.unsaved {
   background: rgba(237, 108, 2, 0.12);
   color: rgb(230, 81, 0);
@@ -833,134 +891,139 @@ body:not(.dark) .vs-graph-status-chip.unsaved,
 }
 
 /* Dark Theme Chips */
+.vs-theme-dark .vs-graph-status-chip.newly_added,
 html.dark .vs-graph-status-chip.newly_added,
 body.dark .vs-graph-status-chip.newly_added,
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-status-chip.newly_added {
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-status-chip.newly_added {
   background: rgba(46, 125, 50, 0.22);
   color: #4ade80;
   border: 1px solid rgba(74, 222, 128, 0.35);
 }
 
+.vs-theme-dark .vs-graph-status-chip.modified,
 html.dark .vs-graph-status-chip.modified,
 body.dark .vs-graph-status-chip.modified,
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-status-chip.modified {
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-status-chip.modified {
   background: rgba(2, 136, 209, 0.22);
   color: #38bdf8;
   border: 1px solid rgba(56, 189, 248, 0.35);
 }
 
+.vs-theme-dark .vs-graph-status-chip.deleted,
 html.dark .vs-graph-status-chip.deleted,
 body.dark .vs-graph-status-chip.deleted,
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-status-chip.deleted {
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-status-chip.deleted {
   background: rgba(211, 47, 47, 0.22);
   color: #f87171;
   border: 1px solid rgba(248, 113, 113, 0.35);
 }
 
+.vs-theme-dark .vs-graph-status-chip.paused,
 html.dark .vs-graph-status-chip.paused,
 body.dark .vs-graph-status-chip.paused,
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-status-chip.paused {
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-status-chip.paused {
   background: rgba(245, 127, 23, 0.22);
   color: #fde047;
   border: 1px solid rgba(253, 224, 71, 0.35);
 }
 
+.vs-theme-dark .vs-graph-status-chip.unsaved,
 html.dark .vs-graph-status-chip.unsaved,
 body.dark .vs-graph-status-chip.unsaved,
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-status-chip.unsaved {
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-status-chip.unsaved {
   background: rgba(237, 108, 2, 0.22);
   color: #fb923c;
   border: 1px solid rgba(251, 146, 60, 0.35);
 }
 
 /* Card Body Status Styling - Light Mode */
-html:not(.dark) .vs-graph-card[data-status="newly_added"],
-body:not(.dark) .vs-graph-card[data-status="newly_added"],
+.vs-theme-light .vs-graph-card[data-status="newly_added"],
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-card[data-status="newly_added"] {
   background-color: #f4fbf5;
   border-color: rgba(46, 125, 50, 0.35);
 }
 
-html:not(.dark) .vs-graph-card[data-status="modified"],
-body:not(.dark) .vs-graph-card[data-status="modified"],
+.vs-theme-light .vs-graph-card[data-status="modified"],
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-card[data-status="modified"] {
   background-color: #f0f7ff;
   border-color: rgba(2, 136, 209, 0.35);
 }
 
-html:not(.dark) .vs-graph-card[data-status="deleted"],
-body:not(.dark) .vs-graph-card[data-status="deleted"],
+.vs-theme-light .vs-graph-card[data-status="deleted"],
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-card[data-status="deleted"] {
   background-color: #fff5f5;
   border-color: rgba(211, 47, 47, 0.35);
 }
 
-html:not(.dark) .vs-graph-card[data-status="paused"],
-body:not(.dark) .vs-graph-card[data-status="paused"],
+.vs-theme-light .vs-graph-card[data-status="paused"],
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-card[data-status="paused"] {
   background-color: #fffdf2;
   border-color: rgba(245, 127, 23, 0.35);
 }
 
-html:not(.dark) .vs-graph-card[data-status="unsaved"],
-body:not(.dark) .vs-graph-card[data-status="unsaved"],
+.vs-theme-light .vs-graph-card[data-status="unsaved"],
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-card[data-status="unsaved"] {
   background-color: #fffbf2;
   border-color: rgba(237, 108, 2, 0.35);
 }
 
 /* Active body is always white in light mode */
-html:not(.dark) .vs-graph-card,
-html:not(.dark) .vs-graph-card[data-status="active"],
-body:not(.dark) .vs-graph-card,
-body:not(.dark) .vs-graph-card[data-status="active"],
+.vs-theme-light .vs-graph-card,
+.vs-theme-light .vs-graph-card[data-status="active"],
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-card,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-card[data-status="active"] {
   background-color: #ffffff;
 }
 
 /* Card Body Status Styling - Dark Mode */
+.vs-theme-dark .vs-graph-card[data-status="newly_added"],
 html.dark .vs-graph-card[data-status="newly_added"],
 body.dark .vs-graph-card[data-status="newly_added"],
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card[data-status="newly_added"] {
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-card[data-status="newly_added"] {
   background-color: rgba(46, 125, 50, 0.08);
   border-color: rgba(74, 222, 128, 0.35);
 }
 
+.vs-theme-dark .vs-graph-card[data-status="modified"],
 html.dark .vs-graph-card[data-status="modified"],
 body.dark .vs-graph-card[data-status="modified"],
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card[data-status="modified"] {
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-card[data-status="modified"] {
   background-color: rgba(2, 136, 209, 0.08);
   border-color: rgba(56, 189, 248, 0.35);
 }
 
+.vs-theme-dark .vs-graph-card[data-status="deleted"],
 html.dark .vs-graph-card[data-status="deleted"],
 body.dark .vs-graph-card[data-status="deleted"],
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card[data-status="deleted"] {
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-card[data-status="deleted"] {
   background-color: rgba(211, 47, 47, 0.08);
   border-color: rgba(248, 113, 113, 0.35);
 }
 
+.vs-theme-dark .vs-graph-card[data-status="paused"],
 html.dark .vs-graph-card[data-status="paused"],
 body.dark .vs-graph-card[data-status="paused"],
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card[data-status="paused"] {
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-card[data-status="paused"] {
   background-color: rgba(245, 127, 23, 0.08);
   border-color: rgba(253, 224, 71, 0.35);
 }
 
+.vs-theme-dark .vs-graph-card[data-status="unsaved"],
 html.dark .vs-graph-card[data-status="unsaved"],
 body.dark .vs-graph-card[data-status="unsaved"],
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card[data-status="unsaved"] {
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-card[data-status="unsaved"] {
   background-color: rgba(237, 108, 2, 0.08);
   border-color: rgba(251, 146, 60, 0.35);
 }
 
+.vs-theme-dark .vs-graph-card,
+.vs-theme-dark .vs-graph-card[data-status="active"],
 html.dark .vs-graph-card,
 html.dark .vs-graph-card[data-status="active"],
 body.dark .vs-graph-card,
 body.dark .vs-graph-card[data-status="active"],
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card,
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card[data-status="active"] {
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-card,
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-card[data-status="active"] {
   background-color: rgb(21, 27, 35);
 }
 
@@ -978,25 +1041,26 @@ body.dark .vs-graph-card[data-status="active"],
   filter: grayscale(0.2) !important;
 }
 
-html:not(.dark) .vs-graph-card-not-run,
-body:not(.dark) .vs-graph-card-not-run,
+.vs-theme-light .vs-graph-card-not-run,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-card-not-run {
   background-color: #f9fafb !important;
   border: 1px dashed #cbd5e1 !important;
 }
 
+.vs-theme-dark .vs-graph-card-not-run,
 html.dark .vs-graph-card-not-run,
 body.dark .vs-graph-card-not-run,
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card-not-run {
-  background-color: #111827 !important;
-  border: 1px dashed #374151 !important;
-  opacity: 0.45 !important;
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-card-not-run {
+  background-color: #161b22 !important;
+  border: 1px dashed rgba(255, 255, 255, 0.18) !important;
+  opacity: 0.55 !important;
 }
 
+.vs-theme-dark .vs-graph-card-not-run:hover,
 html.dark .vs-graph-card-not-run:hover,
 body.dark .vs-graph-card-not-run:hover,
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card-not-run:hover {
-  opacity: 0.82 !important;
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-card-not-run:hover {
+  opacity: 0.85 !important;
   filter: grayscale(0.2) !important;
 }
 
@@ -1006,9 +1070,10 @@ body.dark .vs-graph-card-not-run:hover,
   border: 1px solid #cbd5e1;
 }
 
+.vs-theme-dark .vs-graph-status-chip.not-run,
 html.dark .vs-graph-status-chip.not-run,
 body.dark .vs-graph-status-chip.not-run,
-#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-status-chip.not-run {
+#vs-dependency-graph-overlay.vs-theme-dark .vs-graph-status-chip.not-run {
   background-color: rgba(51, 65, 85, 0.4);
   color: #94a3b8;
   border: 1px solid rgba(148, 163, 184, 0.25);
@@ -1022,8 +1087,7 @@ body.dark .vs-graph-status-chip.not-run,
   transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
 }
 
-html:not(.dark) .vs-graph-card.card-connected-highlight,
-body:not(.dark) .vs-graph-card.card-connected-highlight,
+.vs-theme-light .vs-graph-card.card-connected-highlight,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-card.card-connected-highlight {
   border-color: #0284c7 !important;
   box-shadow: 0 0 0 2px #0284c7, 0 8px 20px rgba(2, 132, 199, 0.24) !important;
@@ -1054,8 +1118,7 @@ body:not(.dark) .vs-graph-card.card-connected-highlight,
   animation: vs-pill-pop 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-html:not(.dark) .vs-graph-lock-pill,
-body:not(.dark) .vs-graph-lock-pill,
+.vs-theme-light .vs-graph-lock-pill,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-lock-pill {
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid rgba(2, 132, 199, 0.45);
@@ -1073,8 +1136,7 @@ body:not(.dark) .vs-graph-lock-pill,
   color: #38bdf8;
 }
 
-html:not(.dark) .vs-graph-lock-pill .vs-lock-icon,
-body:not(.dark) .vs-graph-lock-pill .vs-lock-icon,
+.vs-theme-light .vs-graph-lock-pill .vs-lock-icon,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-lock-pill .vs-lock-icon {
   color: #0284c7;
 }
@@ -1089,8 +1151,7 @@ body:not(.dark) .vs-graph-lock-pill .vs-lock-icon,
   font-size: 11px;
 }
 
-html:not(.dark) .vs-graph-lock-pill .vs-lock-val,
-body:not(.dark) .vs-graph-lock-pill .vs-lock-val,
+.vs-theme-light .vs-graph-lock-pill .vs-lock-val,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-lock-pill .vs-lock-val {
   color: #0284c7;
 }
@@ -1106,8 +1167,7 @@ body:not(.dark) .vs-graph-lock-pill .vs-lock-val,
   font-weight: 600;
 }
 
-html:not(.dark) .vs-graph-lock-pill .vs-lock-hint,
-body:not(.dark) .vs-graph-lock-pill .vs-lock-hint,
+.vs-theme-light .vs-graph-lock-pill .vs-lock-hint,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-lock-pill .vs-lock-hint {
   background: rgba(2, 132, 199, 0.1);
   color: #0284c7;
@@ -1145,8 +1205,7 @@ body:not(.dark) .vs-graph-lock-pill .vs-lock-hint,
   font-weight: 500;
 }
 
-html:not(.dark) .vs-graph-tip-shortcut,
-body:not(.dark) .vs-graph-tip-shortcut,
+.vs-theme-light .vs-graph-tip-shortcut,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-tip-shortcut {
   color: #0284c7;
 }
@@ -1626,8 +1685,7 @@ body:not(.dark) .vs-graph-tip-shortcut,
   word-break: break-word;
 }
 
-html:not(.dark) .vs-graph-tooltip,
-body:not(.dark) .vs-graph-tooltip,
+.vs-theme-light .vs-graph-tooltip,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-tooltip {
   background: rgba(255, 255, 255, 0.98);
   color: #1f2937;
@@ -1640,8 +1698,7 @@ body:not(.dark) .vs-graph-tooltip,
   color: #ffffff;
 }
 
-html:not(.dark) .vs-graph-tip-title,
-body:not(.dark) .vs-graph-tip-title,
+.vs-theme-light .vs-graph-tip-title,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-tip-title {
   color: #111827;
 }
@@ -1653,8 +1710,7 @@ body:not(.dark) .vs-graph-tip-title,
   margin-top: 2px;
 }
 
-html:not(.dark) .vs-graph-tip-detail,
-body:not(.dark) .vs-graph-tip-detail,
+.vs-theme-light .vs-graph-tip-detail,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-tip-detail {
   color: #0284c7;
 }
@@ -1666,8 +1722,7 @@ body:not(.dark) .vs-graph-tip-detail,
   opacity: 0.85;
 }
 
-html:not(.dark) .vs-graph-tip-shortcut,
-body:not(.dark) .vs-graph-tip-shortcut,
+.vs-theme-light .vs-graph-tip-shortcut,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-tip-shortcut {
   color: #64748b;
 }
@@ -1849,6 +1904,14 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       return true
     const body = document.body
     if (body) {
+      const bg = window.getComputedStyle(body).backgroundColor || ''
+      const bgMatch = bg.match(/\d+/g)
+      if (bgMatch && bgMatch.length >= 3) {
+        const bgLum = 0.299 * Number(bgMatch[0]) + 0.587 * Number(bgMatch[1]) + 0.114 * Number(bgMatch[2])
+        if (bgLum < 100) return true
+        if (bgLum > 170) return false
+      }
+
       const color = window.getComputedStyle(body).color || ''
       const match = color.match(/\d+/g)
       if (match && match.length >= 3) {
@@ -1865,16 +1928,35 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     const targetThemeClass = isDark ? 'vs-theme-dark' : 'vs-theme-light'
     const removeThemeClass = isDark ? 'vs-theme-light' : 'vs-theme-dark'
 
+    if (typeof document !== 'undefined') {
+      if (document.documentElement) {
+        if (!document.documentElement.classList.contains(targetThemeClass) || document.documentElement.classList.contains(removeThemeClass)) {
+          document.documentElement.classList.remove(removeThemeClass)
+          document.documentElement.classList.add(targetThemeClass)
+        }
+      }
+      if (document.body) {
+        if (!document.body.classList.contains(targetThemeClass) || document.body.classList.contains(removeThemeClass)) {
+          document.body.classList.remove(removeThemeClass)
+          document.body.classList.add(targetThemeClass)
+        }
+      }
+    }
+
     if (overlayEl) {
-      overlayEl.classList.remove(removeThemeClass)
-      overlayEl.classList.add(targetThemeClass)
+      if (!overlayEl.classList.contains(targetThemeClass) || overlayEl.classList.contains(removeThemeClass)) {
+        overlayEl.classList.remove(removeThemeClass)
+        overlayEl.classList.add(targetThemeClass)
+      }
     }
 
     const tabsContainer = document.querySelector('[data-testid="workflow-view-tabs"]')
     const graphBtn = tabsContainer?.querySelector(`[data-testid="${TAB_BUTTON_TESTID}"]`)
     if (graphBtn) {
-      graphBtn.classList.remove(removeThemeClass)
-      graphBtn.classList.add(targetThemeClass)
+      if (!graphBtn.classList.contains(targetThemeClass) || graphBtn.classList.contains(removeThemeClass)) {
+        graphBtn.classList.remove(removeThemeClass)
+        graphBtn.classList.add(targetThemeClass)
+      }
     }
   }
 
@@ -1892,6 +1974,19 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       themeObserver.observe(document.body, {
         attributes: true,
         attributeFilter: ['class', 'data-theme', 'style'],
+      })
+    }
+  }
+
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    try {
+      mediaQuery.addEventListener('change', () => {
+        updateGraphTheme()
+      })
+    } catch {
+      mediaQuery.addListener?.(() => {
+        updateGraphTheme()
       })
     }
   }
@@ -2285,6 +2380,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       overlayEl.id = OVERLAY_ID
       contentBox.appendChild(overlayEl)
     }
+    updateGraphTheme()
     overlayEl.style.display = 'flex'
 
     overlayEl.innerHTML = `
@@ -2357,6 +2453,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   function renderView(): void {
     if (!overlayEl || !currentGraphData) return
     ensureLogsDrawerZIndex()
+    updateGraphTheme()
 
     const { summary } = currentGraphData
 
