@@ -234,8 +234,8 @@ body[data-theme="dark"] [data-testid="${TAB_BUTTON_TESTID}"].Mui-selected,
 /* Theme tokens: Dark theme by system preference */
 @media (prefers-color-scheme: dark) {
   #${OVERLAY_ID} {
-    --vs-g-bg: #0d1117;
-    --vs-g-dot: rgba(255, 255, 255, 0.08);
+    --vs-g-bg: var(--col-flow-slider, var(--col-surface-sunken, #010409));
+    --vs-g-dot: var(--col-border, rgba(213, 217, 220, 0.24));
     --vs-g-card-bg: rgb(21, 27, 35);
     --vs-g-card-border: rgba(255, 255, 255, 0.1);
     --vs-g-card-border-hover: rgba(255, 255, 255, 0.24);
@@ -285,8 +285,8 @@ body.dark #${OVERLAY_ID},
 html[data-theme="dark"] #${OVERLAY_ID},
 body[data-theme="dark"] #${OVERLAY_ID},
 #${OVERLAY_ID}.vs-theme-dark {
-  --vs-g-bg: #0d1117;
-  --vs-g-dot: rgba(255, 255, 255, 0.08);
+  --vs-g-bg: var(--col-flow-slider, var(--col-surface-sunken, #010409));
+  --vs-g-dot: var(--col-border, rgba(213, 217, 220, 0.24));
   --vs-g-card-bg: rgb(21, 27, 35);
   --vs-g-card-border: rgba(255, 255, 255, 0.1);
   --vs-g-card-border-hover: rgba(255, 255, 255, 0.24);
@@ -378,7 +378,7 @@ body[data-theme="dark"] #${OVERLAY_ID},
   position: absolute;
   inset: 0;
   z-index: 200 !important;
-  background-color: var(--vs-g-bg, #0d1117);
+  background-color: var(--vs-g-bg, #010409);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -412,9 +412,9 @@ body.vs-graph-active .MuiPopper-root.z-\[50\] {
 .vs-graph-canvas-bg {
   position: absolute;
   inset: 0;
-  background-color: var(--vs-g-bg, #0d1117);
-  background-image: radial-gradient(circle, var(--vs-g-dot, rgba(255, 255, 255, 0.08)) 1.2px, transparent 1.2px);
-  background-size: 20px 20px;
+  background-color: var(--vs-g-bg, #010409);
+  background-image: radial-gradient(var(--vs-g-dot, rgba(213, 217, 220, 0.24)) 1px, transparent 1px);
+  background-size: 22px 22px;
   pointer-events: none;
 }
 
@@ -1655,7 +1655,7 @@ body.dark .vs-graph-status-chip.not-run,
   position: absolute;
   top: -11px;
   left: 18px;
-  background: var(--vs-g-bg, #0d1117);
+  background: var(--vs-g-bg, #010409);
   padding: 0 8px;
   font-size: 11px;
   font-weight: 500;
@@ -1846,7 +1846,7 @@ body.dark .vs-graph-status-chip.not-run,
   font-size: 11.5px;
   line-height: 1.5;
   color: var(--vs-g-modal-title, #c9d1d9);
-  background: var(--vs-g-bg, #0d1117);
+  background: var(--vs-g-card-bg, #151b23);
   margin: 0;
   max-height: calc(82vh - 55px);
   user-select: text;
@@ -1896,6 +1896,8 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   let tabTooltipTimer: ReturnType<typeof setTimeout> | undefined
 
   function isDarkMode(): boolean {
+    if (document.documentElement.classList.contains('vs-theme-dark') || document.body.classList.contains('vs-theme-dark')) return true
+    if (document.documentElement.classList.contains('vs-theme-light') || document.body.classList.contains('vs-theme-light')) return false
     if (document.documentElement.classList.contains('dark') || document.body.classList.contains('dark')) return true
     if (
       document.documentElement.getAttribute('data-theme') === 'dark' ||
