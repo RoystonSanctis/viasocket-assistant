@@ -588,6 +588,21 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   animation: vs-flow-dash 1.2s linear infinite;
 }
 
+.vs-graph-path.sequential {
+  stroke: var(--vs-g-path, #58a6ff);
+  stroke-width: 1.8px;
+  stroke-dasharray: 6, 4;
+  opacity: 0.65;
+}
+
+.vs-graph-path.sequential:hover,
+.vs-graph-path.sequential.highlighted {
+  stroke: var(--vs-g-path-hl, #79c0ff) !important;
+  stroke-width: 2.8px !important;
+  opacity: 1 !important;
+  stroke-dasharray: none;
+}
+
 @keyframes vs-flow-dash {
   from { stroke-dashoffset: 20; }
   to { stroke-dashoffset: 0; }
@@ -2016,9 +2031,13 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
             <button class="vs-graph-filter-btn ${currentFilter === 'dependent' ? 'active' : ''}" data-filter="dependent">
               Dependent (${summary.dependentSteps})
             </button>
-            <button class="vs-graph-filter-btn ${currentFilter === 'independent' ? 'active' : ''}" data-filter="independent">
-              Independent (${summary.independentSteps})
-            </button>
+            ${
+              summary.independentSteps > 0
+                ? `<button class="vs-graph-filter-btn ${currentFilter === 'independent' ? 'active' : ''}" data-filter="independent">
+                    Independent (${summary.independentSteps})
+                  </button>`
+                : ''
+            }
           </div>
         </div>
 
@@ -2303,6 +2322,13 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     const { trigger, steps } = currentGraphData
     const nodesLayer = overlayEl.querySelector('#vs-graph-nodes-layer') as HTMLElement
     nodesLayer.innerHTML = ''
+
+    if (currentFilter === 'independent' && !steps.some((s) => s.isIndependent)) {
+      currentFilter = 'all'
+      overlayEl.querySelectorAll('.vs-graph-filter-btn').forEach((b) => {
+        b.classList.toggle('active', b.getAttribute('data-filter') === 'all')
+      })
+    }
 
     let visibleSteps = steps
     if (currentFilter === 'dependent') {
@@ -2893,7 +2919,12 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     }
 
     const isWebhook = node.type === 'trigger'
-    const subtitle = isWebhook ? 'https://flow.sokt.io/func/scriwknFmRIS' : ''
+    const isDelayNode = node.type === 'delay' || node.slugName.toLowerCase() === 'delay'
+    const subtitle = isWebhook
+      ? 'https://flow.sokt.io/func/scriwknFmRIS'
+      : isDelayNode
+        ? 'Delay • Pauses workflow before next step'
+        : ''
 
     const statusChipHtml =
       node.statusLabel && node.stepStatus && node.stepStatus !== 'active'
@@ -3075,12 +3106,19 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     const layerRect = transformLayer.getBoundingClientRect()
 
     for (const conn of currentGraphData.connections) {
-      const fromEl = (transformLayer.querySelector(`.port-out[data-port-id="${conn.fromPortId}"]`) ||
+      let fromEl = (transformLayer.querySelector(`.port-out[data-port-id="${conn.fromPortId}"]`) ||
         transformLayer.querySelector(`.vs-graph-row[data-port-id="${conn.fromPortId}"]`) ||
         transformLayer.querySelector(`.vs-graph-nested-row[data-port-id="${conn.fromPortId}"]`)) as HTMLElement | null
-      const toEl = (transformLayer.querySelector(`.port-in[data-port-id="${conn.toPortId}"]`) ||
+      let toEl = (transformLayer.querySelector(`.port-in[data-port-id="${conn.toPortId}"]`) ||
         transformLayer.querySelector(`.vs-graph-row[data-port-id="${conn.toPortId}"]`) ||
         transformLayer.querySelector(`.vs-graph-nested-row[data-port-id="${conn.toPortId}"]`)) as HTMLElement | null
+
+      if (!fromEl && conn.fromSlug) {
+        fromEl = transformLayer.querySelector(`.vs-graph-card[data-node-id="${conn.fromSlug}"]`) as HTMLElement | null
+      }
+      if (!toEl && conn.toSlug) {
+        toEl = transformLayer.querySelector(`.vs-graph-card[data-node-id="${conn.toSlug}"]`) as HTMLElement | null
+      }
 
       if (!fromEl || !toEl) continue
 
@@ -3107,21 +3145,24 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
       const isFromDot = !fromCollapsed && fromTargetEl.classList.contains('vs-graph-port-dot')
       const isToDot = !toCollapsed && toTargetEl.classList.contains('vs-graph-port-dot')
+      const isFromCard = fromTargetEl.classList.contains('vs-graph-card')
+      const isToCard = toTargetEl.classList.contains('vs-graph-card')
 
       const fromX = isFromDot ? fromRect.left + fromRect.width / 2 - layerRect.left : fromRect.right - layerRect.left
       const toX = isToDot ? toRect.left + toRect.width / 2 - layerRect.left : toRect.left - layerRect.left
 
       const x1 = fromX / zoom
-      const y1 = (fromRect.top + fromRect.height / 2 - layerRect.top) / zoom
+      const y1 = (isFromCard ? fromRect.top + 28 - layerRect.top : fromRect.top + fromRect.height / 2 - layerRect.top) / zoom
       const x2 = toX / zoom
-      const y2 = (toRect.top + toRect.height / 2 - layerRect.top) / zoom
+      const y2 = (isToCard ? toRect.top + 28 - layerRect.top : toRect.top + toRect.height / 2 - layerRect.top) / zoom
 
       const dx = Math.max(50, Math.abs(x2 - x1) * 0.45)
       const pathD = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`
 
+      const isSequentialConn = conn.expression === 'sequential'
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
       path.setAttribute('d', pathD)
-      path.setAttribute('class', 'vs-graph-path')
+      path.setAttribute('class', isSequentialConn ? 'vs-graph-path sequential' : 'vs-graph-path')
       path.setAttribute('data-conn-id', conn.id)
       path.setAttribute('data-from-port', conn.fromPortId)
       path.setAttribute('data-to-port', conn.toPortId)
@@ -3129,11 +3170,17 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       path.addEventListener('mouseenter', (e) => {
         path.classList.add('highlighted', 'pulse-anim')
         highlightConnectedPorts(conn.fromPortId, conn.toPortId)
-        showTooltip(e.clientX, e.clientY, `${conn.fromSlug}.${conn.fromField} (${conn.valuePreview}) ➔ ${conn.toSlug}.${conn.toField}`)
+        const tip = isSequentialConn
+          ? `Sequential Order: ${conn.fromSlug} ➔ ${conn.toSlug}`
+          : `${conn.fromSlug}.${conn.fromField} (${conn.valuePreview}) ➔ ${conn.toSlug}.${conn.toField}`
+        showTooltip(e.clientX, e.clientY, tip)
       })
 
       path.addEventListener('mousemove', (e) => {
-        showTooltip(e.clientX, e.clientY, `${conn.fromSlug}.${conn.fromField} (${conn.valuePreview}) ➔ ${conn.toSlug}.${conn.toField}`)
+        const tip = isSequentialConn
+          ? `Sequential Order: ${conn.fromSlug} ➔ ${conn.toSlug}`
+          : `${conn.fromSlug}.${conn.fromField} (${conn.valuePreview}) ➔ ${conn.toSlug}.${conn.toField}`
+        showTooltip(e.clientX, e.clientY, tip)
       })
 
       path.addEventListener('mouseleave', () => {
@@ -3265,8 +3312,11 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     if (allBtn) allBtn.textContent = `All (${summary.totalSteps})`
     const depBtn = overlayEl.querySelector('.vs-graph-filter-btn[data-filter="dependent"]')
     if (depBtn) depBtn.textContent = `Dependent (${summary.dependentSteps})`
-    const indBtn = overlayEl.querySelector('.vs-graph-filter-btn[data-filter="independent"]')
-    if (indBtn) indBtn.textContent = `Independent (${summary.independentSteps})`
+    const indBtn = overlayEl.querySelector('.vs-graph-filter-btn[data-filter="independent"]') as HTMLElement | null
+    if (indBtn) {
+      indBtn.textContent = `Independent (${summary.independentSteps})`
+      indBtn.style.display = summary.independentSteps > 0 ? '' : 'none'
+    }
   }
 
   let isRefreshing = false

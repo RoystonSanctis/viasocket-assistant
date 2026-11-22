@@ -1438,32 +1438,82 @@ function install(): void {
         }
       }
 
-      // Compute topological depths
-      const depthMap: Record<string, number> = { trigger: 0 }
-      let changed = true
-      let iterations = 0
-      while (changed && iterations < 15) {
-        changed = false
-        iterations++
-        for (const node of stepNodes) {
-          if (node.upstreamSlugs.length === 0) {
-            if (depthMap[node.slugName] !== 0) {
-              depthMap[node.slugName] = 0
-              changed = true
-            }
-          } else {
-            const maxUpstream = Math.max(...node.upstreamSlugs.map((u) => depthMap[u] ?? 0))
-            const newDepth = maxUpstream + 1
-            if (depthMap[node.slugName] !== newDepth) {
-              depthMap[node.slugName] = newDepth
-              changed = true
+      function isDelayBlock(block: Record<string, unknown> | undefined, slug: string): boolean {
+        if (!block) return false
+        if (block.type === 'delay') return true
+        if (block.isDelay === true) return true
+        if (isObj(block.breakPoint) && (block.breakPoint as Record<string, unknown>).isDelay === true) return true
+        if (isObj(block.statement) && (block.statement as Record<string, unknown>).type === 'delay') return true
+        const s = slug.toLowerCase()
+        if (s === 'delay' || s.startsWith('delay_') || s.startsWith('delay-')) return true
+        return false
+      }
+
+      const hasDelay = stepOrder.some((slug) => isDelayBlock(obj(blocks[slug]), slug))
+
+      if (hasDelay) {
+        // When a delay is added and made public, the workflow execution becomes
+        // strictly sequential before and after the delay based on the flow order.
+        // The entire graph is dependent.
+        for (let i = 0; i < stepOrder.length; i++) {
+          const slug = stepOrder[i]
+          if (!slug) continue
+          const node = stepNodes.find((s) => s.slugName === slug)
+          if (!node) continue
+
+          node.isIndependent = false
+          node.depth = i + 1
+
+          const prevSlug = i === 0 ? 'trigger' : stepOrder[i - 1]
+          if (prevSlug && !node.upstreamSlugs.includes(prevSlug)) {
+            node.upstreamSlugs.push(prevSlug)
+          }
+
+          const hasDirectConn = connections.some((c) => c.fromSlug === prevSlug && c.toSlug === slug)
+          if (!hasDirectConn && prevSlug) {
+            connections.push({
+              id: `conn-seq-${prevSlug}-${slug}`,
+              fromNodeId: prevSlug,
+              fromSlug: prevSlug,
+              fromPortId: `${prevSlug}-seq-out`,
+              fromField: 'flow',
+              toNodeId: slug,
+              toSlug: slug,
+              toPortId: `${slug}-seq-in`,
+              toField: 'flow',
+              expression: 'sequential',
+              valuePreview: 'Sequential Step',
+            })
+          }
+        }
+      } else {
+        // Compute topological depths
+        const depthMap: Record<string, number> = { trigger: 0 }
+        let changed = true
+        let iterations = 0
+        while (changed && iterations < 15) {
+          changed = false
+          iterations++
+          for (const node of stepNodes) {
+            if (node.upstreamSlugs.length === 0) {
+              if (depthMap[node.slugName] !== 0) {
+                depthMap[node.slugName] = 0
+                changed = true
+              }
+            } else {
+              const maxUpstream = Math.max(...node.upstreamSlugs.map((u) => depthMap[u] ?? 0))
+              const newDepth = maxUpstream + 1
+              if (depthMap[node.slugName] !== newDepth) {
+                depthMap[node.slugName] = newDepth
+                changed = true
+              }
             }
           }
         }
-      }
 
-      for (const node of stepNodes) {
-        node.depth = depthMap[node.slugName] ?? 1
+        for (const node of stepNodes) {
+          node.depth = depthMap[node.slugName] ?? 1
+        }
       }
 
       const summary = {
