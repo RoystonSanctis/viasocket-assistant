@@ -1002,6 +1002,15 @@ function install(): void {
       const stepRequestSnapshot = obj(tryParse(invData.stepRequestSnapshot))
       const rawInputData = obj(tryParse(invData.inputData))
 
+      // Map identifier -> slug and id -> slug for resolving backend stepIds
+      const stepIdToSlug = new Map<string, string>()
+      for (const [slug, b] of Object.entries(blocks)) {
+        if (!isObj(b)) continue
+        const block = b as Record<string, unknown>
+        if (typeof block.id === 'string' && block.id) stepIdToSlug.set(block.id, slug)
+        if (typeof block.identifier === 'string' && block.identifier) stepIdToSlug.set(block.identifier, slug)
+      }
+
       const executedSlugs = new Set<string>()
       if (isLogView) {
         executedSlugs.add('trigger')
@@ -1009,17 +1018,26 @@ function install(): void {
           for (const s of invData.stepOrderJsonData) {
             if (isObj(s)) {
               const item = s as Record<string, unknown>
-              if (typeof item.id === 'string' && item.id) executedSlugs.add(item.id)
-              if (typeof item.stepId === 'string' && item.stepId) executedSlugs.add(item.stepId)
-              if (typeof item.name === 'string' && item.name) executedSlugs.add(item.name)
+              const slug = (typeof item.id === 'string' && item.id) || (typeof item.name === 'string' && item.name)
+              if (slug) {
+                executedSlugs.add(slug)
+              } else if (typeof item.stepId === 'string' && item.stepId && stepIdToSlug.has(item.stepId)) {
+                executedSlugs.add(stepIdToSlug.get(item.stepId)!)
+              }
             }
           }
         }
         for (const k of Object.keys(responseSnapshot)) {
-          if (k && responseSnapshot[k] !== undefined) executedSlugs.add(k)
+          if (k && responseSnapshot[k] !== undefined) {
+            const resolved = stepIdToSlug.get(k) || k
+            executedSlugs.add(resolved)
+          }
         }
         for (const k of Object.keys(stepRequestSnapshot)) {
-          if (k && stepRequestSnapshot[k] !== undefined) executedSlugs.add(k)
+          if (k && stepRequestSnapshot[k] !== undefined) {
+            const resolved = stepIdToSlug.get(k) || k
+            executedSlugs.add(resolved)
+          }
         }
       }
 
@@ -1038,8 +1056,8 @@ function install(): void {
           blockStatus === 'DELETE'
 
         if (isDeleted) {
-          // If deleted in current flow, only keep if it actually ran in this specific log
-          if (isLogView && executedSlugs.has(slug)) {
+          // If deleted in current flow, ONLY keep if there is a response in this specific log (how log does)
+          if (isLogView && responseSnapshot[slug] !== undefined) {
             stepSlugsSet.add(slug)
           }
         } else {
@@ -1047,10 +1065,14 @@ function install(): void {
         }
       }
 
-      // 2. Any step that actually executed in THIS log run (even if removed from blocks later)
+      // 2. Only deleted steps that actually have a response in this log (how log does)
       if (isLogView) {
-        for (const slug of executedSlugs) {
-          if (slug && slug !== 'trigger' && slug !== 'response') {
+        for (const k of Object.keys(responseSnapshot)) {
+          if (!k || k === 'trigger' || k === 'response') continue
+          const slug = stepIdToSlug.get(k) || k
+          // Skip internal backend IDs like 'func...' that are not flow blocks
+          if (slug.startsWith('func') && !blocks[slug]) continue
+          if (responseSnapshot[k] !== undefined) {
             stepSlugsSet.add(slug)
           }
         }
@@ -1613,6 +1635,22 @@ function install(): void {
               valuePreview: 'Sequential Step',
               hasRun: seqConnHasRun,
             })
+          }
+        }
+
+        // Handle any historical deleted nodes that ran in this log
+        for (const node of stepNodes) {
+          if (!stepOrder.includes(node.slugName)) {
+            node.isIndependent = false
+            if (node.upstreamSlugs.length > 0) {
+              const maxUp = Math.max(...node.upstreamSlugs.map((u) => {
+                const upNode = stepNodes.find((n) => n.slugName === u)
+                return upNode ? upNode.depth : 0
+              }))
+              node.depth = maxUp + 1
+            } else {
+              node.depth = 1
+            }
           }
         }
       } else {
