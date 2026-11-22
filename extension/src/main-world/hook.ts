@@ -911,6 +911,8 @@ function install(): void {
     }
   }
 
+  const historicalStepsByScript = new Map<string, Map<string, { slug: string; title?: string; type?: string; iconUrl?: string }>>()
+
   function readFlowGraphData(msg: { scriptId?: string }): FlowGraphData | null {
     try {
       const obj = (v: unknown): Record<string, unknown> => (isObj(v) ? (v as Record<string, unknown>) : {})
@@ -951,6 +953,16 @@ function install(): void {
       const flowHitId = typeof invData.flowHitId === 'string' ? invData.flowHitId : new URLSearchParams(location.search).get('flowhitid') || undefined
       const timestamp = typeof invData.requestTimestamp === 'string' ? invData.requestTimestamp : undefined
 
+      const urlParams = new URLSearchParams(location.search)
+      const urlFlowHitId = urlParams.get('flowhitid') || undefined
+      const urlTimestamp = urlParams.get('timestamp') || undefined
+      const isLogView = Boolean(
+        urlFlowHitId ||
+        urlTimestamp ||
+        (typeof invData.flowHitId === 'string' && invData.flowHitId.length > 0) ||
+        (Array.isArray(invData.stepOrderJsonData) && invData.stepOrderJsonData.length > 0 && !invData.isDryRun)
+      )
+
       const requestSnapshot = isObj(invData.requestSnapshot)
         ? (invData.requestSnapshot as Record<string, unknown>)
         : isObj(invData.requestSnapshotJsonData)
@@ -976,6 +988,85 @@ function install(): void {
         functions: { ...obj(pubUsed.functions), ...obj(draftUsed.functions) },
         plugin: { ...obj(pubUsed.plugin), ...obj(draftUsed.plugin) },
         variables: { ...obj(pubUsed.variables), ...obj(draftUsed.variables) },
+      }
+
+      const tryParse = (val: unknown): unknown => {
+        if (typeof val === 'string') {
+          try {
+            return JSON.parse(val)
+          } catch {
+            return val
+          }
+        }
+        return val
+      }
+
+      const stepRequestSnapshot = obj(tryParse(invData.stepRequestSnapshot))
+      const rawInputData = obj(tryParse(invData.inputData))
+
+      const executedSlugs = new Set<string>()
+      if (isLogView) {
+        executedSlugs.add('trigger')
+        if (Array.isArray(invData.stepOrderJsonData)) {
+          for (const s of invData.stepOrderJsonData) {
+            if (isObj(s)) {
+              const item = s as Record<string, unknown>
+              if (typeof item.id === 'string' && item.id) executedSlugs.add(item.id)
+              if (typeof item.stepId === 'string' && item.stepId) executedSlugs.add(item.stepId)
+              if (typeof item.name === 'string' && item.name) executedSlugs.add(item.name)
+            }
+          }
+        }
+        for (const k of Object.keys(responseSnapshot)) {
+          if (k && responseSnapshot[k] !== undefined) executedSlugs.add(k)
+        }
+        for (const k of Object.keys(stepRequestSnapshot)) {
+          if (k && stepRequestSnapshot[k] !== undefined) executedSlugs.add(k)
+        }
+      }
+
+      // Track all known steps across flow states and historical logs
+      let histMap = historicalStepsByScript.get(scriptId)
+      if (!histMap) {
+        histMap = new Map()
+        historicalStepsByScript.set(scriptId, histMap)
+      }
+      for (const slug of stepOrder) {
+        const block = obj(blocks[slug])
+        const stepType = typeof block.type === 'string' ? block.type : 'function'
+        const iconUrl = typeof block.iconUrl === 'string' ? block.iconUrl : undefined
+        const stepTitle =
+          (typeof block.name === 'string' && block.name) ||
+          (typeof block.title === 'string' && block.title) ||
+          slug.replace(/_/g, ' ')
+        histMap.set(slug, { slug, title: stepTitle, type: stepType, iconUrl })
+      }
+      if (Array.isArray(invData.stepOrderJsonData)) {
+        for (const item of invData.stepOrderJsonData) {
+          if (isObj(item)) {
+            const s = item as Record<string, unknown>
+            const slug = (typeof s.id === 'string' && s.id) || (typeof s.name === 'string' && s.name)
+            if (slug && !histMap.has(slug)) {
+              histMap.set(slug, {
+                slug,
+                title: slug.replace(/_/g, ' '),
+                type: typeof s.type === 'string' ? s.type : 'function',
+              })
+            }
+          }
+        }
+      }
+      for (const k of Object.keys(responseSnapshot)) {
+        if (k && !histMap.has(k)) {
+          histMap.set(k, { slug: k, title: k.replace(/_/g, ' '), type: 'function' })
+        }
+      }
+
+      const allStepSlugs = [...stepOrder]
+      for (const histSlug of histMap.keys()) {
+        if (!allStepSlugs.includes(histSlug)) {
+          allStepSlugs.push(histSlug)
+        }
       }
 
       function parseVariableReference(rawExpr: string): { sourceSlug: string; sourceField: string } | null {
@@ -1016,20 +1107,6 @@ function install(): void {
 
         return null
       }
-
-      const tryParse = (val: unknown): unknown => {
-        if (typeof val === 'string') {
-          try {
-            return JSON.parse(val)
-          } catch {
-            return val
-          }
-        }
-        return val
-      }
-
-      const stepRequestSnapshot = obj(tryParse(invData.stepRequestSnapshot))
-      const rawInputData = obj(tryParse(invData.inputData))
 
       function evalExpr(expr: string): unknown {
         if (!expr || typeof expr !== 'string') return undefined
@@ -1128,6 +1205,8 @@ function install(): void {
         inputs: [],
         outputs: triggerOutputs,
         stepStatus: 'active',
+        hasRun: true,
+        notInLog: false,
       }
 
       // 2. Build Step Nodes
@@ -1136,15 +1215,23 @@ function install(): void {
       const funcsMap = obj(usedVars.functions)
       const pluginMap = obj(usedVars.plugin)
 
-      for (const slug of stepOrder) {
+      for (const slug of allStepSlugs) {
         const block = obj(blocks[slug])
-        const stepType = typeof block.type === 'string' ? block.type : 'function'
-        const iconUrl = typeof block.iconUrl === 'string' ? block.iconUrl : undefined
+        const histInfo = histMap.get(slug)
+        const stepType = typeof block.type === 'string' ? block.type : (histInfo?.type || 'function')
+        const iconUrl = typeof block.iconUrl === 'string' ? block.iconUrl : histInfo?.iconUrl
         const inputs: FlowGraphPort[] = []
         const upstreamSlugsSet = new Set<string>()
 
         const stepId = typeof block.id === 'string' ? block.id : ''
         const stepIdentifier = typeof block.identifier === 'string' ? block.identifier : ''
+        const existsInCurrentFlow = Boolean(blocks[slug])
+        const hasRun = !isLogView || (
+          executedSlugs.has(slug) ||
+          (Boolean(stepId) && executedSlugs.has(stepId)) ||
+          (Boolean(stepIdentifier) && executedSlugs.has(stepIdentifier))
+        )
+        const notInLog = isLogView && !hasRun
         const allStepsData = obj(obj(state.stepsDataV3)[scriptId])
         let stepEntry = obj(allStepsData[stepIdentifier])
         if (!Object.keys(stepEntry).length && stepId) {
@@ -1300,6 +1387,14 @@ function install(): void {
             })
 
             if (sourceSlug && sourceField) {
+              const fromHasRun = !isLogView || (sourceSlug === 'trigger' ? true : executedSlugs.has(sourceSlug))
+              const toHasRun = !isLogView || (
+                executedSlugs.has(slug) ||
+                (Boolean(stepId) && executedSlugs.has(stepId)) ||
+                (Boolean(stepIdentifier) && executedSlugs.has(stepIdentifier))
+              )
+              const connHasRun = fromHasRun && toHasRun
+
               connections.push({
                 id: `conn-${sourceSlug}-${sourceField}-${slug}-${key}`,
                 fromNodeId: sourceSlug,
@@ -1312,6 +1407,7 @@ function install(): void {
                 toField: key,
                 expression: expr,
                 valuePreview: formatVal(val),
+                hasRun: connHasRun,
               })
             }
           } else {
@@ -1398,6 +1494,15 @@ function install(): void {
           }
         }
 
+        if (notInLog) {
+          if (!existsInCurrentFlow) {
+            stepStatus = 'deleted'
+            statusLabel = 'Not in this log'
+          } else {
+            statusLabel = 'Did not run'
+          }
+        }
+
         stepNodes.push({
           id: slug,
           slugName: slug,
@@ -1411,6 +1516,8 @@ function install(): void {
           outputs,
           stepStatus,
           statusLabel,
+          hasRun,
+          notInLog,
         })
       }
 
@@ -1462,6 +1569,10 @@ function install(): void {
 
           const hasDirectConn = connections.some((c) => c.fromSlug === prevSlug && c.toSlug === slug)
           if (!hasDirectConn && prevSlug) {
+            const prevHasRun = !isLogView || (prevSlug === 'trigger' ? true : executedSlugs.has(prevSlug))
+            const currHasRun = !isLogView || executedSlugs.has(slug)
+            const seqConnHasRun = prevHasRun && currHasRun
+
             connections.push({
               id: `conn-seq-${prevSlug}-${slug}`,
               fromNodeId: prevSlug,
@@ -1474,6 +1585,7 @@ function install(): void {
               toField: 'flow',
               expression: 'sequential',
               valuePreview: 'Sequential Step',
+              hasRun: seqConnHasRun,
             })
           }
         }
@@ -1511,12 +1623,15 @@ function install(): void {
         totalSteps: stepNodes.length,
         dependentSteps: stepNodes.filter((s) => !s.isIndependent).length,
         independentSteps: stepNodes.filter((s) => s.isIndependent).length,
+        executedSteps: isLogView ? stepNodes.filter((s) => s.hasRun).length : undefined,
+        notRunSteps: isLogView ? stepNodes.filter((s) => !s.hasRun).length : undefined,
       }
 
       return {
         scriptId,
         flowHitId,
         timestamp,
+        isLogView,
         trigger: triggerNode,
         steps: stepNodes,
         connections,

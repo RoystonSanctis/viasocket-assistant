@@ -651,6 +651,38 @@ body:not(.dark) .vs-graph-path.sequential.locked,
   stroke: #0284c7 !important;
 }
 
+/* Not-run / unexecuted connections */
+.vs-graph-path.not-run {
+  stroke: #9ca3af !important;
+  stroke-dasharray: 6, 4 !important;
+  opacity: 0.35 !important;
+  transition: opacity 0.2s ease, stroke 0.15s ease;
+}
+
+html:not(.dark) .vs-graph-path.not-run,
+body:not(.dark) .vs-graph-path.not-run,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.not-run {
+  stroke: #9ca3af !important;
+  opacity: 0.4 !important;
+}
+
+html.dark .vs-graph-path.not-run,
+body.dark .vs-graph-path.not-run,
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-path.not-run {
+  stroke: #4b5563 !important;
+  opacity: 0.35 !important;
+}
+
+.vs-graph-path.not-run:hover,
+.vs-graph-path.not-run.highlighted,
+.vs-graph-path.not-run.locked {
+  stroke: #94a3b8 !important;
+  stroke-width: 3px !important;
+  opacity: 0.85 !important;
+  stroke-dasharray: 8, 4 !important;
+  filter: drop-shadow(0 0 6px rgba(148, 163, 184, 0.6)) !important;
+}
+
 @keyframes vs-flow-dash {
   from { stroke-dashoffset: 20; }
   to { stroke-dashoffset: 0; }
@@ -930,6 +962,56 @@ body.dark .vs-graph-card[data-status="active"],
 #vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card,
 #vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card[data-status="active"] {
   background-color: rgb(21, 27, 35);
+}
+
+/* Card Not-Run / Greyout Styling */
+.vs-graph-card-not-run {
+  opacity: 0.52 !important;
+  filter: grayscale(0.7) !important;
+  border: 1px dashed #d1d5db !important;
+  background-color: #f9fafb !important;
+  transition: opacity 0.2s ease, filter 0.2s ease, border-color 0.15s ease !important;
+}
+
+.vs-graph-card-not-run:hover {
+  opacity: 0.88 !important;
+  filter: grayscale(0.2) !important;
+}
+
+html:not(.dark) .vs-graph-card-not-run,
+body:not(.dark) .vs-graph-card-not-run,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-card-not-run {
+  background-color: #f9fafb !important;
+  border: 1px dashed #cbd5e1 !important;
+}
+
+html.dark .vs-graph-card-not-run,
+body.dark .vs-graph-card-not-run,
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card-not-run {
+  background-color: #111827 !important;
+  border: 1px dashed #374151 !important;
+  opacity: 0.45 !important;
+}
+
+html.dark .vs-graph-card-not-run:hover,
+body.dark .vs-graph-card-not-run:hover,
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card-not-run:hover {
+  opacity: 0.82 !important;
+  filter: grayscale(0.2) !important;
+}
+
+.vs-graph-status-chip.not-run {
+  background-color: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
+}
+
+html.dark .vs-graph-status-chip.not-run,
+body.dark .vs-graph-status-chip.not-run,
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-status-chip.not-run {
+  background-color: rgba(51, 65, 85, 0.4);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
 }
 
 /* Card Connected Highlight */
@@ -3138,7 +3220,11 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       const shortcut = conns.length > 0
         ? (conns.length === 1 ? 'Space: Lock path • Click to inspect' : `Space: Lock all ${conns.length} paths • Click to inspect`)
         : (canExpand ? 'Click to expand/collapse' : 'Click to inspect')
-      showTooltip(e.clientX, e.clientY, tip, shortcut, detailText)
+      let rowDetail = detailText
+      if (node.hasRun === false) {
+        rowDetail = `${detailText} • (Step did not run in this log)`
+      }
+      showTooltip(e.clientX, e.clientY, tip, shortcut, rowDetail)
     }
 
     const onRowMove = (e: MouseEvent) => {
@@ -3152,7 +3238,11 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       const shortcut = conns.length > 0
         ? (conns.length === 1 ? 'Space: Lock path • Click to inspect' : `Space: Lock all ${conns.length} paths • Click to inspect`)
         : (canExpand ? 'Click to expand/collapse' : 'Click to inspect')
-      showTooltip(e.clientX, e.clientY, tip, shortcut, detailText)
+      let rowDetail = detailText
+      if (node.hasRun === false) {
+        rowDetail = `${detailText} • (Step did not run in this log)`
+      }
+      showTooltip(e.clientX, e.clientY, tip, shortcut, rowDetail)
     }
 
     const onRowLeave = () => {
@@ -3256,6 +3346,12 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       card.setAttribute('data-status', node.stepStatus)
     }
 
+    const isNotRun = node.hasRun === false
+    if (isNotRun) {
+      card.classList.add('vs-graph-card-not-run')
+      card.setAttribute('data-execution', 'not-run')
+    }
+
     // Resolved icon URL matching native viaSocket
     let iconSrc = node.iconUrl
     if (node.type === 'trigger') {
@@ -3274,17 +3370,18 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         ? 'Delay • Pauses workflow before next step'
         : ''
 
-    const statusChipHtml =
-      node.statusLabel && node.stepStatus && node.stepStatus !== 'active'
-        ? `<span class="vs-graph-status-chip ${node.stepStatus}" title="${escapeHtml(node.statusLabel)}">${escapeHtml(node.statusLabel)}</span>`
+    const statusChipHtml = isNotRun
+      ? `<span class="vs-graph-status-chip not-run">${escapeHtml(node.statusLabel || 'Did not run')}</span>`
+      : node.statusLabel && node.stepStatus && node.stepStatus !== 'active'
+        ? `<span class="vs-graph-status-chip ${node.stepStatus}">${escapeHtml(node.statusLabel)}</span>`
         : ''
 
     card.innerHTML = `
       <div class="vs-graph-card-header">
-        <div class="vs-graph-card-avatar" title="Click to edit ${escapeHtml(node.title)}">
+        <div class="vs-graph-card-avatar">
           <img alt="" src="${iconSrc}" />
         </div>
-        <div class="vs-graph-card-title-box" title="Click to edit ${escapeHtml(node.title)}">
+        <div class="vs-graph-card-title-box">
           <div class="vs-graph-card-title-row">
             <p class="vs-graph-card-title">${escapeHtml(node.title)}</p>
             ${statusChipHtml}
@@ -3293,10 +3390,10 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         </div>
         <div class="vs-graph-card-actions">
           ${node.isIndependent ? `<span class="vs-graph-card-badge indep">Independent</span>` : ''}
-          <button class="vs-graph-edit-btn" aria-label="Edit step" title="Edit step" type="button">
+          <button class="vs-graph-edit-btn" aria-label="Edit step" type="button">
             <svg class="MuiSvgIcon-root" viewBox="0 0 24 24" style="width:15px;height:15px;fill:currentColor;"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></path></svg>
           </button>
-          <button class="vs-graph-menu-btn" aria-label="More actions" title="More actions" type="button">
+          <button class="vs-graph-menu-btn" aria-label="More actions" type="button">
             <svg class="MuiSvgIcon-root" viewBox="0 0 24 24" style="width:17px;height:17px;fill:currentColor;"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2m0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2m0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2"></path></svg>
           </button>
         </div>
@@ -3729,6 +3826,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       }
 
       const isLocked = lockedState?.conns.some((c) => c.id === item.conn.id) ?? false
+      const isNotRunConn = item.conn.hasRun === false
 
       // Invisible fat hit-area path for smooth, reliable hover tracking
       const hitPath = document.createElementNS('http://www.w3.org/2000/svg', 'path')
@@ -3737,22 +3835,31 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       hitPath.setAttribute('data-conn-id', item.conn.id)
       hitPath.setAttribute('data-from-port', item.conn.fromPortId)
       hitPath.setAttribute('data-to-port', item.conn.toPortId)
+      if (isNotRunConn) {
+        hitPath.setAttribute('data-execution', 'not-run')
+      }
+
+      let pathClass = item.isSequentialConn
+        ? isLocked
+          ? 'vs-graph-path sequential highlighted locked'
+          : 'vs-graph-path sequential'
+        : isLocked
+          ? 'vs-graph-path highlighted locked'
+          : 'vs-graph-path'
+
+      if (isNotRunConn) {
+        pathClass += ' not-run'
+      }
 
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
       path.setAttribute('d', pathD)
-      path.setAttribute(
-        'class',
-        item.isSequentialConn
-          ? isLocked
-            ? 'vs-graph-path sequential highlighted locked'
-            : 'vs-graph-path sequential'
-          : isLocked
-            ? 'vs-graph-path highlighted locked'
-            : 'vs-graph-path'
-      )
+      path.setAttribute('class', pathClass)
       path.setAttribute('data-conn-id', item.conn.id)
       path.setAttribute('data-from-port', item.conn.fromPortId)
       path.setAttribute('data-to-port', item.conn.toPortId)
+      if (isNotRunConn) {
+        path.setAttribute('data-execution', 'not-run')
+      }
 
       const onWireEnter = (e: MouseEvent) => {
         hoveredConn = item.conn
@@ -3762,9 +3869,12 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
           : `${item.conn.fromSlug}.${item.conn.fromField} ➔ ${item.conn.toSlug}.${item.conn.toField}`
         const isThisLocked = lockedState?.conns.some((c) => c.id === item.conn.id)
         const shortcut = isThisLocked ? 'Space: Unlock' : 'Space: Lock path • Click for details'
-        const detail = item.isSequentialConn
+        let detail = item.isSequentialConn
           ? 'Sequential execution flow'
           : (item.conn.expression ? `${item.conn.expression} = ${item.conn.valuePreview}` : `Value: ${item.conn.valuePreview}`)
+        if (item.conn.hasRun === false) {
+          detail = `${detail} • (Not executed in this log)`
+        }
         showTooltip(e.clientX, e.clientY, tip, shortcut, detail)
 
         if (lockedState) return
@@ -3777,9 +3887,12 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
           : `${item.conn.fromSlug}.${item.conn.fromField} ➔ ${item.conn.toSlug}.${item.conn.toField}`
         const isThisLocked = lockedState?.conns.some((c) => c.id === item.conn.id)
         const shortcut = isThisLocked ? 'Space: Unlock' : 'Space: Lock path • Click for details'
-        const detail = item.isSequentialConn
+        let detail = item.isSequentialConn
           ? 'Sequential execution flow'
           : (item.conn.expression ? `${item.conn.expression} = ${item.conn.valuePreview}` : `Value: ${item.conn.valuePreview}`)
+        if (item.conn.hasRun === false) {
+          detail = `${detail} • (Not executed in this log)`
+        }
         showTooltip(e.clientX, e.clientY, tip, shortcut, detail)
       }
 

@@ -203,6 +203,8 @@ export interface FlowGraphNode {
   outputs: FlowGraphPort[]
   stepStatus?: FlowStepStatus
   statusLabel?: string
+  hasRun?: boolean
+  notInLog?: boolean
 }
 
 export interface FlowGraphConnection {
@@ -217,12 +219,14 @@ export interface FlowGraphConnection {
   toField: string
   expression: string
   valuePreview: string
+  hasRun?: boolean
 }
 
 export interface FlowGraphData {
   scriptId: string
   flowHitId?: string
   timestamp?: string
+  isLogView?: boolean
   trigger: FlowGraphNode | null
   steps: FlowGraphNode[]
   connections: FlowGraphConnection[]
@@ -230,6 +234,8 @@ export interface FlowGraphData {
     totalSteps: number
     dependentSteps: number
     independentSteps: number
+    executedSteps?: number
+    notRunSteps?: number
   }
 }
 
