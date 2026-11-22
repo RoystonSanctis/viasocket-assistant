@@ -385,6 +385,15 @@ async function main(): Promise<void> {
 
   // ---------- MAIN-world hook ----------
 
+  try {
+    const s = document.createElement('script')
+    s.src = chrome.runtime.getURL('page-hook.js')
+    s.onload = () => s.remove()
+    ;(document.head || document.documentElement).appendChild(s)
+  } catch {
+    // ignore
+  }
+
   const bridge = createPageBridge({
     apiHosts: [new URL(env.apiBase).host],
     onObserved: (event) => port.send({ type: 'observed', event }),

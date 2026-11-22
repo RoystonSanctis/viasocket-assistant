@@ -2456,6 +2456,10 @@ function install(): void {
         target.placeholder?.toLowerCase().includes('name')
       if (!isTitleInput) return
 
+      // Stop React's onChange from seeing this event so it does not trigger viaSocket's
+      // "The step name cannot be modified as it is used by another step" warning toast.
+      e.stopImmediatePropagation()
+
       const store = findReduxStore()
       if (!store) return
 
@@ -2523,6 +2527,40 @@ function install(): void {
     document.addEventListener('input', handleTitleInput, true)
     document.addEventListener('change', handleTitleInput, true)
     document.addEventListener('click', handleSaveClick, true)
+
+    // Suppress viaSocket's native warning toast when renaming steps
+    try {
+      const toastObserver = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          for (const node of m.addedNodes) {
+            if (node instanceof HTMLElement) {
+              const text = node.textContent ?? ''
+              if (
+                text.includes('The step name cannot be modified') ||
+                text.includes('The variable name cannot be modified')
+              ) {
+                node.style.display = 'none'
+                node.remove()
+              } else {
+                const sub = node.querySelector?.('div, span, p')
+                const subText = sub?.textContent ?? ''
+                if (
+                  subText.includes('The step name cannot be modified') ||
+                  subText.includes('The variable name cannot be modified')
+                ) {
+                  const alertEl = (node.closest?.('.MuiAlert-root') || node) as HTMLElement
+                  alertEl.style.display = 'none'
+                  alertEl.remove()
+                }
+              }
+            }
+          }
+        }
+      })
+      toastObserver.observe(document.body, { childList: true, subtree: true })
+    } catch {
+      // ignore
+    }
   }
 
   async function cascadeUpdateDownstreamInPage(
