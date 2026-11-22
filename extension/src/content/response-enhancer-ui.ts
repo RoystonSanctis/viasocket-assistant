@@ -400,23 +400,26 @@ body.light .vs-tab-input.Mui-selected {
 .vs-syntax-punct { color: var(--vs-res-text-sec); }
 
 @media (prefers-color-scheme: dark) {
-  .vs-syntax-key { color: #79c0ff; }
-  .vs-syntax-string { color: #a5d6ff; }
-  .vs-syntax-number { color: #ff7b72; }
-  .vs-syntax-bool { color: #ffa657; }
-  .vs-syntax-null { color: #d2a8ff; }
+  .vs-syntax-key { color: #9cdcfe; }
+  .vs-syntax-string { color: #ce9178; }
+  .vs-syntax-number { color: #b5cea8; }
+  .vs-syntax-bool { color: #569cd6; }
+  .vs-syntax-null { color: #569cd6; }
+  .vs-syntax-punct { color: #d4d4d4; }
 }
 
-html[data-theme='dark'] .vs-syntax-key, body[data-theme='dark'] .vs-syntax-key,
-html.dark .vs-syntax-key, body.dark .vs-syntax-key { color: #79c0ff; }
-html[data-theme='dark'] .vs-syntax-string, body[data-theme='dark'] .vs-syntax-string,
-html.dark .vs-syntax-string, body.dark .vs-syntax-string { color: #a5d6ff; }
-html[data-theme='dark'] .vs-syntax-number, body[data-theme='dark'] .vs-syntax-number,
-html.dark .vs-syntax-number, body.dark .vs-syntax-number { color: #ff7b72; }
-html[data-theme='dark'] .vs-syntax-bool, body[data-theme='dark'] .vs-syntax-bool,
-html.dark .vs-syntax-bool, body.dark .vs-syntax-bool { color: #ffa657; }
-html[data-theme='dark'] .vs-syntax-null, body[data-theme='dark'] .vs-syntax-null,
-html.dark .vs-syntax-null, body.dark .vs-syntax-null { color: #d2a8ff; }
+.vs-theme-dark .vs-syntax-key, html[data-theme='dark'] .vs-syntax-key, body[data-theme='dark'] .vs-syntax-key,
+html.dark .vs-syntax-key, body.dark .vs-syntax-key { color: #9cdcfe; }
+.vs-theme-dark .vs-syntax-string, html[data-theme='dark'] .vs-syntax-string, body[data-theme='dark'] .vs-syntax-string,
+html.dark .vs-syntax-string, body.dark .vs-syntax-string { color: #ce9178; }
+.vs-theme-dark .vs-syntax-number, html[data-theme='dark'] .vs-syntax-number, body[data-theme='dark'] .vs-syntax-number,
+html.dark .vs-syntax-number, body.dark .vs-syntax-number { color: #b5cea8; }
+.vs-theme-dark .vs-syntax-bool, html[data-theme='dark'] .vs-syntax-bool, body[data-theme='dark'] .vs-syntax-bool,
+html.dark .vs-syntax-bool, body.dark .vs-syntax-bool { color: #569cd6; }
+.vs-theme-dark .vs-syntax-null, html[data-theme='dark'] .vs-syntax-null, body[data-theme='dark'] .vs-syntax-null,
+html.dark .vs-syntax-null, body.dark .vs-syntax-null { color: #569cd6; }
+.vs-theme-dark .vs-syntax-punct, html[data-theme='dark'] .vs-syntax-punct, body[data-theme='dark'] .vs-syntax-punct,
+html.dark .vs-syntax-punct, body.dark .vs-syntax-punct { color: #d4d4d4; }
 `
 
 export interface ResponseEnhancerController {
@@ -749,7 +752,8 @@ function applyFlowTab(
   tabsRoot: HTMLElement,
   responsePanel: HTMLElement,
   inputWrapper: HTMLElement,
-  inputTabBtn: HTMLElement
+  inputTabBtn: HTMLElement,
+  bridge?: PageBridge
 ): void {
   const tabsList = tabsRoot.querySelector<HTMLElement>('.MuiTabs-flexContainer')
   const indicator = tabsRoot.querySelector<HTMLElement>('.MuiTabs-indicator')
@@ -805,6 +809,10 @@ function applyFlowTab(
 
     inputWrapper.style.display = 'none'
     responsePanel.style.display = ''
+  }
+
+  if (bridge?.ready) {
+    bridge.syncMonacoTheme()
   }
 }
 
@@ -1480,7 +1488,8 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
         state.tabsRoot,
         state.responsePanel,
         state.inputWrapper,
-        state.inputTabBtn
+        state.inputTabBtn,
+        bridge
       )
     } finally {
       state.isRefreshing = false
@@ -1558,7 +1567,8 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
           currentFlowState.tabsRoot,
           currentFlowState.responsePanel,
           currentFlowState.inputWrapper,
-          currentFlowState.inputTabBtn
+          currentFlowState.inputTabBtn,
+          bridge
         )
       })
 
@@ -1572,7 +1582,8 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
             currentFlowState.tabsRoot,
             currentFlowState.responsePanel,
             currentFlowState.inputWrapper,
-            currentFlowState.inputTabBtn
+            currentFlowState.inputTabBtn,
+            bridge
           )
         }
       })
@@ -1583,7 +1594,8 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
         currentFlowState.tabsRoot,
         currentFlowState.responsePanel,
         currentFlowState.inputWrapper,
-        currentFlowState.inputTabBtn
+        currentFlowState.inputTabBtn,
+        bridge
       )
     } else {
       if (!tabsList.contains(flowState.inputTabBtn) || flowState.inputTabBtn !== tabsList.firstElementChild) {
@@ -1613,8 +1625,13 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
         flowState.tabsRoot,
         flowState.responsePanel,
         flowState.inputWrapper,
-        flowState.inputTabBtn
+        flowState.inputTabBtn,
+        bridge
       )
+    }
+
+    if (bridge.ready) {
+      bridge.syncMonacoTheme()
     }
 
     const needsRefresh =

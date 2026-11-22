@@ -335,6 +335,8 @@ export type ContentToPageMsg =
   | { type: 'update-monaco-viewer'; requestId: string; containerId: string; value: string }
   /** Dispose a mounted Monaco viewer */
   | { type: 'dispose-monaco-viewer'; containerId: string }
+  /** Sync theme on all mounted and existing Monaco editors */
+  | { type: 'sync-monaco-theme' }
   /** The content script was orphaned (extension updated or reloaded): the hook pairs with the next init instead */
   | { type: 'release' }
 

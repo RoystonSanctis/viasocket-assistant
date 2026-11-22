@@ -66,6 +66,8 @@ export interface PageBridge {
   updateMonacoViewer(containerId: string, value: string): Promise<boolean>
   /** Disposes a mounted Monaco viewer */
   disposeMonacoViewer(containerId: string): void
+  /** Synchronizes Monaco editor themes matching viaSocket theme */
+  syncMonacoTheme(): void
   /** Inserts text at cursor into the Monaco editor marked with EDITOR_ID_ATTR = editorId */
   editorInsert(editorId: string, text: string): Promise<boolean>
   /** Adds a dynamic variable to the current step draft in Redux */
@@ -464,6 +466,10 @@ export function createPageBridge(opts: PageBridgeOptions): PageBridge {
     disposeMonacoViewer(containerId) {
       if (!hookReady) return
       post({ type: 'dispose-monaco-viewer', containerId })
+    },
+    syncMonacoTheme() {
+      if (!hookReady) return
+      post({ type: 'sync-monaco-theme' })
     },
     editorInsert(editorId, text) {
       if (!hookReady) return Promise.resolve(false)

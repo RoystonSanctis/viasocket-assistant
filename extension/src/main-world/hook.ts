@@ -35,6 +35,8 @@ import {
   mountMonacoViewer,
   updateMonacoViewer,
   disposeMonacoViewer,
+  ensureThemeObserver,
+  syncAllMonacoThemes,
 } from './editors'
 import {
   classify, dryRunFailed, isObj, isPageMutation, MAX_PARSE_CHARS, outcomeInBody, parseCapped, shortErrorText, SLUG_MAX,
@@ -2283,6 +2285,12 @@ function install(): void {
         nonce: inner.nonce,
       }
     }
+    if (inner.type === 'sync-monaco-theme') {
+      return {
+        type: 'sync-monaco-theme',
+        nonce: inner.nonce,
+      }
+    }
     if (inner.type === 'release') return { type: 'release', nonce: inner.nonce }
     return null
   }
@@ -2350,6 +2358,10 @@ function install(): void {
       }
       if (msg.type === 'dispose-monaco-viewer') {
         disposeMonacoViewer(msg.containerId)
+        return
+      }
+      if (msg.type === 'sync-monaco-theme') {
+        syncAllMonacoThemes()
         return
       }
       if (msg.type === 'add-dynamic-variable') {
@@ -3421,6 +3433,8 @@ function install(): void {
     }
   }
   ensureStoreSubscription()
+  ensureThemeObserver()
+  syncAllMonacoThemes()
   setInterval(() => {
     ensureStoreSubscription()
     syncDraftToDom()

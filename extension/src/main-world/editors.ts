@@ -264,29 +264,92 @@ interface MountedViewer {
 
 const mountedViewers = new Map<string, MountedViewer>()
 
-function getResolvedMonacoTheme(): string {
-  const isDarkMode =
+export function isDarkModeActive(): boolean {
+  if (typeof document === 'undefined') return false
+  if (
+    document.documentElement.classList.contains('vs-theme-dark') ||
+    document.body.classList.contains('vs-theme-dark') ||
     document.documentElement.classList.contains('dark') ||
-    document.body.classList.contains('dark') ||
-    document.documentElement.getAttribute('data-theme') === 'dark'
-  return isDarkMode ? 'vs-dark-transparent' : 'vs-transparent'
+    document.body.classList.contains('dark')
+  ) {
+    return true
+  }
+  if (
+    document.documentElement.getAttribute('data-theme') === 'dark' ||
+    document.body.getAttribute('data-theme') === 'dark'
+  ) {
+    return true
+  }
+  const body = document.body
+  if (body) {
+    const bg = window.getComputedStyle(body).backgroundColor || ''
+    const bgMatch = bg.match(/\d+/g)
+    if (bgMatch && bgMatch.length >= 3) {
+      const bgLum = 0.299 * Number(bgMatch[0]) + 0.587 * Number(bgMatch[1]) + 0.114 * Number(bgMatch[2])
+      if (bgLum < 100) return true
+      if (bgLum > 170) return false
+    }
+    const color = window.getComputedStyle(body).color || ''
+    const match = color.match(/\d+/g)
+    if (match && match.length >= 3) {
+      const lum = 0.299 * Number(match[0]) + 0.587 * Number(match[1]) + 0.114 * Number(match[2])
+      if (lum > 150) return true
+      if (lum < 100) return false
+    }
+  }
+  return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches
+}
+
+export function getResolvedMonacoTheme(): string {
+  return isDarkModeActive() ? 'vs-dark-transparent' : 'vs-transparent'
+}
+
+export function syncAllMonacoThemes(): void {
+  const theme = getResolvedMonacoTheme()
+  for (const v of mountedViewers.values()) {
+    if (v.container.isConnected && typeof v.editor?.updateOptions === 'function') {
+      try {
+        v.editor.updateOptions({ theme })
+      } catch {
+        // ignore
+      }
+    }
+  }
+  const allMonaco = document.querySelectorAll('.monaco-editor')
+  for (const el of allMonaco) {
+    try {
+      const ed = findEditor(el)
+      if (ed && typeof (ed as any).updateOptions === 'function') {
+        const curTheme = (ed as any)._themeService?._theme?.themeName || (ed as any).getRawOptions?.()?.theme
+        if (curTheme !== theme) {
+          (ed as any).updateOptions({ theme })
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }
 }
 
 let themeObserverInitialized = false
-function ensureThemeObserver(): void {
+export function ensureThemeObserver(): void {
   if (themeObserverInitialized || typeof MutationObserver === 'undefined') return
   themeObserverInitialized = true
   const observer = new MutationObserver(() => {
-    const theme = getResolvedMonacoTheme()
-    for (const v of mountedViewers.values()) {
-      if (v.container.isConnected && typeof v.editor?.updateOptions === 'function') {
-        v.editor.updateOptions({ theme })
-      }
-    }
+    syncAllMonacoThemes()
   })
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] })
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme', 'style'] })
   if (document.body) {
-    observer.observe(document.body, { attributes: true, attributeFilter: ['class', 'data-theme'] })
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class', 'data-theme', 'style'] })
+  }
+  if (typeof window !== 'undefined' && window.matchMedia) {
+    try {
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        syncAllMonacoThemes()
+      })
+    } catch {
+      // ignore
+    }
   }
 }
 
@@ -302,6 +365,7 @@ export function mountMonacoViewer(containerId: string, value: string, language =
       const model = existing.editor.getModel()
       if (model && typeof model.setValue === 'function') {
         model.setValue(value)
+        syncAllMonacoThemes()
         return true
       }
     }
@@ -368,6 +432,7 @@ export function mountMonacoViewer(containerId: string, value: string, language =
     }
 
     mountedViewers.set(containerId, { editor, container })
+    syncAllMonacoThemes()
     return true
   } catch {
     return false
@@ -381,6 +446,7 @@ export function updateMonacoViewer(containerId: string, value: string): boolean 
     const model = existing.editor.getModel()
     if (model && typeof model.setValue === 'function') {
       model.setValue(value)
+      syncAllMonacoThemes()
       return true
     }
     return false
