@@ -2166,8 +2166,9 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
   function close(): void {
     isGraphActive = false
-    unlockActivePath(true)
+    unlockActivePaths(true)
     hoveredConn = null
+    hoveredKeyInfo = null
     document.body.classList.remove('vs-graph-active')
     resetLogsDrawerZIndex()
     updateTabButtonsState()
@@ -2386,13 +2387,13 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     viewport.addEventListener('click', (e) => {
       const target = e.target as HTMLElement | null
       if (
-        lockedConn &&
+        lockedState &&
         target &&
         !target.closest('.vs-graph-card') &&
         !target.closest('.vs-graph-lock-pill') &&
         !target.closest('.vs-graph-modal')
       ) {
-        unlockActivePath(true)
+        unlockActivePaths(true)
       }
     })
   }
@@ -3016,10 +3017,39 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       })
     }
 
-    // Hover highlights for port curves
+    // Hover highlights for port curves and key locking
     if (portId) {
-      row.addEventListener('mouseenter', () => highlightPortAndCurves(portId, isInput ? 'input' : 'output'))
-      row.addEventListener('mouseleave', clearHighlights)
+      row.addEventListener('mouseenter', (e) => {
+        if (lockedState) return
+        highlightPortAndCurves(portId, isInput ? 'input' : 'output', key, node.title || node.slugName)
+        const conns = currentGraphData?.connections.filter((c) =>
+          isInput ? c.toPortId === portId : c.fromPortId === portId
+        ) || []
+        if (conns.length > 0) {
+          const tip = `${node.title || node.slugName}.${key} (${conns.length} ${conns.length === 1 ? 'connection' : 'connections'})`
+          const shortcut = conns.length === 1 ? 'Space: Lock path' : `Space: Lock all ${conns.length} paths`
+          showTooltip(e.clientX, e.clientY, tip, shortcut)
+        }
+      })
+
+      row.addEventListener('mousemove', (e) => {
+        if (lockedState) return
+        const conns = currentGraphData?.connections.filter((c) =>
+          isInput ? c.toPortId === portId : c.fromPortId === portId
+        ) || []
+        if (conns.length > 0) {
+          const tip = `${node.title || node.slugName}.${key} (${conns.length} ${conns.length === 1 ? 'connection' : 'connections'})`
+          const shortcut = conns.length === 1 ? 'Space: Lock path' : `Space: Lock all ${conns.length} paths`
+          showTooltip(e.clientX, e.clientY, tip, shortcut)
+        }
+      })
+
+      row.addEventListener('mouseleave', () => {
+        hoveredKeyInfo = null
+        hideTooltip()
+        if (lockedState) return
+        clearHighlights()
+      })
     }
 
     return itemWrapper
@@ -3312,8 +3342,22 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     laneIndex?: number
   }
 
+  interface LockedPathState {
+    conns: FlowGraphConnection[]
+    title: string
+    subtitle?: string
+    isKeyLock: boolean
+  }
+
+  let lockedState: LockedPathState | null = null
   let hoveredConn: FlowGraphConnection | null = null
-  let lockedConn: FlowGraphConnection | null = null
+  let hoveredKeyInfo: {
+    portId: string
+    type: 'input' | 'output'
+    keyName: string
+    stepTitle: string
+    conns: FlowGraphConnection[]
+  } | null = null
 
   function highlightActivePath(conn: FlowGraphConnection): void {
     if (!overlayEl) return
@@ -3343,7 +3387,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     }
   }
 
-  function showLockPill(conn: FlowGraphConnection): void {
+  function showLockPill(title: string, subtitle?: string): void {
     if (!overlayEl) return
     let pill = overlayEl.querySelector('#vs-graph-lock-pill') as HTMLElement | null
     if (!pill) {
@@ -3353,37 +3397,40 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       overlayEl.appendChild(pill)
     }
 
-    const isSeq = conn.expression === 'sequential'
-    const title = isSeq
-      ? `Sequential: ${conn.fromSlug} ➔ ${conn.toSlug}`
-      : `${conn.fromSlug}.${conn.fromField} ➔ ${conn.toSlug}.${conn.toField}`
-    const val = isSeq ? '' : conn.valuePreview ? ` (${escapeHtml(conn.valuePreview)})` : ''
-
     pill.innerHTML = `
       <span class="vs-lock-icon">🔒</span>
       <span class="vs-lock-text">${escapeHtml(title)}</span>
-      ${val ? `<span class="vs-lock-val">${val}</span>` : ''}
+      ${subtitle ? `<span class="vs-lock-val"> ${escapeHtml(subtitle)}</span>` : ''}
       <span class="vs-lock-hint">Press Space to unlock</span>
       <button class="vs-lock-close" title="Unlock">✕</button>
     `
 
     pill.querySelector('.vs-lock-close')?.addEventListener('click', (e) => {
       e.stopPropagation()
-      unlockActivePath(true)
+      unlockActivePaths(true)
     })
   }
 
-  function lockActivePath(conn: FlowGraphConnection): void {
-    unlockActivePath(false)
-    lockedConn = conn
-    if (!overlayEl) return
+  function lockActivePaths(conns: FlowGraphConnection[], title: string, subtitle = '', isKeyLock = false): void {
+    unlockActivePaths(false)
+    if (!overlayEl || conns.length === 0) return
+
+    lockedState = {
+      conns,
+      title,
+      subtitle,
+      isKeyLock,
+    }
 
     const svg = overlayEl.querySelector('#vs-graph-svg') as SVGElement | null
     if (!svg) return
 
     svg.classList.add('has-active-connection')
-    svg.querySelectorAll('.vs-graph-path').forEach((p) => {
-      if (p.getAttribute('data-conn-id') === conn.id) {
+    const connIdSet = new Set(conns.map((c) => c.id))
+
+    svg.querySelectorAll<SVGPathElement>('.vs-graph-path').forEach((p) => {
+      const connId = p.getAttribute('data-conn-id')
+      if (connId && connIdSet.has(connId)) {
         p.classList.add('highlighted', 'locked')
         svg.appendChild(p)
       } else {
@@ -3391,14 +3438,17 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       }
     })
 
-    highlightConnectedPorts(conn.fromPortId, conn.toPortId)
-    highlightConnectedCards(conn.fromSlug, conn.toSlug)
-    showLockPill(conn)
+    for (const c of conns) {
+      highlightConnectedPorts(c.fromPortId, c.toPortId)
+      highlightConnectedCards(c.fromSlug, c.toSlug)
+    }
+
+    showLockPill(title, subtitle)
   }
 
-  function unlockActivePath(resetHighlights = true): void {
-    if (!lockedConn && !overlayEl?.querySelector('#vs-graph-lock-pill')) return
-    lockedConn = null
+  function unlockActivePaths(resetHighlights = true): void {
+    if (!lockedState && !overlayEl?.querySelector('#vs-graph-lock-pill')) return
+    lockedState = null
 
     const pill = overlayEl?.querySelector('#vs-graph-lock-pill')
     pill?.remove()
@@ -3411,6 +3461,8 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     if (resetHighlights) {
       if (hoveredConn) {
         highlightActivePath(hoveredConn)
+      } else if (hoveredKeyInfo && hoveredKeyInfo.conns.length > 0) {
+        highlightPortAndCurves(hoveredKeyInfo.portId, hoveredKeyInfo.type, hoveredKeyInfo.keyName, hoveredKeyInfo.stepTitle)
       } else {
         clearHighlights()
       }
@@ -3563,7 +3615,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         pathD = `M ${item.x1} ${item.y1} C ${item.x1 + dx} ${item.y1}, ${item.x2 - dx} ${item.y2}, ${item.x2} ${item.y2}`
       }
 
-      const isLocked = lockedConn?.id === item.conn.id
+      const isLocked = lockedState?.conns.some((c) => c.id === item.conn.id) ?? false
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
       path.setAttribute('d', pathD)
       path.setAttribute(
@@ -3582,13 +3634,15 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
       path.addEventListener('mouseenter', (e) => {
         hoveredConn = item.conn
+        hoveredKeyInfo = null
         const tip = item.isSequentialConn
           ? `Sequential Order: ${item.conn.fromSlug} ➔ ${item.conn.toSlug}`
           : `${item.conn.fromSlug}.${item.conn.fromField} (${item.conn.valuePreview}) ➔ ${item.conn.toSlug}.${item.conn.toField}`
-        const shortcut = lockedConn?.id === item.conn.id ? 'Space: Unlock path' : 'Space: Lock path'
+        const isThisLocked = lockedState?.conns.some((c) => c.id === item.conn.id)
+        const shortcut = isThisLocked ? 'Space: Unlock' : 'Space: Lock path'
         showTooltip(e.clientX, e.clientY, tip, shortcut)
 
-        if (lockedConn) return
+        if (lockedState) return
         highlightActivePath(item.conn)
       })
 
@@ -3596,14 +3650,15 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         const tip = item.isSequentialConn
           ? `Sequential Order: ${item.conn.fromSlug} ➔ ${item.conn.toSlug}`
           : `${item.conn.fromSlug}.${item.conn.fromField} (${item.conn.valuePreview}) ➔ ${item.conn.toSlug}.${item.conn.toField}`
-        const shortcut = lockedConn?.id === item.conn.id ? 'Space: Unlock path' : 'Space: Lock path'
+        const isThisLocked = lockedState?.conns.some((c) => c.id === item.conn.id)
+        const shortcut = isThisLocked ? 'Space: Unlock' : 'Space: Lock path'
         showTooltip(e.clientX, e.clientY, tip, shortcut)
       })
 
       path.addEventListener('mouseleave', () => {
         hoveredConn = null
         hideTooltip()
-        if (lockedConn) return
+        if (lockedState) return
         clearHighlights()
       })
 
@@ -3621,19 +3676,38 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       svg.appendChild(path)
     }
 
-    if (lockedConn) {
+    if (lockedState) {
       svg.classList.add('has-active-connection')
-      highlightConnectedPorts(lockedConn.fromPortId, lockedConn.toPortId)
-      highlightConnectedCards(lockedConn.fromSlug, lockedConn.toSlug)
-      showLockPill(lockedConn)
+      for (const c of lockedState.conns) {
+        highlightConnectedPorts(c.fromPortId, c.toPortId)
+        highlightConnectedCards(c.fromSlug, c.toSlug)
+      }
+      showLockPill(lockedState.title, lockedState.subtitle)
     }
   }
 
-  function highlightPortAndCurves(portId: string, type: 'input' | 'output'): void {
+  function highlightPortAndCurves(portId: string, type: 'input' | 'output', keyName?: string, stepTitle?: string): void {
     if (!overlayEl) return
-    const svg = overlayEl.querySelector('#vs-graph-svg')
-    svg?.classList.add('has-active-connection')
-    const paths = Array.from(overlayEl.querySelectorAll('.vs-graph-path'))
+    const svg = overlayEl.querySelector('#vs-graph-svg') as SVGElement | null
+    if (!svg) return
+
+    const matchingConns = currentGraphData?.connections.filter((c) =>
+      type === 'output' ? c.fromPortId === portId : c.toPortId === portId
+    ) || []
+
+    if (keyName && stepTitle && matchingConns.length > 0) {
+      hoveredKeyInfo = {
+        portId,
+        type,
+        keyName,
+        stepTitle,
+        conns: matchingConns,
+      }
+      hoveredConn = null
+    }
+
+    svg.classList.add('has-active-connection')
+    const paths = Array.from(overlayEl.querySelectorAll<SVGPathElement>('.vs-graph-path'))
 
     for (const p of paths) {
       const fromPort = p.getAttribute('data-from-port')
@@ -3641,6 +3715,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
       if ((type === 'output' && fromPort === portId) || (type === 'input' && toPort === portId)) {
         p.classList.add('highlighted', 'pulse-anim')
+        svg.appendChild(p) // bring to front
         if (fromPort) {
           const fromRow = overlayEl.querySelector(`.vs-graph-row[data-port-id="${fromPort}"], .vs-graph-nested-row[data-port-id="${fromPort}"]`)
           fromRow?.classList.add('highlighted-source')
@@ -3652,6 +3727,10 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
           toRow?.querySelector('.port-in')?.classList.add('highlighted')
         }
       }
+    }
+
+    for (const c of matchingConns) {
+      highlightConnectedCards(c.fromSlug, c.toSlug)
     }
   }
 
@@ -3667,7 +3746,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   }
 
   function clearHighlights(): void {
-    if (!overlayEl || lockedConn) return
+    if (!overlayEl || lockedState) return
     const svg = overlayEl.querySelector('#vs-graph-svg')
     svg?.classList.remove('has-active-connection')
     overlayEl.querySelectorAll('.vs-graph-path').forEach((p) => p.classList.remove('highlighted', 'pulse-anim', 'locked'))
@@ -3885,18 +3964,26 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       e.preventDefault()
       e.stopPropagation()
 
-      if (lockedConn) {
-        unlockActivePath(true)
+      if (lockedState) {
+        unlockActivePaths(true)
+      } else if (hoveredKeyInfo && hoveredKeyInfo.conns.length > 0) {
+        const count = hoveredKeyInfo.conns.length
+        const title = `Key Locked: ${hoveredKeyInfo.stepTitle}.${hoveredKeyInfo.keyName}`
+        const subtitle = count === 1 ? '(1 path locked)' : `(${count} paths locked)`
+        lockActivePaths(hoveredKeyInfo.conns, title, subtitle, true)
+        hideTooltip()
       } else if (hoveredConn) {
-        lockActivePath(hoveredConn)
+        const title = `${hoveredConn.fromSlug}.${hoveredConn.fromField} ➔ ${hoveredConn.toSlug}.${hoveredConn.toField}`
+        const subtitle = hoveredConn.valuePreview ? `(${hoveredConn.valuePreview})` : ''
+        lockActivePaths([hoveredConn], title, subtitle, false)
         hideTooltip()
       }
       return
     }
 
-    if (e.code === 'Escape' && lockedConn) {
+    if (e.code === 'Escape' && lockedState) {
       e.preventDefault()
-      unlockActivePath(true)
+      unlockActivePaths(true)
     }
   }
   window.addEventListener('keydown', onGraphKeyDown, true)
