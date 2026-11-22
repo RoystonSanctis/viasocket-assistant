@@ -38,6 +38,7 @@ import {
 import { SCRIPT_ID_PARAM } from './tools-read'
 import type { AuthData, Block, FlowRow, FlowTarget, JsonScript, PluginData } from './types'
 import { asRecord, AUTH_ID_RE, FLOW_PAGES, isRecord, label, MASK, parseMaybeJson, prefixedStepId, ROW_ID_RE, sleep, SLUG_RE, str, truncate } from './util'
+import { getUniqueStepSlug, replaceStepReferencesInObject, replaceStepReferencesInString } from '../../../shared/step-rename'
 
 /** App-action steps, including the editor's built-in tools that are app actions underneath. */
 const PLUGIN_LIKE = new Set(['plugin', 'delay', 'approval', 'ai_agent', 'flow_in_flow'])
@@ -1200,15 +1201,101 @@ function precheckUpdate(a: UpdateStepArgs): string[] {
 
 const RENAMABLE = new Set(['function', 'api', 'plugin', 'variable'])
 
+async function cascadeUpdateStepReferences(
+  ctx: ToolContext,
+  t: FlowTarget,
+  oldSlug: string,
+  newSlug: string,
+): Promise<string[]> {
+  const fresh = await getFlow(ctx, t)
+  const blocks = fresh.json_script.blocks
+  const updatedSlugs: string[] = []
+
+  for (const [stepSlug, block] of Object.entries(blocks)) {
+    if (stepSlug === oldSlug || stepSlug === newSlug) continue
+    if (block.status === 'DELETE') continue
+
+    const c: SaveCommon = {
+      stepId: block.identifier ?? '',
+      title: stepSlug,
+      description: block.description,
+      sampleData: block.sampleData,
+      iconUrl: block.iconUrl,
+      hidden: block.hidden,
+    }
+
+    if (block.type === 'plugin' && block.identifier) {
+      const row = await getFunctionRow(ctx, t, block.identifier)
+      const pd = pluginDataOf(block, row)
+      if (pd) {
+        const inputData = (pd.selectedValues?.inputData ?? {}) as Record<string, unknown>
+        const rep = replaceStepReferencesInObject(inputData, oldSlug, newSlug)
+        if (rep.changed) {
+          const authData: AuthData = { ...(pd.selectedValues?.authData ?? {}), id: str(pd.selectedValues?.authData?.id) ?? str(pd.auth_id) ?? '' }
+          const body = pluginBody(c, pd, authData, rep.value as Record<string, unknown>)
+          await putStep(ctx, t, stepSlug, body, true)
+          updatedSlugs.push(stepSlug)
+        }
+      }
+    } else if (block.type === 'function' && block.identifier) {
+      const row = await getFunctionRow(ctx, t, block.identifier)
+      const rawCode = str(row?.code) ?? str(block.data) ?? ''
+      const repCode = replaceStepReferencesInString(rawCode, oldSlug, newSlug)
+      const dynamicVars = row?.metadata && isRecord((row.metadata as Record<string, unknown>).drafted)
+        ? (row.metadata as Record<string, unknown>).drafted
+        : block.dynamicVariables
+      const repVars = replaceStepReferencesInObject(dynamicVars, oldSlug, newSlug)
+
+      if (repCode !== rawCode || repVars.changed) {
+        const body = functionBody(c, repCode, {
+          dynamicVariables: isRecord(repVars.value) ? (repVars.value as Record<string, unknown>) : undefined,
+          authId: block.auth_id,
+          subfunctions: block.subfunctions,
+        })
+        await putStep(ctx, t, stepSlug, body, true)
+        updatedSlugs.push(stepSlug)
+      }
+    } else if (block.type === 'variable') {
+      const raw = str(block.data) ?? ''
+      const rep = replaceStepReferencesInString(raw, oldSlug, newSlug)
+      if (rep !== raw) {
+        const body = variableBody(c, rep)
+        await putStep(ctx, t, stepSlug, body, true)
+        updatedSlugs.push(stepSlug)
+      }
+    } else if (block.type === 'ifBlock') {
+      const cond = str(block.condition) ?? ''
+      const stmt = str(block.statement) ?? ''
+      const repCond = replaceStepReferencesInString(cond, oldSlug, newSlug)
+      const repStmt = replaceStepReferencesInString(stmt, oldSlug, newSlug)
+      if (repCond !== cond || repStmt !== stmt) {
+        const body = ifBlockBody(c, repCond, repStmt, block.dynamicVariables)
+        await putStep(ctx, t, stepSlug, body, true)
+        updatedSlugs.push(stepSlug)
+      }
+    } else if (block.type === 'response') {
+      const raw = str(block.data) ?? str(block.body) ?? ''
+      const rep = replaceStepReferencesInString(raw, oldSlug, newSlug)
+      if (rep !== raw) {
+        const body = responseBody(block.responseType === 'custom' ? 'custom' : 'default', rep, block.customHeaders)
+        await putStep(ctx, t, 'response', body, true)
+        updatedSlugs.push('response')
+      }
+    }
+  }
+
+  return updatedSlugs
+}
+
 const updateStep = defineTool<UpdateStepArgs>({
   name: 'vs_update_step',
   description: [
-    'Change and save an existing step. Only the fields you pass change; the rest of the saved configuration is kept (and checked like new values).',
-    'Also use it to finish a step that is still an unsaved draft (e.g. an app step that needed a connection or answers from the user); values given in earlier incomplete calls are kept.',
-    'App steps: inputData is merged into the saved values (set replaceInputData to start from empty); connectionId switches the connection. A step with a missing connection or required field is not saved: the result lists needsConnection / needsUserInput.',
-    'Rename only with newTitle (other steps that reference the old name are not updated, so viaSocket may refuse).',
+    'Change and save an existing step. Only passed fields change; the rest is kept (and checked like new values).',
+    'Also use it to finish an unsaved draft (e.g. an app step needing a connection or answers); values from earlier calls are kept.',
+    'App steps: inputData merges into saved values (replaceInputData starts empty); connectionId switches connection. Missing connections or required fields list needsConnection / needsUserInput.',
+    'Rename with newTitle (ensures uniqueness with numeric suffix and cascade-updates downstream references).',
     'The webhook response is slugName "response" (responseType, responseBody), or use vs_set_response.',
-    'Use the type-specific fields of the step being edited (see vs_get_step); built-in tools also take duration/until/delayFrom (Delay), agentId/message/conversationId (AI agent) and targetScriptId (Flow in Flow).',
+    'Use type-specific fields (see vs_get_step); built-in tools take duration/until/delayFrom (Delay), agentId/message/conversationId (AI) and targetScriptId (Flow in Flow).',
   ].join(' '),
   parameters: params(
     {
@@ -1251,8 +1338,7 @@ const updateStep = defineTool<UpdateStepArgs>({
         if (!isValidSlug(a.newTitle)) {
           throw new ToolError('newTitle must be 4-50 letters, digits or underscores, start with a letter, and not be a reserved word (such as date, console, context or response).')
         }
-        if (js.blocks[a.newTitle]) throw new ToolError(`A step named ${a.newTitle} already exists.`)
-        title = a.newTitle
+        title = getUniqueStepSlug(a.newTitle, Object.keys(js.blocks), slug)
       }
       const c: SaveCommon = {
         stepId: block.identifier ?? '',
@@ -1283,6 +1369,12 @@ const updateStep = defineTool<UpdateStepArgs>({
       for (const s of await guardMappings(js, getCat, bodyTexts(block.type, body, new Set(a.customInput ?? [])), allowDoc, true)) documentedUsed.add(s)
       const docNote = documentedNote([...documentedUsed])
       if (docNote) warnings.push(docNote)
+
+      const cascadingUpdates: string[] = []
+      if (title !== slug) {
+        const downstream = await cascadeUpdateStepReferences(ctx, t, slug, title)
+        cascadingUpdates.push(...downstream)
+      }
       await putStep(ctx, t, slug, body, true)
       if (block.type === 'plugin' && block.identifier) clearPending(stepKey(ctx, t, block.identifier))
 
@@ -1299,6 +1391,7 @@ const updateStep = defineTool<UpdateStepArgs>({
         saved: true,
         slug: title,
         renamedFrom: title !== slug ? slug : undefined,
+        cascadingUpdates: cascadingUpdates.length ? cascadingUpdates : undefined,
         reference,
         defaultsApplied,
         ...panel,

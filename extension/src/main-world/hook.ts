@@ -39,6 +39,9 @@ import {
 import {
   classify, dryRunFailed, isObj, isPageMutation, MAX_PARSE_CHARS, outcomeInBody, parseCapped, shortErrorText, SLUG_MAX,
 } from '../shared/classify'
+import {
+  getUniqueStepSlug, replaceStepReferencesInObject, replaceStepReferencesInString, str,
+} from '../shared/step-rename'
 
 const DEFAULT_API_HOSTS = ['flow-api.viasocket.com', 'dev-api.viasocket.com']
 /** Extra API hosts from 'init' must be viaSocket hosts; anything else is ignored */
@@ -69,6 +72,13 @@ interface Pending {
   slugParam: string | undefined
   /** Counted in `inflight` and not yet settled */
   counted?: boolean
+  headers?: Record<string, string>
+  renameInfo?: {
+    oldSlug: string
+    newSlug: string
+    scriptId: string
+    origin: string
+  }
 }
 
 function stepSlugInUrl(): string | undefined {
@@ -2430,6 +2440,272 @@ function install(): void {
     inflight = Math.max(0, inflight - 1)
   }
 
+  function setupTitleInputInterception(): void {
+    const handleTitleInput = (e: Event): void => {
+      const target = e.target as HTMLInputElement | null
+      if (!target || target.id !== 'function-title-textfield') return
+
+      e.stopImmediatePropagation()
+
+      const store = findReduxStore()
+      if (!store) return
+
+      const raw = target.value
+      const formatted = raw.replace(/\s+/g, '_')
+      store.dispatch({
+        type: 'stepsDataV3/setKeyValueInstance',
+        payload: { title: formatted, hasUnsavedCode: true },
+      })
+    }
+
+    document.addEventListener('input', handleTitleInput, true)
+    document.addEventListener('change', handleTitleInput, true)
+  }
+
+  async function cascadeUpdateDownstreamInPage(
+    renameInfo: { oldSlug: string; newSlug: string; scriptId: string; origin: string },
+    reqHeaders?: Record<string, string>,
+  ): Promise<void> {
+    const { oldSlug, newSlug, scriptId, origin } = renameInfo
+    if (!oldSlug || !newSlug || oldSlug === newSlug) return
+
+    const store = findReduxStore()
+    if (!store) return
+    const state = store.getState()
+    const flowJsonV2 = isObj(state.flowJsonV2) ? (state.flowJsonV2 as Record<string, any>) : undefined
+    const scriptFlow = flowJsonV2?.[scriptId]
+    const flowJson = isObj(scriptFlow?.flowJson) ? (scriptFlow.flowJson as Record<string, any>) : undefined
+    if (!flowJson || !flowJson.blocks) return
+
+    const blocks = flowJson.blocks as Record<string, Record<string, unknown>>
+    const stepsDataV3 = isObj(state.stepsDataV3) ? (state.stepsDataV3 as Record<string, any>) : undefined
+    const stepsData = (stepsDataV3?.[scriptId] ?? {}) as Record<string, Record<string, unknown>>
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'sent-by-fbai': 'true',
+    }
+    if (reqHeaders) {
+      for (const [k, v] of Object.entries(reqHeaders)) {
+        const lk = k.toLowerCase()
+        if (lk === 'authorization' || lk.startsWith('proxy') || lk === 'org-id') {
+          headers[k] = v
+        }
+      }
+    }
+
+    // Fetch all function rows from server for complete step data
+    let functionRows: Array<Record<string, unknown>> = []
+    try {
+      const fnResp = await fetch(`${origin}/scripts/${scriptId}/functions`, {
+        headers,
+        credentials: 'include',
+      })
+      if (fnResp.ok) {
+        const fnJson = await fnResp.json()
+        if (Array.isArray(fnJson?.data)) {
+          functionRows = fnJson.data
+        }
+      }
+    } catch {
+      // fallback to stepsData
+    }
+
+    const rowMap = new Map<string, Record<string, unknown>>()
+    for (const r of functionRows) {
+      if (typeof r.id === 'string') rowMap.set(r.id, r)
+      if (typeof r.title === 'string') rowMap.set(r.title, r)
+    }
+
+    const updatesToApply: Array<{
+      slug: string
+      stepId: string
+      type: string
+      body: Record<string, unknown>
+    }> = []
+
+    for (const [stepSlug, block] of Object.entries(blocks)) {
+      if (stepSlug === oldSlug || stepSlug === newSlug) continue
+      const type = str(block.type)
+      if (!type) continue
+
+      const stepId = str(block.identifier) ?? stepSlug
+      const row = rowMap.get(stepId) ?? rowMap.get(stepSlug)
+      const stepInstance = stepsData[stepId] as Record<string, unknown> | undefined
+      const draft = (stepInstance?.draft ?? {}) as Record<string, unknown>
+      const dataFromBackend = (stepInstance?.dataFromBackend ?? {}) as Record<string, unknown>
+
+      if (type === 'plugin') {
+        let pluginData: Record<string, unknown> | undefined
+        if (row?.code) {
+          try {
+            pluginData = typeof row.code === 'string' ? JSON.parse(row.code as string) : (row.code as Record<string, unknown>)
+          } catch {
+            // ignore
+          }
+        }
+        if (!pluginData) {
+          pluginData = (draft.pluginData ?? dataFromBackend.pluginData) as Record<string, unknown> | undefined
+        }
+        pluginData = pluginData ?? {}
+        const selectedValues = (pluginData.selectedValues ?? {}) as Record<string, any>
+
+        const rep = replaceStepReferencesInObject(selectedValues, oldSlug, newSlug)
+        if (rep.changed) {
+          const updatedPluginData = { ...pluginData, selectedValues: rep.value }
+          const authData = isObj(selectedValues.authData) ? (selectedValues.authData as Record<string, unknown>) : undefined
+          const authId = str(authData?.id) ?? str(row?.auth_id) ?? str(pluginData.auth_id) ?? str(draft.authId)
+          const actionId = str(row?.action_id) ?? str(pluginData.actionVersionId) ?? str(pluginData.action_id)
+
+          updatesToApply.push({
+            slug: stepSlug,
+            stepId,
+            type,
+            body: {
+              type: 'plugin',
+              title: stepSlug,
+              stepId,
+              description: block.description ?? pluginData.description,
+              iconUrl: block.iconUrl ?? pluginData.iconUrl,
+              code: updatedPluginData,
+              auth_id: authId,
+              action_id: actionId,
+            },
+          })
+        }
+      } else if (type === 'function') {
+        const rawCode = str(row?.code) ?? str(draft.code) ?? str(dataFromBackend.code) ?? str(block.data) ?? ''
+        const repCode = replaceStepReferencesInString(rawCode, oldSlug, newSlug)
+        const rowMeta = isObj(row?.metadata) ? (row!.metadata as Record<string, unknown>) : undefined
+        const draftedMeta = isObj(rowMeta?.drafted) ? (rowMeta!.drafted as Record<string, unknown>) : undefined
+        const dynamicVars = draftedMeta?.dynamicVariables ?? draft.dynamicVariables ?? dataFromBackend.dynamicVariables ?? block.dynamicVariables
+        const repVars = replaceStepReferencesInObject(dynamicVars, oldSlug, newSlug)
+
+        if (repCode !== rawCode || repVars.changed) {
+          updatesToApply.push({
+            slug: stepSlug,
+            stepId,
+            type,
+            body: {
+              type: 'function',
+              title: stepSlug,
+              stepId,
+              description: block.description ?? draft.description,
+              code: repCode,
+              dynamicVariables: repVars.value,
+            },
+          })
+        }
+      } else if (type === 'variable') {
+        const rawExpr = str(row?.code) ?? str(draft.code) ?? str(dataFromBackend.code) ?? str(block.data) ?? ''
+        const repExpr = replaceStepReferencesInString(rawExpr, oldSlug, newSlug)
+        if (repExpr !== rawExpr) {
+          updatesToApply.push({
+            slug: stepSlug,
+            stepId,
+            type,
+            body: {
+              type: 'variable',
+              title: stepSlug,
+              stepId,
+              data: repExpr,
+              html: repExpr,
+            },
+          })
+        }
+      } else if (type === 'ifBlock') {
+        const cond = str(draft.code) ?? str(block.condition) ?? ''
+        const stmt = str(draft.statement) ?? str(block.statement) ?? ''
+        const repCond = replaceStepReferencesInString(cond, oldSlug, newSlug)
+        const repStmt = replaceStepReferencesInString(stmt, oldSlug, newSlug)
+        if (repCond !== cond || repStmt !== stmt) {
+          updatesToApply.push({
+            slug: stepSlug,
+            stepId,
+            type,
+            body: {
+              type: 'ifBlock',
+              title: stepSlug,
+              stepId,
+              condition: repCond,
+              html: repCond,
+              statement: repStmt,
+            },
+          })
+        }
+      } else if (type === 'response') {
+        const rawData = str(block.data) ?? str(block.body) ?? ''
+        const repData = replaceStepReferencesInString(rawData, oldSlug, newSlug)
+        if (repData !== rawData) {
+          updatesToApply.push({
+            slug: 'response',
+            stepId: 'response',
+            type,
+            body: {
+              type: 'response',
+              stepId: 'response',
+              title: 'response',
+              responseType: block.responseType ?? 'custom',
+              data: repData,
+              _data: repData,
+            },
+          })
+        }
+      }
+    }
+
+    if (updatesToApply.length === 0) return
+
+    let updatedCount = 0
+    for (const item of updatesToApply) {
+      try {
+        const targetUrl = `${origin}/scripts/${scriptId}/stepv2/${encodeURIComponent(item.slug)}`
+        const resp = await fetch(targetUrl, {
+          method: 'PUT',
+          headers,
+          credentials: 'include',
+          body: JSON.stringify(item.body),
+        })
+        if (resp.ok) {
+          updatedCount++
+          const resJson = await resp.json()
+          const script = resJson?.script ?? resJson?.data?.script
+          if (script?.json_script) {
+            store.dispatch({
+              type: 'flowJsonV2/setFlowAndDraftFlowJson',
+              payload: script.json_script,
+            })
+            if (script.used_variables) {
+              store.dispatch({
+                type: 'flowJsonV2/setFlowJsonAndUsedVariables',
+                payload: script,
+              })
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[assistant] failed to cascade-update step:', item.slug, err)
+      }
+    }
+
+    if (updatedCount > 0) {
+      post({ type: 'flow-graph-changed' })
+      try {
+        const toastEl = document.createElement('div')
+        toastEl.style.cssText =
+          'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;z-index:999999;box-shadow:0 4px 12px rgba(0,0,0,0.15);pointer-events:none;transition:opacity 0.3s;'
+        toastEl.textContent = `Renamed ${oldSlug} ➔ ${newSlug}: updated variable path in ${updatedCount} step(s)`
+        document.body.appendChild(toastEl)
+        setTimeout(() => {
+          toastEl.style.opacity = '0'
+          setTimeout(() => toastEl.remove(), 300)
+        }, 3500)
+      } catch {
+        // ignore
+      }
+    }
+  }
+
   function settle(p: Pending, status: number, readBody: () => Promise<unknown>): void {
     const c = classify(p.method, p.url.pathname, status, p.pagePath)
     if (!c) return
@@ -2521,7 +2797,11 @@ function install(): void {
     proto.setRequestHeader = function (this: XMLHttpRequest, name: string, value: string): void {
       try {
         const p = pending.get(this)
-        if (p && typeof name === 'string' && name.toLowerCase() === FBAI_HEADER) p.byAssistant = true
+        if (p) {
+          if (typeof name === 'string' && name.toLowerCase() === FBAI_HEADER) p.byAssistant = true
+          if (!p.headers) p.headers = {}
+          p.headers[name] = value
+        }
       } catch {
         // ignore
       }
@@ -2533,6 +2813,66 @@ function install(): void {
       try {
         const p = pending.get(this)
         if (p) {
+          if (p.method === 'PUT') {
+            const m = p.url.pathname.match(/\/scripts\/([^/]+)\/stepv2\/([^/]+)/)
+            if (m && m[1] && m[2]) {
+              const scriptId = m[1]
+              const oldSlug = decodeURIComponent(m[2])
+              try {
+                if (typeof args[0] === 'string') {
+                  const parsed = JSON.parse(args[0])
+                  if (parsed && typeof parsed.title === 'string' && parsed.title) {
+                    const store = findReduxStore()
+                    if (store) {
+                      const state = store.getState()
+                      const flowJsonV2 = isObj(state.flowJsonV2) ? (state.flowJsonV2 as Record<string, any>) : undefined
+                      const flowJson = flowJsonV2?.[scriptId]?.flowJson
+                      if (flowJson?.blocks) {
+                        const uniqueTitle = getUniqueStepSlug(parsed.title, Object.keys(flowJson.blocks), oldSlug)
+                        if (uniqueTitle !== parsed.title) {
+                          parsed.title = uniqueTitle
+                          args[0] = JSON.stringify(parsed)
+                        }
+                      }
+                    }
+                    p.renameInfo = { oldSlug, newSlug: parsed.title, scriptId, origin: p.url.origin }
+                  }
+                }
+              } catch {
+                // ignore
+              }
+            }
+          }
+          if (p.renameInfo && p.renameInfo.oldSlug !== p.renameInfo.newSlug) {
+            const renameInfo = p.renameInfo
+            const headers = p.headers
+            const xhr = this
+            cascadeUpdateDownstreamInPage(renameInfo, headers)
+              .catch((err) => console.warn('[assistant] cascadeUpdateDownstreamInPage error:', err))
+              .finally(() => {
+                try {
+                  p.start = performance.now()
+                  if (countStart(p)) counted = p
+                  const onEnd = (): void => {
+                    try {
+                      xhr.removeEventListener('loadend', onEnd)
+                      countEnd(p)
+                      if (pending.get(xhr) !== p) return
+                      pending.delete(xhr)
+                      settle(p, xhr.status, () => readXhrBody(xhr))
+                    } catch {
+                      // ignore
+                    }
+                  }
+                  xhr.addEventListener('loadend', onEnd)
+                  origSend.apply(xhr, args)
+                } catch (e) {
+                  if (counted) countEnd(counted)
+                  throw e
+                }
+              })
+            return
+          }
           p.start = performance.now()
           if (countStart(p)) counted = p
           const xhr = this
@@ -2571,6 +2911,38 @@ function install(): void {
     try {
       const headers = new Headers(init?.headers ?? (isReq ? input.headers : undefined))
       p.byAssistant = headers.has(FBAI_HEADER)
+      p.headers = {}
+      headers.forEach((v, k) => {
+        if (p.headers) p.headers[k] = v
+      })
+      if (p.method === 'PUT') {
+        const m = p.url.pathname.match(/\/scripts\/([^/]+)\/stepv2\/([^/]+)/)
+        if (m && m[1] && m[2] && init && typeof init.body === 'string') {
+          const scriptId = m[1]
+          const oldSlug = decodeURIComponent(m[2])
+          try {
+            const parsed = JSON.parse(init.body)
+            if (parsed && typeof parsed.title === 'string' && parsed.title) {
+              const store = findReduxStore()
+              if (store) {
+                const state = store.getState()
+                const flowJsonV2 = isObj(state.flowJsonV2) ? (state.flowJsonV2 as Record<string, any>) : undefined
+                const flowJson = flowJsonV2?.[scriptId]?.flowJson
+                if (flowJson?.blocks) {
+                  const uniqueTitle = getUniqueStepSlug(parsed.title, Object.keys(flowJson.blocks), oldSlug)
+                  if (uniqueTitle !== parsed.title) {
+                    parsed.title = uniqueTitle
+                    init.body = JSON.stringify(parsed)
+                  }
+                }
+              }
+              p.renameInfo = { oldSlug, newSlug: parsed.title, scriptId, origin: p.url.origin }
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
     } catch {
       // malformed headers are the page's problem; keep tracking
     }
@@ -2586,6 +2958,39 @@ function install(): void {
         p = trackFetch(args[0], args[1])
       } catch {
         p = null
+      }
+      if (p && p.renameInfo && p.renameInfo.oldSlug !== p.renameInfo.newSlug) {
+        const req = p
+        const renameInfo = p.renameInfo
+        return cascadeUpdateDownstreamInPage(renameInfo, req.headers)
+          .catch((err) => console.warn('[assistant] cascadeUpdateDownstreamInPage error:', err))
+          .then(() => {
+            const result = origFetch.apply(this, args)
+            try {
+              countStart(req)
+              result.then(
+                (res) => {
+                  try {
+                    countEnd(req)
+                    settle(req, res.status, () => readFetchBody(res))
+                  } catch {
+                    // ignore
+                  }
+                },
+                () => {
+                  try {
+                    countEnd(req)
+                    settle(req, 0, async () => undefined)
+                  } catch {
+                    // ignore
+                  }
+                },
+              )
+            } catch {
+              // ignore
+            }
+            return result
+          })
       }
       const result = origFetch.apply(this, args)
       if (p) {
@@ -2701,6 +3106,12 @@ function install(): void {
     } catch {
       // leave that API untouched
     }
+  }
+
+  try {
+    setupTitleInputInterception()
+  } catch {
+    // leave DOM listeners untouched
   }
 
   // Synchronize draft step state from Redux and monitor flow structure changes
