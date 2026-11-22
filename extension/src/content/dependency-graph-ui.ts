@@ -327,7 +327,10 @@ body[data-theme="dark"] #${OVERLAY_ID} {
   z-index: 1200 !important;
 }
 
-/* Ensure the logs history drawer / popper sits above the graph canvas */
+/* Ensure the logs history drawer / popper and native logs chip sit above the graph canvas */
+body.vs-graph-active [data-testid="workflow-navbar-logs-time-chip-container"],
+body.vs-graph-active #logs-data-time-chip-anchor,
+body.vs-graph-active [data-testid="logs-data-time-chip"],
 body.vs-graph-active .MuiPopper-root:has(input[placeholder*="search" i]),
 body.vs-graph-active .MuiPopper-root:has(input[placeholder*="history" i]),
 body.vs-graph-active .MuiPopper-root:has([data-testid="logs-list-container"]),
@@ -1773,58 +1776,18 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     }
   }
 
-  function formatRunTimestamp(ts: string): string {
-    try {
-      const date = new Date(ts)
-      if (isNaN(date.getTime())) return ts
-      const now = new Date()
-      const diffMs = now.getTime() - date.getTime()
-      if (diffMs < 0) return ts
-
-      const diffSecs = Math.floor(diffMs / 1000)
-      const diffMins = Math.floor(diffSecs / 60)
-      const diffHours = Math.floor(diffMins / 60)
-      const diffDays = Math.floor(diffHours / 24)
-
-      const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
-
-      if (diffMins < 1) {
-        return 'Just now'
-      } else if (diffHours < 1) {
-        return `${diffMins}m ago, ${timeStr}`
-      } else if (diffHours < 24) {
-        return `${diffHours}h ago, ${timeStr}`
-      } else if (diffDays === 1) {
-        return `yesterday, ${timeStr}`
-      } else {
-        return `${diffDays}d ago, ${timeStr}`
-      }
-    } catch {
-      return ts
-    }
-  }
-
   function renderView(): void {
     if (!overlayEl || !currentGraphData) return
     ensureLogsDrawerZIndex()
 
-    const { summary, timestamp } = currentGraphData
-    const displayTimestamp = timestamp ? formatRunTimestamp(timestamp) : ''
-    const hasNativeChip = !!document.querySelector('[data-testid="workflow-navbar-logs-time-chip-container"]')
+    const { summary } = currentGraphData
 
     overlayEl.innerHTML = `
       <div class="vs-graph-canvas-bg"></div>
 
       <!-- Top Floating Controls -->
       <div class="vs-graph-top-bar">
-        <div class="vs-graph-top-left">
-          ${hasNativeChip ? '' : `
-            <div class="vs-graph-run-chip" id="vs-fallback-run-chip" title="Click to open or close logs history">
-              <span class="vs-graph-run-dot" style="${displayTimestamp ? '' : 'background-color:#9ca3af;'}"></span>
-              <span>Showing data from ${displayTimestamp ? `run ${displayTimestamp}` : 'draft (no run logs yet)'}</span>
-            </div>
-          `}
-        </div>
+        <div class="vs-graph-top-left"></div>
 
         <div class="vs-graph-top-center">
           <div class="vs-graph-filter-group" role="group">
@@ -1899,10 +1862,6 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     })
     overlayEl.querySelector('#vs-zoom-fit')?.addEventListener('click', () => {
       fitView(true)
-    })
-    overlayEl.querySelector('#vs-fallback-run-chip')?.addEventListener('click', () => {
-      const nativeChip = document.querySelector('[data-testid="logs-data-time-chip"]') as HTMLElement | null
-      nativeChip?.click()
     })
 
     const viewport = overlayEl.querySelector('#vs-graph-viewport') as HTMLElement
@@ -2015,6 +1974,11 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         popper.style.setProperty('z-index', '260', 'important')
       }
     })
+
+    const nativeChipContainer = document.querySelector<HTMLElement>('[data-testid="workflow-navbar-logs-time-chip-container"]')
+    if (nativeChipContainer) {
+      nativeChipContainer.style.setProperty('z-index', '260', 'important')
+    }
   }
 
   function resetLogsDrawerZIndex(): void {
@@ -2030,6 +1994,11 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         popper.style.removeProperty('z-index')
       }
     })
+
+    const nativeChipContainer = document.querySelector<HTMLElement>('[data-testid="workflow-navbar-logs-time-chip-container"]')
+    if (nativeChipContainer) {
+      nativeChipContainer.style.removeProperty('z-index')
+    }
   }
 
   function getLogsHistoryDrawer(): HTMLElement | null {
