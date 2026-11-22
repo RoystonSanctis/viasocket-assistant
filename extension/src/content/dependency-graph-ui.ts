@@ -640,7 +640,7 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 
 /* Dim non-active paths when one path is hovered or locked */
 .vs-graph-svg.has-active-connection .vs-graph-path:not(.highlighted):not(.locked) {
-  opacity: 0.12 !important;
+  opacity: 0.18 !important;
   stroke-width: 1.5px !important;
 }
 
@@ -701,34 +701,55 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 
 /* Not-run / unexecuted connections */
 .vs-graph-path.not-run {
-  stroke: #9ca3af !important;
+  stroke: #cbd5e1 !important;
   stroke-dasharray: 6, 4 !important;
-  opacity: 0.35 !important;
+  stroke-width: 2px !important;
+  opacity: 0.55 !important;
   transition: opacity 0.2s ease, stroke 0.15s ease;
 }
 
 .vs-theme-light .vs-graph-path.not-run,
 #vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.not-run {
-  stroke: #9ca3af !important;
-  opacity: 0.4 !important;
+  stroke: #94a3b8 !important;
+  opacity: 0.55 !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  .vs-graph-path.not-run,
+  #vs-dependency-graph-overlay .vs-graph-path.not-run {
+    stroke: #cbd5e1 !important;
+    opacity: 0.55 !important;
+  }
 }
 
 .vs-theme-dark .vs-graph-path.not-run,
 html.dark .vs-graph-path.not-run,
 body.dark .vs-graph-path.not-run,
+html[data-theme="dark"] .vs-graph-path.not-run,
+body[data-theme="dark"] .vs-graph-path.not-run,
 #vs-dependency-graph-overlay.vs-theme-dark .vs-graph-path.not-run {
-  stroke: #4b5563 !important;
-  opacity: 0.35 !important;
+  stroke: #cbd5e1 !important;
+  opacity: 0.55 !important;
 }
 
 .vs-graph-path.not-run:hover,
 .vs-graph-path.not-run.highlighted,
 .vs-graph-path.not-run.locked {
-  stroke: #94a3b8 !important;
+  stroke: #f1f5f9 !important;
   stroke-width: 3px !important;
-  opacity: 0.85 !important;
+  opacity: 0.95 !important;
   stroke-dasharray: 8, 4 !important;
-  filter: drop-shadow(0 0 6px rgba(148, 163, 184, 0.6)) !important;
+  filter: drop-shadow(0 0 6px rgba(241, 245, 249, 0.75)) !important;
+}
+
+.vs-theme-light .vs-graph-path.not-run:hover,
+.vs-theme-light .vs-graph-path.not-run.highlighted,
+.vs-theme-light .vs-graph-path.not-run.locked,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.not-run:hover,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.not-run.highlighted,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.not-run.locked {
+  stroke: #64748b !important;
+  filter: drop-shadow(0 0 6px rgba(100, 116, 139, 0.6)) !important;
 }
 
 @keyframes vs-flow-dash {
@@ -1610,6 +1631,16 @@ body.dark .vs-graph-status-chip.not-run,
   transform: translateY(-50%);
 }
 
+.vs-graph-port-dot.not-run {
+  border-color: #cbd5e1 !important;
+  opacity: 0.7;
+}
+
+.vs-theme-light .vs-graph-port-dot.not-run {
+  border-color: #94a3b8 !important;
+  opacity: 0.7;
+}
+
 .vs-graph-port-dot.port-in {
   left: -5px;
 }
@@ -1881,8 +1912,6 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   let tabTooltipTimer: ReturnType<typeof setTimeout> | undefined
 
   function isDarkMode(): boolean {
-    if (document.documentElement.classList.contains('vs-theme-dark') || document.body.classList.contains('vs-theme-dark')) return true
-    if (document.documentElement.classList.contains('vs-theme-light') || document.body.classList.contains('vs-theme-light')) return false
     if (document.documentElement.classList.contains('dark') || document.body.classList.contains('dark')) return true
     if (
       document.documentElement.getAttribute('data-theme') === 'dark' ||
@@ -3076,7 +3105,10 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       const hasIncomingConn = currentGraphData?.connections.some((c) => c.toPortId === portId)
       if (hasIncomingConn) {
         const dot = document.createElement('div')
-        dot.className = 'vs-graph-port-dot port-in'
+        const onlyNotRun = currentGraphData?.connections
+          .filter((c) => c.toPortId === portId)
+          .every((c) => c.hasRun === false)
+        dot.className = `vs-graph-port-dot port-in${onlyNotRun ? ' not-run' : ''}`
         dot.setAttribute('data-port-id', portId)
         row.appendChild(dot)
       }
@@ -3143,7 +3175,10 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       const hasOutgoingConn = currentGraphData?.connections.some((c) => c.fromPortId === portId)
       if (hasOutgoingConn) {
         const dot = document.createElement('div')
-        dot.className = 'vs-graph-port-dot port-out'
+        const onlyNotRun = currentGraphData?.connections
+          .filter((c) => c.fromPortId === portId)
+          .every((c) => c.hasRun === false)
+        dot.className = `vs-graph-port-dot port-out${onlyNotRun ? ' not-run' : ''}`
         dot.setAttribute('data-port-id', portId)
         row.appendChild(dot)
       }
