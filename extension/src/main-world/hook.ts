@@ -967,9 +967,53 @@ function install(): void {
           : {}
 
       const isDryRun = Boolean(invData.isDryRun)
-      let usedVars = isDryRun ? obj(flowState.usedVariables) : obj(flowState.publishUsedVariables)
-      if (!usedVars || Object.keys(usedVars).length === 0) {
-        usedVars = obj(flowState.usedVariables)
+      const pubUsed = obj(flowState.publishUsedVariables)
+      const draftUsed = obj(flowState.usedVariables)
+      const usedVars: Record<string, unknown> = {
+        ...pubUsed,
+        ...draftUsed,
+        functions: { ...obj(pubUsed.functions), ...obj(draftUsed.functions) },
+        plugin: { ...obj(pubUsed.plugin), ...obj(draftUsed.plugin) },
+        variables: { ...obj(pubUsed.variables), ...obj(draftUsed.variables) },
+      }
+
+      function parseVariableReference(rawExpr: string): { sourceSlug: string; sourceField: string } | null {
+        if (!rawExpr || typeof rawExpr !== 'string') return null
+        let expr = rawExpr.trim()
+        if (expr.startsWith('${') && expr.endsWith('}')) {
+          expr = expr.slice(2, -1).trim()
+        }
+
+        // Trigger reference: context.req.body.xyz or req.body['xyz']
+        if (expr.includes('req.body') || expr.includes('req.') || /req(?:\.|\?\.|\[)/.test(expr)) {
+          const field = expr
+            .replace(/^(?:context(?:\.|\?\.)?)?req(?:\.|\?\.)(?:body(?:\.|\?\.)?)?/g, '')
+            .replace(/\[["'](.*?)["']\]/g, '$1')
+            .replace(/^\.+/, '')
+            .replace(/[\?\}].*$/, '')
+            .trim()
+          if (field) {
+            return { sourceSlug: 'trigger', sourceField: field }
+          }
+        }
+
+        // Step response reference: context.res.Step_Name.field or context.steps.Step_Name?.field
+        const stepMatch = /(?:context(?:\.|\?\.)?)?(?:res|steps)(?:\.|\?\.|\[["'])([a-zA-Z0-9_-]+)(?:["']\])?(?:\.|\?\.|\[["'])([a-zA-Z0-9_$-]+)/.exec(expr)
+        if (stepMatch && stepMatch[1] && stepMatch[2]) {
+          const slug = stepMatch[1]
+          const field = stepMatch[2].replace(/["'\]\}].*$/, '')
+          return { sourceSlug: slug, sourceField: field }
+        }
+
+        const fallbackMatch = /(?:res|steps)(?:\.|\?\.)([a-zA-Z0-9_-]+)(?:\.|\?\.)([a-zA-Z0-9_$-]+)/.exec(expr)
+        if (fallbackMatch && fallbackMatch[1] && fallbackMatch[2]) {
+          return {
+            sourceSlug: fallbackMatch[1],
+            sourceField: fallbackMatch[2].replace(/[?\}].*$/, ''),
+          }
+        }
+
+        return null
       }
 
       const tryParse = (val: unknown): unknown => {
@@ -1099,10 +1143,36 @@ function install(): void {
         const seenInputKeys = new Set<string>()
 
         const stepId = typeof block.id === 'string' ? block.id : ''
-        const stepEntry = obj(obj(state.stepsDataV3)[scriptId])[stepId] ?? obj(obj(state.stepsDataV3)[scriptId])[slug]
+        const stepIdentifier = typeof block.identifier === 'string' ? block.identifier : ''
+        const allStepsData = obj(obj(state.stepsDataV3)[scriptId])
+        let stepEntry = obj(allStepsData[stepIdentifier])
+        if (!Object.keys(stepEntry).length && stepId) {
+          stepEntry = obj(allStepsData[stepId])
+        }
+        if (!Object.keys(stepEntry).length && slug) {
+          stepEntry = obj(allStepsData[slug])
+        }
+        if (!Object.keys(stepEntry).length) {
+          for (const [k, v] of Object.entries(allStepsData)) {
+            if (!isObj(v)) continue
+            const candidate = v as Record<string, unknown>
+            const d = obj(candidate.draft || candidate)
+            if (
+              k === stepIdentifier ||
+              k === slug ||
+              candidate.identifier === stepIdentifier ||
+              d.identifier === stepIdentifier ||
+              candidate.name === slug ||
+              d.name === slug
+            ) {
+              stepEntry = candidate
+              break
+            }
+          }
+        }
         const draft = obj(isObj(stepEntry) ? stepEntry.draft || stepEntry : {})
-        const pluginData = obj(draft.pluginData)
-        const selVals = obj(isObj(pluginData.selectedValues) ? pluginData.selectedValues : draft.selectedValues)
+        const pluginData = obj(draft.pluginData || stepEntry.pluginData)
+        const selVals = obj(isObj(pluginData.selectedValues) ? pluginData.selectedValues : (draft.selectedValues || stepEntry.selectedValues))
         const draftInputs = obj(selVals.inputData)
 
         const rawInputsMap = new Map<string, { value: unknown; expr?: string }>()
@@ -1140,11 +1210,24 @@ function install(): void {
         for (const [k, v] of Object.entries(rawInput)) registerInput(k, v)
 
         // 2. Used variables / functions
+        const pVars = {
+          ...(stepIdentifier ? obj(pluginMap[stepIdentifier]) : {}),
+          ...obj(pluginMap[slug]),
+        }
+        for (const [k, v] of Object.entries(pVars)) {
+          registerInput(k, v)
+        }
+
+        const funcVars = [
+          ...(Array.isArray(funcsMap[slug]) ? (funcsMap[slug] as string[]) : []),
+          ...(stepIdentifier && Array.isArray(funcsMap[stepIdentifier]) ? (funcsMap[stepIdentifier] as string[]) : []),
+          ...(Array.isArray(draft.usedVariables) ? (draft.usedVariables as string[]) : []),
+        ]
+
         if (stepType === 'function') {
           const codeStr = typeof draft.code === 'string' ? draft.code : (typeof block.data === 'string' ? block.data : '')
-          const list = Array.isArray(funcsMap[slug]) ? (funcsMap[slug] as string[]) : []
           if (codeStr) {
-            for (const item of list) {
+            for (const item of funcVars) {
               if (typeof item === 'string') {
                 const propName = item.split('.').pop()?.replace(/[[\]"']/g, '') || ''
                 if (codeStr.includes(item) || (propName && codeStr.includes(propName))) {
@@ -1158,16 +1241,19 @@ function install(): void {
               registerInput(cleaned, cleaned)
             }
           } else {
-            for (const item of list) {
+            for (const item of funcVars) {
               if (typeof item === 'string') {
                 registerInput(item, item)
               }
             }
           }
         } else if (stepType === 'plugin') {
-          const pVars = obj(pluginMap[slug])
-          for (const [k, v] of Object.entries(pVars)) {
-            registerInput(k, v)
+          for (const item of funcVars) {
+            if (typeof item === 'string' && (item.includes('res.') || item.includes('steps.') || item.includes('req.'))) {
+              const parts = item.split('.')
+              const field = parts[parts.length - 1] || 'input'
+              registerInput(field, `\${${item}}`)
+            }
           }
         }
 
@@ -1199,20 +1285,10 @@ function install(): void {
             let sourceSlug: string | undefined = undefined
             let sourceField: string | undefined = undefined
 
-            if (expr.includes('req.body') || expr.includes('req.')) {
-              sourceSlug = 'trigger'
-              sourceField = expr
-                .replace(/context\.req\.body\b/g, '')
-                .replace(/req\.body\b/g, '')
-                .replace(/context\.req\b/g, '')
-                .replace(/\[["'](.*?)["']\]/g, '$1')
-                .replace(/^\.+/, '')
-            } else if (expr.includes('res.') || expr.includes('steps.')) {
-              const m = /(?:res|steps)\.([a-zA-Z0-9_-]+)\??\.(.+)/.exec(expr)
-              if (m) {
-                sourceSlug = m[1]
-                sourceField = m[2]?.replace(/[}].*$/, '')?.replace(/\?.*$/, '')
-              }
+            const ref = parseVariableReference(expr)
+            if (ref && ref.sourceSlug && ref.sourceField) {
+              sourceSlug = ref.sourceSlug
+              sourceField = ref.sourceField
             }
 
             if (sourceSlug && sourceSlug !== slug) {
@@ -1398,7 +1474,15 @@ function install(): void {
       blockInputs.push(`${bKey}:${b.name || b.title || ''}:${JSON.stringify(bSel.inputData || b.data || '')}`)
     }
 
-    return `${rawStepOrder.join(',')}|${Object.keys(blocks).sort().join(',')}|${funcs}|${plugins}|${stepDrafts.sort().join(';')}|${blockInputs.sort().join(';')}`
+    const invState = asObj(asObj(state.invocationV2)[scriptId])
+    let invData = asObj(invState.invocationData)
+    if (!Object.keys(invData).length) {
+      invData = asObj(asObj(asObj(state.invocationV2)['selectedLog']).invocationData)
+    }
+    const flowHitId = typeof invData.flowHitId === 'string' ? invData.flowHitId : ''
+    const ts = typeof invData.requestTimestamp === 'string' ? invData.requestTimestamp : ''
+
+    return `${rawStepOrder.join(',')}|${Object.keys(blocks).sort().join(',')}|${funcs}|${plugins}|${stepDrafts.sort().join(';')}|${blockInputs.sort().join(';')}|${flowHitId}:${ts}`
   }
 
   let lastFlowSignature = ''

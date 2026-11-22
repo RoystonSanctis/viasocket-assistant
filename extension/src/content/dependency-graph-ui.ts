@@ -327,6 +327,15 @@ body[data-theme="dark"] #${OVERLAY_ID} {
   z-index: 1200 !important;
 }
 
+/* Ensure the logs history drawer / popper sits above the graph canvas */
+body.vs-graph-active .MuiPopper-root:has(input[placeholder*="search" i]),
+body.vs-graph-active .MuiPopper-root:has(input[placeholder*="history" i]),
+body.vs-graph-active .MuiPopper-root:has([data-testid="logs-list-container"]),
+body.vs-graph-active .MuiPopper-root:has([data-testid="logs-slider-card"]),
+body.vs-graph-active .MuiPopper-root.z-\[50\] {
+  z-index: 260 !important;
+}
+
 /* viaSocket dot grid canvas background */
 .vs-graph-canvas-bg {
   position: absolute;
@@ -1680,6 +1689,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   async function open(): Promise<void> {
     isGraphActive = true
     document.body.classList.add('vs-graph-active')
+    ensureLogsDrawerZIndex()
     updateTabButtonsState()
     updateGraphTheme()
 
@@ -1719,7 +1729,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
           </div>
         </div>
         <div class="vs-graph-viewport" style="display:flex;align-items:center;justify-content:center;color:#ef4444;font-size:13px;">
-          Unable to load workflow graph data. Try selecting a test run or reload.
+          Unable to load workflow graph data. Try reloading the page.
         </div>
       `
       overlayEl.querySelector('#vs-graph-err-close')?.addEventListener('click', close)
@@ -1740,6 +1750,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   function close(): void {
     isGraphActive = false
     document.body.classList.remove('vs-graph-active')
+    resetLogsDrawerZIndex()
     updateTabButtonsState()
     if (overlayEl) {
       overlayEl.style.display = 'none'
@@ -1795,6 +1806,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
   function renderView(): void {
     if (!overlayEl || !currentGraphData) return
+    ensureLogsDrawerZIndex()
 
     const { summary, timestamp } = currentGraphData
     const displayTimestamp = timestamp ? formatRunTimestamp(timestamp) : ''
@@ -1808,8 +1820,8 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         <div class="vs-graph-top-left">
           ${hasNativeChip ? '' : `
             <div class="vs-graph-run-chip" id="vs-fallback-run-chip" title="Click to open or close logs history">
-              <span class="vs-graph-run-dot"></span>
-              <span>Showing data from ${displayTimestamp ? `run ${displayTimestamp}` : 'latest run'}</span>
+              <span class="vs-graph-run-dot" style="${displayTimestamp ? '' : 'background-color:#9ca3af;'}"></span>
+              <span>Showing data from ${displayTimestamp ? `run ${displayTimestamp}` : 'draft (no run logs yet)'}</span>
             </div>
           `}
         </div>
@@ -1987,6 +1999,37 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     setTimeout(() => {
       if (layer) layer.style.transition = ''
     }, durationMs + 20)
+  }
+
+  function ensureLogsDrawerZIndex(): void {
+    if (!isGraphActive) return
+    const poppers = document.querySelectorAll<HTMLElement>('.MuiPopper-root')
+    poppers.forEach((popper) => {
+      if (
+        popper.querySelector('[data-testid="logs-list-container"]') ||
+        popper.querySelector('[data-testid="logs-slider-card"]') ||
+        popper.querySelector('input[placeholder*="history" i]') ||
+        popper.querySelector('input[placeholder*="search" i]') ||
+        popper.classList.contains('z-[50]')
+      ) {
+        popper.style.setProperty('z-index', '260', 'important')
+      }
+    })
+  }
+
+  function resetLogsDrawerZIndex(): void {
+    const poppers = document.querySelectorAll<HTMLElement>('.MuiPopper-root')
+    poppers.forEach((popper) => {
+      if (
+        popper.querySelector('[data-testid="logs-list-container"]') ||
+        popper.querySelector('[data-testid="logs-slider-card"]') ||
+        popper.querySelector('input[placeholder*="history" i]') ||
+        popper.querySelector('input[placeholder*="search" i]') ||
+        popper.classList.contains('z-[50]')
+      ) {
+        popper.style.removeProperty('z-index')
+      }
+    })
   }
 
   function getLogsHistoryDrawer(): HTMLElement | null {
@@ -3061,6 +3104,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     ensureTabButton()
 
     if (isGraphActive) {
+      ensureLogsDrawerZIndex()
       const drawer = getLogsHistoryDrawer()
       const isDrawerOpen = !!drawer
       if (isDrawerOpen !== lastDrawerOpen) {
@@ -3123,6 +3167,13 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   }
   window.addEventListener('resize', onResize)
 
+  const onWindowClick = (): void => {
+    if (isGraphActive) {
+      setTimeout(ensureLogsDrawerZIndex, 50)
+    }
+  }
+  window.addEventListener('click', onWindowClick, { passive: true })
+
   return {
     open,
     close,
@@ -3131,6 +3182,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       themeObserver.disconnect()
       clearInterval(interval)
       document.removeEventListener('click', onDocClick, true)
+      window.removeEventListener('click', onWindowClick)
       document.body.classList.remove('vs-graph-active')
       window.removeEventListener('popstate', onPopState)
       window.removeEventListener('resize', onResize)
