@@ -911,8 +911,6 @@ function install(): void {
     }
   }
 
-  const historicalStepsByScript = new Map<string, Map<string, { slug: string; title?: string; type?: string; iconUrl?: string }>>()
-
   function readFlowGraphData(msg: { scriptId?: string }): FlowGraphData | null {
     try {
       const obj = (v: unknown): Record<string, unknown> => (isObj(v) ? (v as Record<string, unknown>) : {})
@@ -1025,49 +1023,40 @@ function install(): void {
         }
       }
 
-      // Track all known steps across flow states and historical logs
-      let histMap = historicalStepsByScript.get(scriptId)
-      if (!histMap) {
-        histMap = new Map()
-        historicalStepsByScript.set(scriptId, histMap)
-      }
+      // Determine step slugs for this specific view:
+      // 1. Current non-deleted steps in blocks
+      const stepSlugsSet = new Set<string>()
       for (const slug of stepOrder) {
+        if (!blocks[slug]) continue
         const block = obj(blocks[slug])
-        const stepType = typeof block.type === 'string' ? block.type : 'function'
-        const iconUrl = typeof block.iconUrl === 'string' ? block.iconUrl : undefined
-        const stepTitle =
-          (typeof block.name === 'string' && block.name) ||
-          (typeof block.title === 'string' && block.title) ||
-          slug.replace(/_/g, ' ')
-        histMap.set(slug, { slug, title: stepTitle, type: stepType, iconUrl })
-      }
-      if (Array.isArray(invData.stepOrderJsonData)) {
-        for (const item of invData.stepOrderJsonData) {
-          if (isObj(item)) {
-            const s = item as Record<string, unknown>
-            const slug = (typeof s.id === 'string' && s.id) || (typeof s.name === 'string' && s.name)
-            if (slug && !histMap.has(slug)) {
-              histMap.set(slug, {
-                slug,
-                title: slug.replace(/_/g, ' '),
-                type: typeof s.type === 'string' ? s.type : 'function',
-              })
-            }
+        const draftStatus = typeof block.draftStatus === 'string' ? block.draftStatus.toUpperCase().trim() : ''
+        const blockStatus = typeof block.status === 'string' ? block.status.toUpperCase().trim() : 'ACTIVE'
+        const isDeleted =
+          draftStatus === 'DELETE' ||
+          draftStatus === 'MODIFY-DELETE' ||
+          draftStatus === 'CREATE-DELETE' ||
+          blockStatus === 'DELETE'
+
+        if (isDeleted) {
+          // If deleted in current flow, only keep if it actually ran in this specific log
+          if (isLogView && executedSlugs.has(slug)) {
+            stepSlugsSet.add(slug)
           }
-        }
-      }
-      for (const k of Object.keys(responseSnapshot)) {
-        if (k && !histMap.has(k)) {
-          histMap.set(k, { slug: k, title: k.replace(/_/g, ' '), type: 'function' })
+        } else {
+          stepSlugsSet.add(slug)
         }
       }
 
-      const allStepSlugs = [...stepOrder]
-      for (const histSlug of histMap.keys()) {
-        if (!allStepSlugs.includes(histSlug)) {
-          allStepSlugs.push(histSlug)
+      // 2. Any step that actually executed in THIS log run (even if removed from blocks later)
+      if (isLogView) {
+        for (const slug of executedSlugs) {
+          if (slug && slug !== 'trigger' && slug !== 'response') {
+            stepSlugsSet.add(slug)
+          }
         }
       }
+
+      const allStepSlugs = Array.from(stepSlugsSet)
 
       function parseVariableReference(rawExpr: string): { sourceSlug: string; sourceField: string } | null {
         if (!rawExpr || typeof rawExpr !== 'string') return null
@@ -1215,17 +1204,54 @@ function install(): void {
       const funcsMap = obj(usedVars.functions)
       const pluginMap = obj(usedVars.plugin)
 
+      // Collect step metadata for this view
+      const stepMetaMap = new Map<string, { type?: string; iconUrl?: string; title?: string }>()
+      for (const [slug, b] of Object.entries(blocks)) {
+        if (!isObj(b)) continue
+        const block = b as Record<string, unknown>
+        const stepType = typeof block.type === 'string' ? block.type : 'function'
+        const iconUrl = typeof block.iconUrl === 'string' ? block.iconUrl : undefined
+        const stepTitle =
+          (typeof block.name === 'string' && block.name) ||
+          (typeof block.title === 'string' && block.title) ||
+          slug.replace(/_/g, ' ')
+        stepMetaMap.set(slug, { type: stepType, iconUrl, title: stepTitle })
+      }
+      if (Array.isArray(invData.stepOrderJsonData)) {
+        for (const item of invData.stepOrderJsonData) {
+          if (isObj(item)) {
+            const s = item as Record<string, unknown>
+            const slug = (typeof s.id === 'string' && s.id) || (typeof s.name === 'string' && s.name)
+            if (slug && !stepMetaMap.has(slug)) {
+              stepMetaMap.set(slug, {
+                title: slug.replace(/_/g, ' '),
+                type: typeof s.type === 'string' ? s.type : 'function',
+              })
+            }
+          }
+        }
+      }
+
       for (const slug of allStepSlugs) {
         const block = obj(blocks[slug])
-        const histInfo = histMap.get(slug)
-        const stepType = typeof block.type === 'string' ? block.type : (histInfo?.type || 'function')
-        const iconUrl = typeof block.iconUrl === 'string' ? block.iconUrl : histInfo?.iconUrl
+        const stepMeta = stepMetaMap.get(slug)
+        const stepType = typeof block.type === 'string' ? block.type : (stepMeta?.type || 'function')
+        const iconUrl = typeof block.iconUrl === 'string' ? block.iconUrl : stepMeta?.iconUrl
         const inputs: FlowGraphPort[] = []
         const upstreamSlugsSet = new Set<string>()
 
         const stepId = typeof block.id === 'string' ? block.id : ''
         const stepIdentifier = typeof block.identifier === 'string' ? block.identifier : ''
-        const existsInCurrentFlow = Boolean(blocks[slug])
+        const currentBlock = obj(blocks[slug])
+        const bDraft = typeof currentBlock.draftStatus === 'string' ? currentBlock.draftStatus.toUpperCase().trim() : ''
+        const bStatus = typeof currentBlock.status === 'string' ? currentBlock.status.toUpperCase().trim() : 'ACTIVE'
+        const isDeletedInFlow =
+          !blocks[slug] ||
+          bDraft === 'DELETE' ||
+          bDraft === 'MODIFY-DELETE' ||
+          bDraft === 'CREATE-DELETE' ||
+          bStatus === 'DELETE'
+        const existsInCurrentFlow = !isDeletedInFlow
         const hasRun = !isLogView || (
           executedSlugs.has(slug) ||
           (Boolean(stepId) && executedSlugs.has(stepId)) ||
@@ -1494,11 +1520,11 @@ function install(): void {
           }
         }
 
-        if (notInLog) {
+        if (isLogView) {
           if (!existsInCurrentFlow) {
             stepStatus = 'deleted'
-            statusLabel = 'Not in this log'
-          } else {
+            statusLabel = 'Deleted from flow'
+          } else if (notInLog) {
             statusLabel = 'Did not run'
           }
         }

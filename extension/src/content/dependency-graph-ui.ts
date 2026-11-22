@@ -3347,9 +3347,10 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     }
 
     const isNotRun = node.hasRun === false
-    if (isNotRun) {
+    const isDeletedFromFlow = node.stepStatus === 'deleted'
+    if (isNotRun || isDeletedFromFlow) {
       card.classList.add('vs-graph-card-not-run')
-      card.setAttribute('data-execution', 'not-run')
+      card.setAttribute('data-execution', isDeletedFromFlow ? 'deleted' : 'not-run')
     }
 
     // Resolved icon URL matching native viaSocket
@@ -3370,11 +3371,13 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         ? 'Delay • Pauses workflow before next step'
         : ''
 
-    const statusChipHtml = isNotRun
-      ? `<span class="vs-graph-status-chip not-run">${escapeHtml(node.statusLabel || 'Did not run')}</span>`
-      : node.statusLabel && node.stepStatus && node.stepStatus !== 'active'
-        ? `<span class="vs-graph-status-chip ${node.stepStatus}">${escapeHtml(node.statusLabel)}</span>`
-        : ''
+    const statusChipHtml = isDeletedFromFlow
+      ? `<span class="vs-graph-status-chip deleted">${escapeHtml(node.statusLabel || 'Deleted from flow')}</span>`
+      : isNotRun
+        ? `<span class="vs-graph-status-chip not-run">${escapeHtml(node.statusLabel || 'Did not run')}</span>`
+        : node.statusLabel && node.stepStatus && node.stepStatus !== 'active'
+          ? `<span class="vs-graph-status-chip ${node.stepStatus}">${escapeHtml(node.statusLabel)}</span>`
+          : ''
 
     card.innerHTML = `
       <div class="vs-graph-card-header">
@@ -3689,12 +3692,14 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     const layerRect = transformLayer.getBoundingClientRect()
     const allCards = Array.from(transformLayer.querySelectorAll<HTMLElement>('.vs-graph-card'))
 
-    let maxAllCardBottom = 320
+    let maxFlowCardBottom = 320
     for (const card of allCards) {
+      if (card.closest('.vs-graph-independent-lane')) continue
       const cTop = parseFloat(card.style.top) || 80
+      if (cTop > 800) continue
       const cBottom = cTop + (card.offsetHeight || 180)
-      if (cBottom > maxAllCardBottom) {
-        maxAllCardBottom = cBottom
+      if (cBottom > maxFlowCardBottom) {
+        maxFlowCardBottom = cBottom
       }
     }
 
@@ -3752,23 +3757,12 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       const y2 = (isToCard ? toRect.top + 28 - layerRect.top : toRect.top + toRect.height / 2 - layerRect.top) / zoom
 
       const isSequentialConn = conn.expression === 'sequential'
+      const fromNode = conn.fromSlug === 'trigger' ? currentGraphData.trigger : currentGraphData.steps.find((s) => s.slugName === conn.fromSlug)
+      const toNode = currentGraphData.steps.find((s) => s.slugName === conn.toSlug)
       const isReverse = x2 < x1 - 20
-
-      // Check if any intermediate cards lie between x1 and x2
-      const minX = Math.min(x1, x2)
-      const maxX = Math.max(x1, x2)
-      let hasIntermediateCard = false
-
-      for (const card of allCards) {
-        const cLeft = parseFloat(card.style.left) || 0
-        const cRight = cLeft + (card.offsetWidth || 360)
-        if (cRight > minX + 30 && cLeft < maxX - 30) {
-          hasIntermediateCard = true
-          break
-        }
-      }
-
-      const isMultiSpan = hasIntermediateCard || Math.abs(x2 - x1) > 220 || isReverse
+      // Multi-span bottom lane routing is strictly reserved for reverse cycle/loop connections.
+      // All forward connections use natural, clean, smooth cubic beziers.
+      const isMultiSpan = isReverse
 
       calculatedConns.push({
         conn,
@@ -3782,7 +3776,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       })
     }
 
-    // Allocate lanes for multi-span connections to eliminate any overlapping
+    // Allocate lanes for reverse multi-span connections to eliminate overlapping
     const multiSpanConns = calculatedConns.filter((c) => c.isMultiSpan)
     multiSpanConns.sort((a, b) => (a.x1 - b.x1) || (a.x2 - b.x2) || (a.y2 - b.y2))
 
@@ -3804,24 +3798,16 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       item.laneIndex = assigned
     }
 
-    const baseLaneY = Math.max(340, maxAllCardBottom + 30)
+    const baseLaneY = Math.max(340, maxFlowCardBottom + 25)
 
     for (const item of calculatedConns) {
       let pathD: string
-      if (item.isMultiSpan && item.laneIndex !== undefined) {
+      if (item.isReverse && item.laneIndex !== undefined) {
         const laneY = baseLaneY + item.laneIndex * 22
-        if (!item.isReverse) {
-          const spanDist = item.x2 - item.x1
-          const cornerX = Math.min(80, Math.max(48, spanDist * 0.08))
-          const c1 = cornerX * 0.55
-          const c2 = cornerX * 0.45
-          pathD = `M ${item.x1} ${item.y1} C ${item.x1 + c1} ${item.y1}, ${item.x1 + cornerX - c2} ${laneY}, ${item.x1 + cornerX} ${laneY} L ${item.x2 - cornerX} ${laneY} C ${item.x2 - cornerX + c2} ${laneY}, ${item.x2 - c1} ${item.y2}, ${item.x2} ${item.y2}`
-        } else {
-          const corner = 60
-          pathD = `M ${item.x1} ${item.y1} C ${item.x1 + corner} ${item.y1}, ${item.x1 + corner} ${laneY}, ${item.x1} ${laneY} L ${item.x2} ${laneY} C ${item.x2 - corner} ${laneY}, ${item.x2 - corner} ${item.y2}, ${item.x2} ${item.y2}`
-        }
+        const corner = 60
+        pathD = `M ${item.x1} ${item.y1} C ${item.x1 + corner} ${item.y1}, ${item.x1 + corner} ${laneY}, ${item.x1} ${laneY} L ${item.x2} ${laneY} C ${item.x2 - corner} ${laneY}, ${item.x2 - corner} ${item.y2}, ${item.x2} ${item.y2}`
       } else {
-        const dx = Math.max(45, (item.x2 - item.x1) * 0.45)
+        const dx = Math.max(50, (item.x2 - item.x1) * 0.45)
         pathD = `M ${item.x1} ${item.y1} C ${item.x1 + dx} ${item.y1}, ${item.x2 - dx} ${item.y2}, ${item.x2} ${item.y2}`
       }
 
