@@ -571,21 +571,47 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   stroke-linecap: round;
   pointer-events: stroke;
   cursor: pointer;
-  transition: stroke 0.15s ease, stroke-width 0.15s ease, opacity 0.15s ease;
+  transition: stroke 0.15s ease, stroke-width 0.15s ease, opacity 0.2s ease, filter 0.15s ease;
   opacity: 0.85;
 }
 
+/* Dim non-active paths when one path is hovered or locked */
+.vs-graph-svg.has-active-connection .vs-graph-path:not(.highlighted):not(.locked) {
+  opacity: 0.12 !important;
+  stroke-width: 1.5px !important;
+}
+
 .vs-graph-path:hover,
-.vs-graph-path.highlighted {
-  stroke: var(--vs-g-path-hl, #79c0ff) !important;
-  stroke-width: 3.2px !important;
+.vs-graph-path.highlighted,
+.vs-graph-path.locked {
+  stroke: #38bdf8 !important;
+  stroke-width: 3.5px !important;
   opacity: 1 !important;
-  filter: drop-shadow(0 0 5px var(--vs-g-path, rgba(88, 166, 255, 0.75)));
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.85)) !important;
+  cursor: pointer;
+}
+
+html:not(.dark) .vs-graph-path:hover,
+html:not(.dark) .vs-graph-path.highlighted,
+html:not(.dark) .vs-graph-path.locked,
+body:not(.dark) .vs-graph-path:hover,
+body:not(.dark) .vs-graph-path.highlighted,
+body:not(.dark) .vs-graph-path.locked,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-path:hover,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.highlighted,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.locked {
+  stroke: #0284c7 !important;
+  filter: drop-shadow(0 0 6px rgba(2, 132, 199, 0.75)) !important;
 }
 
 .vs-graph-path.pulse-anim {
   stroke-dasharray: 6, 4;
   animation: vs-flow-dash 1.2s linear infinite;
+}
+
+.vs-graph-path.locked {
+  stroke-dasharray: 8, 4 !important;
+  animation: vs-flow-dash 1s linear infinite !important;
 }
 
 .vs-graph-path.sequential {
@@ -596,11 +622,24 @@ body.vs-graph-active [data-testid="build-flow-card"] {
 }
 
 .vs-graph-path.sequential:hover,
-.vs-graph-path.sequential.highlighted {
-  stroke: var(--vs-g-path-hl, #79c0ff) !important;
-  stroke-width: 2.8px !important;
+.vs-graph-path.sequential.highlighted,
+.vs-graph-path.sequential.locked {
+  stroke: #38bdf8 !important;
+  stroke-width: 3px !important;
   opacity: 1 !important;
-  stroke-dasharray: none;
+  stroke-dasharray: 8, 4;
+}
+
+html:not(.dark) .vs-graph-path.sequential:hover,
+html:not(.dark) .vs-graph-path.sequential.highlighted,
+html:not(.dark) .vs-graph-path.sequential.locked,
+body:not(.dark) .vs-graph-path.sequential:hover,
+body:not(.dark) .vs-graph-path.sequential.highlighted,
+body:not(.dark) .vs-graph-path.sequential.locked,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.sequential:hover,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.sequential.highlighted,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-path.sequential.locked {
+  stroke: #0284c7 !important;
 }
 
 @keyframes vs-flow-dash {
@@ -882,6 +921,143 @@ body.dark .vs-graph-card[data-status="active"],
 #vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card,
 #vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card[data-status="active"] {
   background-color: rgb(21, 27, 35);
+}
+
+/* Card Connected Highlight */
+.vs-graph-card.card-connected-highlight {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 2px #38bdf8, 0 8px 24px rgba(56, 189, 248, 0.28) !important;
+  z-index: 10 !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+html:not(.dark) .vs-graph-card.card-connected-highlight,
+body:not(.dark) .vs-graph-card.card-connected-highlight,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-card.card-connected-highlight {
+  border-color: #0284c7 !important;
+  box-shadow: 0 0 0 2px #0284c7, 0 8px 20px rgba(2, 132, 199, 0.24) !important;
+}
+
+/* Floating Lock Banner Pill */
+.vs-graph-lock-pill {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 220;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: 9999px;
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(13, 17, 23, 0.94);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  box-shadow: 0 4px 18px rgba(56, 189, 248, 0.25), 0 2px 8px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  color: #f0f6fc;
+  pointer-events: auto;
+  user-select: none;
+  animation: vs-pill-pop 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+html:not(.dark) .vs-graph-lock-pill,
+body:not(.dark) .vs-graph-lock-pill,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-lock-pill {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(2, 132, 199, 0.45);
+  box-shadow: 0 4px 16px rgba(2, 132, 199, 0.2), 0 2px 6px rgba(0, 0, 0, 0.08);
+  color: #1f2328;
+}
+
+@keyframes vs-pill-pop {
+  from { opacity: 0; transform: translate(-50%, -8px) scale(0.95); }
+  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+.vs-graph-lock-pill .vs-lock-icon {
+  font-size: 13px;
+  color: #38bdf8;
+}
+
+html:not(.dark) .vs-graph-lock-pill .vs-lock-icon,
+body:not(.dark) .vs-graph-lock-pill .vs-lock-icon,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-lock-pill .vs-lock-icon {
+  color: #0284c7;
+}
+
+.vs-graph-lock-pill .vs-lock-text {
+  font-weight: 500;
+}
+
+.vs-graph-lock-pill .vs-lock-val {
+  color: #38bdf8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+html:not(.dark) .vs-graph-lock-pill .vs-lock-val,
+body:not(.dark) .vs-graph-lock-pill .vs-lock-val,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-lock-pill .vs-lock-val {
+  color: #0284c7;
+}
+
+.vs-graph-lock-pill .vs-lock-hint {
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 10px;
+  background: rgba(56, 189, 248, 0.15);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  font-weight: 600;
+}
+
+html:not(.dark) .vs-graph-lock-pill .vs-lock-hint,
+body:not(.dark) .vs-graph-lock-pill .vs-lock-hint,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-lock-pill .vs-lock-hint {
+  background: rgba(2, 132, 199, 0.1);
+  color: #0284c7;
+  border-color: rgba(2, 132, 199, 0.25);
+}
+
+.vs-graph-lock-pill .vs-lock-close {
+  background: transparent;
+  border: none;
+  color: #8b949e;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: all 0.15s ease;
+  margin-left: 4px;
+}
+
+.vs-graph-lock-pill .vs-lock-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f87171;
+}
+
+/* Tooltip shortcut hint */
+.vs-graph-tip-shortcut {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: #38bdf8;
+  opacity: 0.95;
+  font-weight: 500;
+}
+
+html:not(.dark) .vs-graph-tip-shortcut,
+body:not(.dark) .vs-graph-tip-shortcut,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-tip-shortcut {
+  color: #0284c7;
 }
 
 .vs-graph-card-url {
@@ -1646,9 +1822,13 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     return tooltipEl
   }
 
-  function showTooltip(x: number, y: number, text: string): void {
+  function showTooltip(x: number, y: number, text: string, shortcutHint?: string): void {
     const el = getTooltip()
-    el.innerText = text
+    if (shortcutHint) {
+      el.innerHTML = `<div>${escapeHtml(text)}</div><div class="vs-graph-tip-shortcut">${escapeHtml(shortcutHint)}</div>`
+    } else {
+      el.innerText = text
+    }
     el.style.left = `${x + 12}px`
     el.style.top = `${y + 12}px`
     el.style.display = 'block'
@@ -1986,6 +2166,8 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
   function close(): void {
     isGraphActive = false
+    unlockActivePath(true)
+    hoveredConn = null
     document.body.classList.remove('vs-graph-active')
     resetLogsDrawerZIndex()
     updateTabButtonsState()
@@ -2200,6 +2382,19 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       },
       { passive: false }
     )
+
+    viewport.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement | null
+      if (
+        lockedConn &&
+        target &&
+        !target.closest('.vs-graph-card') &&
+        !target.closest('.vs-graph-lock-pill') &&
+        !target.closest('.vs-graph-modal')
+      ) {
+        unlockActivePath(true)
+      }
+    })
   }
 
   function animateTransform(durationMs = 250): void {
@@ -2434,6 +2629,15 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         currentY += card.offsetHeight + 32
       }
       maxGraphY = Math.max(maxGraphY, currentY)
+    }
+
+    const multiSpanCount = currentGraphData.connections.filter((c) => {
+      const fromStep = currentGraphData?.steps.find((s) => s.slugName === c.fromSlug)
+      const toStep = currentGraphData?.steps.find((s) => s.slugName === c.toSlug)
+      return fromStep && toStep && Math.abs(toStep.depth - fromStep.depth) > 1
+    }).length
+    if (multiSpanCount > 0) {
+      maxGraphY += Math.min(180, multiSpanCount * 22 + 40)
     }
 
     const lane = nodesLayer.querySelector<HTMLElement>('.vs-graph-independent-lane')
@@ -3096,6 +3300,123 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     return card
   }
 
+  interface CalculatedConnection {
+    conn: FlowGraphConnection
+    x1: number
+    y1: number
+    x2: number
+    y2: number
+    isSequentialConn: boolean
+    isMultiSpan: boolean
+    isReverse: boolean
+    laneIndex?: number
+  }
+
+  let hoveredConn: FlowGraphConnection | null = null
+  let lockedConn: FlowGraphConnection | null = null
+
+  function highlightActivePath(conn: FlowGraphConnection): void {
+    if (!overlayEl) return
+    const svg = overlayEl.querySelector('#vs-graph-svg') as SVGElement | null
+    if (!svg) return
+
+    svg.classList.add('has-active-connection')
+    const path = svg.querySelector(`.vs-graph-path[data-conn-id="${conn.id}"]`) as SVGPathElement | null
+    if (path) {
+      path.classList.add('highlighted', 'pulse-anim')
+      svg.appendChild(path)
+    }
+
+    highlightConnectedPorts(conn.fromPortId, conn.toPortId)
+    highlightConnectedCards(conn.fromSlug, conn.toSlug)
+  }
+
+  function highlightConnectedCards(fromSlug?: string, toSlug?: string): void {
+    if (!overlayEl) return
+    if (fromSlug) {
+      const card = overlayEl.querySelector(`.vs-graph-card[data-node-id="${fromSlug}"]`)
+      card?.classList.add('card-connected-highlight', 'card-source-highlight')
+    }
+    if (toSlug) {
+      const card = overlayEl.querySelector(`.vs-graph-card[data-node-id="${toSlug}"]`)
+      card?.classList.add('card-connected-highlight', 'card-target-highlight')
+    }
+  }
+
+  function showLockPill(conn: FlowGraphConnection): void {
+    if (!overlayEl) return
+    let pill = overlayEl.querySelector('#vs-graph-lock-pill') as HTMLElement | null
+    if (!pill) {
+      pill = document.createElement('div')
+      pill.id = 'vs-graph-lock-pill'
+      pill.className = 'vs-graph-lock-pill'
+      overlayEl.appendChild(pill)
+    }
+
+    const isSeq = conn.expression === 'sequential'
+    const title = isSeq
+      ? `Sequential: ${conn.fromSlug} ➔ ${conn.toSlug}`
+      : `${conn.fromSlug}.${conn.fromField} ➔ ${conn.toSlug}.${conn.toField}`
+    const val = isSeq ? '' : conn.valuePreview ? ` (${escapeHtml(conn.valuePreview)})` : ''
+
+    pill.innerHTML = `
+      <span class="vs-lock-icon">🔒</span>
+      <span class="vs-lock-text">${escapeHtml(title)}</span>
+      ${val ? `<span class="vs-lock-val">${val}</span>` : ''}
+      <span class="vs-lock-hint">Press Space to unlock</span>
+      <button class="vs-lock-close" title="Unlock">✕</button>
+    `
+
+    pill.querySelector('.vs-lock-close')?.addEventListener('click', (e) => {
+      e.stopPropagation()
+      unlockActivePath(true)
+    })
+  }
+
+  function lockActivePath(conn: FlowGraphConnection): void {
+    unlockActivePath(false)
+    lockedConn = conn
+    if (!overlayEl) return
+
+    const svg = overlayEl.querySelector('#vs-graph-svg') as SVGElement | null
+    if (!svg) return
+
+    svg.classList.add('has-active-connection')
+    svg.querySelectorAll('.vs-graph-path').forEach((p) => {
+      if (p.getAttribute('data-conn-id') === conn.id) {
+        p.classList.add('highlighted', 'locked')
+        svg.appendChild(p)
+      } else {
+        p.classList.remove('highlighted', 'locked', 'pulse-anim')
+      }
+    })
+
+    highlightConnectedPorts(conn.fromPortId, conn.toPortId)
+    highlightConnectedCards(conn.fromSlug, conn.toSlug)
+    showLockPill(conn)
+  }
+
+  function unlockActivePath(resetHighlights = true): void {
+    if (!lockedConn && !overlayEl?.querySelector('#vs-graph-lock-pill')) return
+    lockedConn = null
+
+    const pill = overlayEl?.querySelector('#vs-graph-lock-pill')
+    pill?.remove()
+
+    const svg = overlayEl?.querySelector('#vs-graph-svg') as SVGElement | null
+    if (svg) {
+      svg.querySelectorAll('.vs-graph-path.locked').forEach((p) => p.classList.remove('locked'))
+    }
+
+    if (resetHighlights) {
+      if (hoveredConn) {
+        highlightActivePath(hoveredConn)
+      } else {
+        clearHighlights()
+      }
+    }
+  }
+
   function renderConnections(): void {
     if (!currentGraphData || !overlayEl) return
     const svg = overlayEl.querySelector('#vs-graph-svg') as SVGElement | null
@@ -3104,6 +3425,18 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
     svg.innerHTML = ''
     const layerRect = transformLayer.getBoundingClientRect()
+    const allCards = Array.from(transformLayer.querySelectorAll<HTMLElement>('.vs-graph-card'))
+
+    let maxAllCardBottom = 320
+    for (const card of allCards) {
+      const cTop = parseFloat(card.style.top) || 80
+      const cBottom = cTop + (card.offsetHeight || 180)
+      if (cBottom > maxAllCardBottom) {
+        maxAllCardBottom = cBottom
+      }
+    }
+
+    const calculatedConns: CalculatedConnection[] = []
 
     for (const conn of currentGraphData.connections) {
       let fromEl = (transformLayer.querySelector(`.port-out[data-port-id="${conn.fromPortId}"]`) ||
@@ -3156,56 +3489,150 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       const x2 = toX / zoom
       const y2 = (isToCard ? toRect.top + 28 - layerRect.top : toRect.top + toRect.height / 2 - layerRect.top) / zoom
 
-      const dx = Math.max(50, Math.abs(x2 - x1) * 0.45)
-      const pathD = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`
-
       const isSequentialConn = conn.expression === 'sequential'
+      const isReverse = x2 < x1 - 20
+
+      // Check if any intermediate cards lie between x1 and x2
+      const minX = Math.min(x1, x2)
+      const maxX = Math.max(x1, x2)
+      let hasIntermediateCard = false
+
+      for (const card of allCards) {
+        const cLeft = parseFloat(card.style.left) || 0
+        const cRight = cLeft + (card.offsetWidth || 360)
+        if (cRight > minX + 30 && cLeft < maxX - 30) {
+          hasIntermediateCard = true
+          break
+        }
+      }
+
+      const isMultiSpan = hasIntermediateCard || Math.abs(x2 - x1) > 220 || isReverse
+
+      calculatedConns.push({
+        conn,
+        x1,
+        y1,
+        x2,
+        y2,
+        isSequentialConn,
+        isMultiSpan,
+        isReverse,
+      })
+    }
+
+    // Allocate lanes for multi-span connections to eliminate any overlapping
+    const multiSpanConns = calculatedConns.filter((c) => c.isMultiSpan)
+    multiSpanConns.sort((a, b) => (a.x1 - b.x1) || (a.x2 - b.x2) || (a.y2 - b.y2))
+
+    const laneOccupiedUntil: number[] = []
+    for (const item of multiSpanConns) {
+      let assigned = -1
+      for (let l = 0; l < laneOccupiedUntil.length; l++) {
+        const occ = laneOccupiedUntil[l]
+        if (occ !== undefined && occ < item.x1 - 30) {
+          assigned = l
+          laneOccupiedUntil[l] = Math.max(item.x1, item.x2) + 30
+          break
+        }
+      }
+      if (assigned === -1) {
+        assigned = laneOccupiedUntil.length
+        laneOccupiedUntil.push(Math.max(item.x1, item.x2) + 30)
+      }
+      item.laneIndex = assigned
+    }
+
+    const baseLaneY = Math.max(340, maxAllCardBottom + 30)
+
+    for (const item of calculatedConns) {
+      let pathD: string
+      if (item.isMultiSpan && item.laneIndex !== undefined) {
+        const laneY = baseLaneY + item.laneIndex * 22
+        if (!item.isReverse) {
+          const spanDist = item.x2 - item.x1
+          const cornerX = Math.min(80, Math.max(48, spanDist * 0.08))
+          const c1 = cornerX * 0.55
+          const c2 = cornerX * 0.45
+          pathD = `M ${item.x1} ${item.y1} C ${item.x1 + c1} ${item.y1}, ${item.x1 + cornerX - c2} ${laneY}, ${item.x1 + cornerX} ${laneY} L ${item.x2 - cornerX} ${laneY} C ${item.x2 - cornerX + c2} ${laneY}, ${item.x2 - c1} ${item.y2}, ${item.x2} ${item.y2}`
+        } else {
+          const corner = 60
+          pathD = `M ${item.x1} ${item.y1} C ${item.x1 + corner} ${item.y1}, ${item.x1 + corner} ${laneY}, ${item.x1} ${laneY} L ${item.x2} ${laneY} C ${item.x2 - corner} ${laneY}, ${item.x2 - corner} ${item.y2}, ${item.x2} ${item.y2}`
+        }
+      } else {
+        const dx = Math.max(45, (item.x2 - item.x1) * 0.45)
+        pathD = `M ${item.x1} ${item.y1} C ${item.x1 + dx} ${item.y1}, ${item.x2 - dx} ${item.y2}, ${item.x2} ${item.y2}`
+      }
+
+      const isLocked = lockedConn?.id === item.conn.id
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
       path.setAttribute('d', pathD)
-      path.setAttribute('class', isSequentialConn ? 'vs-graph-path sequential' : 'vs-graph-path')
-      path.setAttribute('data-conn-id', conn.id)
-      path.setAttribute('data-from-port', conn.fromPortId)
-      path.setAttribute('data-to-port', conn.toPortId)
+      path.setAttribute(
+        'class',
+        item.isSequentialConn
+          ? isLocked
+            ? 'vs-graph-path sequential highlighted locked'
+            : 'vs-graph-path sequential'
+          : isLocked
+            ? 'vs-graph-path highlighted locked'
+            : 'vs-graph-path'
+      )
+      path.setAttribute('data-conn-id', item.conn.id)
+      path.setAttribute('data-from-port', item.conn.fromPortId)
+      path.setAttribute('data-to-port', item.conn.toPortId)
 
       path.addEventListener('mouseenter', (e) => {
-        path.classList.add('highlighted', 'pulse-anim')
-        highlightConnectedPorts(conn.fromPortId, conn.toPortId)
-        const tip = isSequentialConn
-          ? `Sequential Order: ${conn.fromSlug} ➔ ${conn.toSlug}`
-          : `${conn.fromSlug}.${conn.fromField} (${conn.valuePreview}) ➔ ${conn.toSlug}.${conn.toField}`
-        showTooltip(e.clientX, e.clientY, tip)
+        hoveredConn = item.conn
+        const tip = item.isSequentialConn
+          ? `Sequential Order: ${item.conn.fromSlug} ➔ ${item.conn.toSlug}`
+          : `${item.conn.fromSlug}.${item.conn.fromField} (${item.conn.valuePreview}) ➔ ${item.conn.toSlug}.${item.conn.toField}`
+        const shortcut = lockedConn?.id === item.conn.id ? 'Space: Unlock path' : 'Space: Lock path'
+        showTooltip(e.clientX, e.clientY, tip, shortcut)
+
+        if (lockedConn) return
+        highlightActivePath(item.conn)
       })
 
       path.addEventListener('mousemove', (e) => {
-        const tip = isSequentialConn
-          ? `Sequential Order: ${conn.fromSlug} ➔ ${conn.toSlug}`
-          : `${conn.fromSlug}.${conn.fromField} (${conn.valuePreview}) ➔ ${conn.toSlug}.${conn.toField}`
-        showTooltip(e.clientX, e.clientY, tip)
+        const tip = item.isSequentialConn
+          ? `Sequential Order: ${item.conn.fromSlug} ➔ ${item.conn.toSlug}`
+          : `${item.conn.fromSlug}.${item.conn.fromField} (${item.conn.valuePreview}) ➔ ${item.conn.toSlug}.${item.conn.toField}`
+        const shortcut = lockedConn?.id === item.conn.id ? 'Space: Unlock path' : 'Space: Lock path'
+        showTooltip(e.clientX, e.clientY, tip, shortcut)
       })
 
       path.addEventListener('mouseleave', () => {
-        path.classList.remove('highlighted', 'pulse-anim')
-        clearHighlights()
+        hoveredConn = null
         hideTooltip()
+        if (lockedConn) return
+        clearHighlights()
       })
 
       path.addEventListener('click', () => {
-        showDetailsModal(`Connection: ${conn.fromSlug}.${conn.fromField} ➔ ${conn.toSlug}.${conn.toField}`, {
-          fromStep: conn.fromSlug,
-          fromField: conn.fromField,
-          toStep: conn.toSlug,
-          toField: conn.toField,
-          expression: conn.expression,
-          runtimeValue: conn.valuePreview,
+        showDetailsModal(`Connection: ${item.conn.fromSlug}.${item.conn.fromField} ➔ ${item.conn.toSlug}.${item.conn.toField}`, {
+          fromStep: item.conn.fromSlug,
+          fromField: item.conn.fromField,
+          toStep: item.conn.toSlug,
+          toField: item.conn.toField,
+          expression: item.conn.expression,
+          runtimeValue: item.conn.valuePreview,
         })
       })
 
       svg.appendChild(path)
     }
+
+    if (lockedConn) {
+      svg.classList.add('has-active-connection')
+      highlightConnectedPorts(lockedConn.fromPortId, lockedConn.toPortId)
+      highlightConnectedCards(lockedConn.fromSlug, lockedConn.toSlug)
+      showLockPill(lockedConn)
+    }
   }
 
   function highlightPortAndCurves(portId: string, type: 'input' | 'output'): void {
     if (!overlayEl) return
+    const svg = overlayEl.querySelector('#vs-graph-svg')
+    svg?.classList.add('has-active-connection')
     const paths = Array.from(overlayEl.querySelectorAll('.vs-graph-path'))
 
     for (const p of paths) {
@@ -3240,10 +3667,13 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   }
 
   function clearHighlights(): void {
-    if (!overlayEl) return
-    overlayEl.querySelectorAll('.vs-graph-path').forEach((p) => p.classList.remove('highlighted', 'pulse-anim'))
+    if (!overlayEl || lockedConn) return
+    const svg = overlayEl.querySelector('#vs-graph-svg')
+    svg?.classList.remove('has-active-connection')
+    overlayEl.querySelectorAll('.vs-graph-path').forEach((p) => p.classList.remove('highlighted', 'pulse-anim', 'locked'))
     overlayEl.querySelectorAll('.vs-graph-row, .vs-graph-nested-row').forEach((r) => r.classList.remove('highlighted', 'highlighted-source'))
     overlayEl.querySelectorAll('.vs-graph-port-dot').forEach((d) => d.classList.remove('highlighted'))
+    overlayEl.querySelectorAll('.vs-graph-card').forEach((c) => c.classList.remove('card-connected-highlight', 'card-source-highlight', 'card-target-highlight'))
   }
 
   const onDocClick = (e: MouseEvent): void => {
@@ -3437,6 +3867,40 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
   }
   window.addEventListener('click', onWindowClick, { passive: true })
 
+  const onGraphKeyDown = (e: KeyboardEvent): void => {
+    if (!isGraphActive) return
+
+    const activeEl = document.activeElement as HTMLElement | null
+    if (
+      activeEl &&
+      (activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA' ||
+        activeEl.isContentEditable ||
+        activeEl.closest('.MuiInputBase-root'))
+    ) {
+      return
+    }
+
+    if (e.code === 'Space') {
+      e.preventDefault()
+      e.stopPropagation()
+
+      if (lockedConn) {
+        unlockActivePath(true)
+      } else if (hoveredConn) {
+        lockActivePath(hoveredConn)
+        hideTooltip()
+      }
+      return
+    }
+
+    if (e.code === 'Escape' && lockedConn) {
+      e.preventDefault()
+      unlockActivePath(true)
+    }
+  }
+  window.addEventListener('keydown', onGraphKeyDown, true)
+
   return {
     open,
     close,
@@ -3446,6 +3910,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       clearInterval(interval)
       document.removeEventListener('click', onDocClick, true)
       window.removeEventListener('click', onWindowClick)
+      window.removeEventListener('keydown', onGraphKeyDown, true)
       document.body.classList.remove('vs-graph-active')
       window.removeEventListener('popstate', onPopState)
       window.removeEventListener('resize', onResize)
