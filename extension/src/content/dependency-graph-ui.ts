@@ -432,8 +432,17 @@ body.vs-graph-active .MuiPopper-root.z-\[50\] {
 }
 
 .vs-graph-top-left,
-.vs-graph-top-center,
 .vs-graph-top-right {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vs-graph-top-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   pointer-events: auto;
   display: flex;
   align-items: center;
@@ -499,30 +508,6 @@ body.vs-graph-active .MuiPopper-root.z-\[50\] {
   font-weight: 600;
 }
 
-/* Back button */
-.vs-graph-back-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 8px;
-  border: 1px solid var(--vs-g-topbar-border, rgba(213, 217, 220, 0.24));
-  background: var(--vs-g-topbar-bg, rgba(21, 27, 35, 0.92));
-  backdrop-filter: blur(8px);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--vs-g-topbar-text, #c9d1d9);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  box-shadow: var(--vs-g-card-shadow, 0 1px 3px rgba(0, 0, 0, 0.3));
-  font-family: inherit;
-  user-select: none;
-}
-
-.vs-graph-back-btn:hover {
-  background: var(--vs-g-back-btn-hover, #21262d);
-  color: var(--vs-g-text-primary, #ffffff);
-}
 
 /* Floating bottom zoom & notes controls */
 .vs-graph-bottom-controls {
@@ -2400,15 +2385,12 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         <div class="vs-graph-canvas-bg"></div>
         <div class="vs-graph-top-bar">
           <div class="vs-graph-top-left"></div>
-          <div class="vs-graph-top-right">
-            <button class="vs-graph-back-btn" id="vs-graph-err-close">✕ Back to Flow</button>
-          </div>
+          <div class="vs-graph-top-right"></div>
         </div>
         <div class="vs-graph-viewport" style="display:flex;align-items:center;justify-content:center;color:#ef4444;font-size:13px;">
           Unable to load workflow graph data. Try reloading the page.
         </div>
       `
-      overlayEl.querySelector('#vs-graph-err-close')?.addEventListener('click', close)
       return
     }
 
@@ -2484,11 +2466,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
           </div>
         </div>
 
-        <div class="vs-graph-top-right">
-          <button class="vs-graph-back-btn" id="vs-graph-close">
-            ✕ Back to Flow
-          </button>
-        </div>
+        <div class="vs-graph-top-right"></div>
       </div>
 
       <!-- Canvas Viewport -->
@@ -2535,7 +2513,6 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     `
 
     // Wire listeners
-    overlayEl.querySelector('#vs-graph-close')?.addEventListener('click', close)
     overlayEl.querySelectorAll('.vs-graph-filter-btn').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const filter = (e.currentTarget as HTMLElement).getAttribute('data-filter') as 'all' | 'dependent' | 'independent'
