@@ -188,6 +188,8 @@ export interface FlowGraphPort {
   usedBySlugs?: string[]
 }
 
+export type FlowStepStatus = 'newly_added' | 'modified' | 'deleted' | 'paused' | 'unsaved' | 'active'
+
 export interface FlowGraphNode {
   id: string
   slugName: string
@@ -199,6 +201,8 @@ export interface FlowGraphNode {
   upstreamSlugs: string[]
   inputs: FlowGraphPort[]
   outputs: FlowGraphPort[]
+  stepStatus?: FlowStepStatus
+  statusLabel?: string
 }
 
 export interface FlowGraphConnection {

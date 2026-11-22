@@ -22,6 +22,7 @@ import {
   type StepInputDataResult,
   type FlowGraphData,
   type FlowGraphNode,
+  type FlowStepStatus,
   type FlowGraphPort,
   type FlowGraphConnection,
 } from '../shared/messages'
@@ -1126,6 +1127,7 @@ function install(): void {
         upstreamSlugs: [],
         inputs: [],
         outputs: triggerOutputs,
+        stepStatus: 'active',
       }
 
       // 2. Build Step Nodes
@@ -1170,6 +1172,7 @@ function install(): void {
             }
           }
         }
+        const hasUnsavedCode = Boolean(stepEntry.hasUnsavedCode)
         const draft = obj(isObj(stepEntry) ? stepEntry.draft || stepEntry : {})
         const pluginData = obj(draft.pluginData || stepEntry.pluginData)
         const selVals = obj(isObj(pluginData.selectedValues) ? pluginData.selectedValues : (draft.selectedValues || stepEntry.selectedValues))
@@ -1360,6 +1363,50 @@ function install(): void {
           (typeof draft.title === 'string' && draft.title) ||
           slug.replace(/_/g, ' ')
         const upstreamSlugs = Array.from(upstreamSlugsSet)
+
+        const draftStatus = typeof block.draftStatus === 'string' ? block.draftStatus.toUpperCase().trim() : ''
+        const blockStatus = typeof block.status === 'string' ? block.status.toUpperCase().trim() : 'ACTIVE'
+        const isPublishedTab = location.pathname.includes('/published') || location.search.includes('tab=publish')
+
+        let stepStatus: FlowStepStatus = 'active'
+        let statusLabel: string | undefined = undefined
+
+        if (isPublishedTab) {
+          if (blockStatus === 'INACTIVE') {
+            stepStatus = 'paused'
+            statusLabel = 'Paused'
+          } else {
+            stepStatus = 'active'
+          }
+        } else {
+          if (hasUnsavedCode) {
+            stepStatus = 'unsaved'
+            statusLabel = 'Unsaved Changes'
+          } else if (
+            draftStatus === 'DELETE' ||
+            draftStatus === 'MODIFY-DELETE' ||
+            draftStatus === 'CREATE-DELETE' ||
+            blockStatus === 'DELETE'
+          ) {
+            stepStatus = 'deleted'
+            statusLabel = 'Deleted'
+          } else if (draftStatus === 'CREATE') {
+            stepStatus = 'newly_added'
+            statusLabel = 'Newly Added'
+          } else if (draftStatus === 'MODIFY') {
+            stepStatus = 'modified'
+            statusLabel = 'Modified'
+          } else if (blockStatus === 'DRAFTED') {
+            stepStatus = 'newly_added'
+            statusLabel = 'Newly Added'
+          } else if (blockStatus === 'INACTIVE') {
+            stepStatus = 'paused'
+            statusLabel = 'Paused'
+          } else {
+            stepStatus = 'active'
+          }
+        }
+
         stepNodes.push({
           id: slug,
           slugName: slug,
@@ -1371,6 +1418,8 @@ function install(): void {
           upstreamSlugs,
           inputs,
           outputs,
+          stepStatus,
+          statusLabel,
         })
       }
 
@@ -1463,7 +1512,8 @@ function install(): void {
       const inData = asObj(sel.inputData)
       const code = typeof draft.code === 'string' ? draft.code : ''
       const title = typeof draft.title === 'string' ? draft.title : ''
-      stepDrafts.push(`${sId}:${title}:${code}:${JSON.stringify(inData)}`)
+      const hasUnsaved = Boolean(e.hasUnsavedCode)
+      stepDrafts.push(`${sId}:${title}:${code}:${hasUnsaved}:${JSON.stringify(inData)}`)
     }
 
     const blockInputs: string[] = []
@@ -1471,7 +1521,9 @@ function install(): void {
       if (!isObj(bVal)) continue
       const b = bVal as Record<string, unknown>
       const bSel = asObj(b.selectedValues)
-      blockInputs.push(`${bKey}:${b.name || b.title || ''}:${JSON.stringify(bSel.inputData || b.data || '')}`)
+      const bStatus = typeof b.status === 'string' ? b.status : ''
+      const bDraftStatus = typeof b.draftStatus === 'string' ? b.draftStatus : ''
+      blockInputs.push(`${bKey}:${b.name || b.title || ''}:${bStatus}:${bDraftStatus}:${JSON.stringify(bSel.inputData || b.data || '')}`)
     }
 
     const invState = asObj(asObj(state.invocationV2)[scriptId])

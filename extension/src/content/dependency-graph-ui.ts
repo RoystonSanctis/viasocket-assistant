@@ -663,6 +663,13 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   min-width: 0;
 }
 
+.vs-graph-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .vs-graph-card-title {
   font-size: 13px;
   font-weight: 600;
@@ -671,6 +678,195 @@ body.vs-graph-active [data-testid="build-flow-card"] {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.vs-graph-status-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 2.5px 7px;
+  border-radius: 12px;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+/* Light Theme Chips */
+html:not(.dark) .vs-graph-status-chip.newly_added,
+body:not(.dark) .vs-graph-status-chip.newly_added,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-status-chip.newly_added {
+  background: rgba(46, 125, 50, 0.12);
+  color: rgb(27, 94, 32);
+  border: 1px solid rgba(46, 125, 50, 0.28);
+}
+
+html:not(.dark) .vs-graph-status-chip.modified,
+body:not(.dark) .vs-graph-status-chip.modified,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-status-chip.modified {
+  background: rgba(2, 136, 209, 0.12);
+  color: rgb(2, 119, 189);
+  border: 1px solid rgba(2, 136, 209, 0.28);
+}
+
+html:not(.dark) .vs-graph-status-chip.deleted,
+body:not(.dark) .vs-graph-status-chip.deleted,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-status-chip.deleted {
+  background: rgba(211, 47, 47, 0.12);
+  color: rgb(198, 40, 40);
+  border: 1px solid rgba(211, 47, 47, 0.28);
+}
+
+html:not(.dark) .vs-graph-status-chip.paused,
+body:not(.dark) .vs-graph-status-chip.paused,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-status-chip.paused {
+  background: rgba(245, 127, 23, 0.14);
+  color: rgb(217, 119, 6);
+  border: 1px solid rgba(245, 127, 23, 0.3);
+}
+
+html:not(.dark) .vs-graph-status-chip.unsaved,
+body:not(.dark) .vs-graph-status-chip.unsaved,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-status-chip.unsaved {
+  background: rgba(237, 108, 2, 0.12);
+  color: rgb(230, 81, 0);
+  border: 1px solid rgba(237, 108, 2, 0.28);
+}
+
+/* Dark Theme Chips */
+html.dark .vs-graph-status-chip.newly_added,
+body.dark .vs-graph-status-chip.newly_added,
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-status-chip.newly_added {
+  background: rgba(46, 125, 50, 0.22);
+  color: #4ade80;
+  border: 1px solid rgba(74, 222, 128, 0.35);
+}
+
+html.dark .vs-graph-status-chip.modified,
+body.dark .vs-graph-status-chip.modified,
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-status-chip.modified {
+  background: rgba(2, 136, 209, 0.22);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+}
+
+html.dark .vs-graph-status-chip.deleted,
+body.dark .vs-graph-status-chip.deleted,
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-status-chip.deleted {
+  background: rgba(211, 47, 47, 0.22);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+}
+
+html.dark .vs-graph-status-chip.paused,
+body.dark .vs-graph-status-chip.paused,
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-status-chip.paused {
+  background: rgba(245, 127, 23, 0.22);
+  color: #fde047;
+  border: 1px solid rgba(253, 224, 71, 0.35);
+}
+
+html.dark .vs-graph-status-chip.unsaved,
+body.dark .vs-graph-status-chip.unsaved,
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-status-chip.unsaved {
+  background: rgba(237, 108, 2, 0.22);
+  color: #fb923c;
+  border: 1px solid rgba(251, 146, 60, 0.35);
+}
+
+/* Card Body Status Styling - Light Mode */
+html:not(.dark) .vs-graph-card[data-status="newly_added"],
+body:not(.dark) .vs-graph-card[data-status="newly_added"],
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-card[data-status="newly_added"] {
+  background-color: #f4fbf5;
+  border-color: rgba(46, 125, 50, 0.35);
+}
+
+html:not(.dark) .vs-graph-card[data-status="modified"],
+body:not(.dark) .vs-graph-card[data-status="modified"],
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-card[data-status="modified"] {
+  background-color: #f0f7ff;
+  border-color: rgba(2, 136, 209, 0.35);
+}
+
+html:not(.dark) .vs-graph-card[data-status="deleted"],
+body:not(.dark) .vs-graph-card[data-status="deleted"],
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-card[data-status="deleted"] {
+  background-color: #fff5f5;
+  border-color: rgba(211, 47, 47, 0.35);
+}
+
+html:not(.dark) .vs-graph-card[data-status="paused"],
+body:not(.dark) .vs-graph-card[data-status="paused"],
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-card[data-status="paused"] {
+  background-color: #fffdf2;
+  border-color: rgba(245, 127, 23, 0.35);
+}
+
+html:not(.dark) .vs-graph-card[data-status="unsaved"],
+body:not(.dark) .vs-graph-card[data-status="unsaved"],
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-card[data-status="unsaved"] {
+  background-color: #fffbf2;
+  border-color: rgba(237, 108, 2, 0.35);
+}
+
+/* Active body is always white in light mode */
+html:not(.dark) .vs-graph-card,
+html:not(.dark) .vs-graph-card[data-status="active"],
+body:not(.dark) .vs-graph-card,
+body:not(.dark) .vs-graph-card[data-status="active"],
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-card,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-card[data-status="active"] {
+  background-color: #ffffff;
+}
+
+/* Card Body Status Styling - Dark Mode */
+html.dark .vs-graph-card[data-status="newly_added"],
+body.dark .vs-graph-card[data-status="newly_added"],
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card[data-status="newly_added"] {
+  background-color: rgba(46, 125, 50, 0.08);
+  border-color: rgba(74, 222, 128, 0.35);
+}
+
+html.dark .vs-graph-card[data-status="modified"],
+body.dark .vs-graph-card[data-status="modified"],
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card[data-status="modified"] {
+  background-color: rgba(2, 136, 209, 0.08);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+html.dark .vs-graph-card[data-status="deleted"],
+body.dark .vs-graph-card[data-status="deleted"],
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card[data-status="deleted"] {
+  background-color: rgba(211, 47, 47, 0.08);
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+html.dark .vs-graph-card[data-status="paused"],
+body.dark .vs-graph-card[data-status="paused"],
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card[data-status="paused"] {
+  background-color: rgba(245, 127, 23, 0.08);
+  border-color: rgba(253, 224, 71, 0.35);
+}
+
+html.dark .vs-graph-card[data-status="unsaved"],
+body.dark .vs-graph-card[data-status="unsaved"],
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card[data-status="unsaved"] {
+  background-color: rgba(237, 108, 2, 0.08);
+  border-color: rgba(251, 146, 60, 0.35);
+}
+
+html.dark .vs-graph-card,
+html.dark .vs-graph-card[data-status="active"],
+body.dark .vs-graph-card,
+body.dark .vs-graph-card[data-status="active"],
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card,
+#vs-dependency-graph-overlay:not(.vs-theme-light) .vs-graph-card[data-status="active"] {
+  background-color: rgb(21, 27, 35);
 }
 
 .vs-graph-card-url {
@@ -2682,6 +2878,9 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     const card = document.createElement('div')
     card.className = 'MuiPaper-root MuiPaper-elevation MuiPaper-rounded MuiPaper-elevation1 MuiCard-root vs-graph-card'
     card.setAttribute('data-node-id', node.id)
+    if (node.stepStatus) {
+      card.setAttribute('data-status', node.stepStatus)
+    }
 
     // Resolved icon URL matching native viaSocket
     let iconSrc = node.iconUrl
@@ -2696,13 +2895,21 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     const isWebhook = node.type === 'trigger'
     const subtitle = isWebhook ? 'https://flow.sokt.io/func/scriwknFmRIS' : ''
 
+    const statusChipHtml =
+      node.statusLabel && node.stepStatus && node.stepStatus !== 'active'
+        ? `<span class="vs-graph-status-chip ${node.stepStatus}" title="${escapeHtml(node.statusLabel)}">${escapeHtml(node.statusLabel)}</span>`
+        : ''
+
     card.innerHTML = `
       <div class="vs-graph-card-header">
         <div class="vs-graph-card-avatar" title="Click to edit ${escapeHtml(node.title)}">
           <img alt="" src="${iconSrc}" />
         </div>
         <div class="vs-graph-card-title-box" title="Click to edit ${escapeHtml(node.title)}">
-          <p class="vs-graph-card-title">${escapeHtml(node.title)}</p>
+          <div class="vs-graph-card-title-row">
+            <p class="vs-graph-card-title">${escapeHtml(node.title)}</p>
+            ${statusChipHtml}
+          </div>
           ${subtitle ? `<p class="vs-graph-card-url">${escapeHtml(subtitle)}</p>` : ''}
         </div>
         <div class="vs-graph-card-actions">
