@@ -227,7 +227,13 @@ function install(): void {
 
       // The flow as the save returned it, applied the way the editor applies an assistant save (workFlowNavbar's
       // RTLayer handler: setFlowAndDraftFlowJson), so a step saved for the first time is no longer DRAFTED here.
-      if (flowJson && openFlow) store.dispatch({ type: 'flowJsonV2/setFlowAndDraftFlowJson', payload: flowJson })
+      if (flowJson && openFlow) {
+        store.dispatch({
+          type: 'flowJsonV2/setFlowAndDraftFlowJson',
+          urlData: { scriptId: resolvedScriptId || scriptId },
+          payload: flowJson,
+        })
+      }
 
       const isPreProcess =
         slugName === 'CRON_PRE_PROCESS' ||
@@ -2452,10 +2458,28 @@ function install(): void {
 
       const raw = target.value
       const formatted = raw.replace(/\s+/g, '_')
-      store.dispatch({
-        type: 'stepsDataV3/setKeyValueInstance',
-        payload: { title: formatted, hasUnsavedCode: true },
-      })
+      const state = store.getState()
+      const appInfo = isObj(state.appInfo) ? (state.appInfo as Record<string, unknown>) : undefined
+      const urlParams = new URLSearchParams(location.search)
+      const scriptId =
+        extractScriptId(location.pathname) ||
+        (typeof appInfo?.currentScriptId === 'string' ? appInfo.currentScriptId : undefined) ||
+        urlParams.get('scriptId')
+      const stepId =
+        urlParams.get('stepId') || (typeof appInfo?.currentStepId === 'string' ? appInfo.currentStepId : undefined)
+
+      if (scriptId && stepId) {
+        store.dispatch({
+          type: 'stepsDataV3/setKeyValueInstance',
+          urlData: { sectionIdOrScriptId: scriptId, versionIdOrStepId: stepId, tabName: 'draft' },
+          payload: { id: stepId, title: formatted, hasUnsavedCode: true },
+        })
+      } else {
+        store.dispatch({
+          type: 'stepsDataV3/setKeyValueInstance',
+          payload: { title: formatted, hasUnsavedCode: true },
+        })
+      }
     }
 
     document.addEventListener('input', handleTitleInput, true)
@@ -2673,12 +2697,14 @@ function install(): void {
           if (script?.json_script) {
             store.dispatch({
               type: 'flowJsonV2/setFlowAndDraftFlowJson',
+              urlData: { scriptId },
               payload: script.json_script,
             })
             if (script.used_variables) {
               store.dispatch({
                 type: 'flowJsonV2/setFlowJsonAndUsedVariables',
-                payload: script,
+                urlData: { scriptId },
+                payload: { flowJson: script.json_script, used_variables: script.used_variables },
               })
             }
           }
@@ -2712,7 +2738,7 @@ function install(): void {
     const at = Date.now()
     const durationMs = Math.max(0, Math.round(performance.now() - p.start))
     const httpOk = status >= 200 && status < 300
-    const wantBody = status >= 400 || (httpOk && outcomeInBody(c.kind))
+    const wantBody = status >= 400 || (httpOk && (outcomeInBody(c.kind) || c.kind === 'step-saved' || Boolean(p.renameInfo)))
 
     // Dry-run and create calls carry no slug in their path; the open slider (or the one opened for the new step) names it.
     let slugName = c.slugName ?? (c.kind === 'step-tested' ? p.slugParam : undefined)
@@ -2734,6 +2760,80 @@ function install(): void {
         if (text) event.errorText = text
       }
       report(event)
+      if (httpOk && (c.kind === 'step-saved' || Boolean(p.renameInfo))) {
+        try {
+          const root = isObj(body) ? (body as Record<string, unknown>) : {}
+          const script = isObj(root.script)
+            ? (root.script as Record<string, unknown>)
+            : isObj(root.data) && isObj((root.data as Record<string, unknown>).script)
+              ? ((root.data as Record<string, unknown>).script as Record<string, unknown>)
+              : undefined
+          const targetScriptId = c.scriptId || p.renameInfo?.scriptId || extractScriptId(location.pathname)
+          let flowJson =
+            script?.json_script ??
+            (isObj(script?.scriptData) ? (script!.scriptData as Record<string, unknown>).json_script : undefined) ??
+            root.json_script
+          if (typeof flowJson === 'string') {
+            try {
+              flowJson = JSON.parse(flowJson)
+            } catch {
+              // ignore
+            }
+          }
+          const store = findReduxStore()
+          if (flowJson && targetScriptId && store) {
+            store.dispatch({
+              type: 'flowJsonV2/setFlowAndDraftFlowJson',
+              urlData: { scriptId: targetScriptId },
+              payload: flowJson,
+            })
+            const usedVars = script?.used_variables ?? root.used_variables
+            if (usedVars) {
+              store.dispatch({
+                type: 'flowJsonV2/setFlowJsonAndUsedVariables',
+                urlData: { scriptId: targetScriptId },
+                payload: { flowJson, used_variables: usedVars },
+              })
+            }
+          } else if (p.renameInfo && p.renameInfo.oldSlug !== p.renameInfo.newSlug && targetScriptId && store) {
+            const state = store.getState()
+            const curFlow = (state.flowJsonV2 as any)?.[targetScriptId]?.flowJson
+            if (curFlow && curFlow.blocks) {
+              const oldSlug = p.renameInfo.oldSlug
+              const newSlug = p.renameInfo.newSlug
+              const newBlocks = { ...curFlow.blocks }
+              if (newBlocks[oldSlug]) {
+                const block = { ...newBlocks[oldSlug], title: newSlug, name: newSlug }
+                delete newBlocks[oldSlug]
+                newBlocks[newSlug] = block
+              }
+              const newOrder = { ...curFlow.order }
+              if (Array.isArray(newOrder.root)) {
+                newOrder.root = newOrder.root.map((s: string) => (s === oldSlug ? newSlug : s))
+              }
+              const updatedFlow = { ...curFlow, blocks: newBlocks, order: newOrder }
+              store.dispatch({
+                type: 'flowJsonV2/setFlowAndDraftFlowJson',
+                urlData: { scriptId: targetScriptId },
+                payload: updatedFlow,
+              })
+            }
+          }
+          if (p.renameInfo && p.renameInfo.oldSlug !== p.renameInfo.newSlug) {
+            try {
+              const url = new URL(location.href)
+              if (url.searchParams.get('slugName') === p.renameInfo.oldSlug) {
+                url.searchParams.set('slugName', p.renameInfo.newSlug)
+                history.replaceState(history.state, '', url.pathname + url.search + url.hash)
+              }
+            } catch {
+              // ignore
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
       if (httpOk && (c.kind === 'step-saved' || c.kind === 'step-tested' || c.kind === 'trigger-saved' || c.kind === 'step-created' || c.kind === 'step-deleted')) {
         post({ type: 'flow-graph-changed' })
         setTimeout(checkFlowChange, 50)
