@@ -455,59 +455,82 @@ body.vs-graph-active .MuiPopper-root.z-\[50\] {
   color: var(--vs-g-text-primary, #ffffff);
 }
 
-/* Floating bottom zoom controls */
+/* Floating bottom zoom & notes controls */
 .vs-graph-bottom-controls {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 210;
+  pointer-events: auto;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.vs-graph-bottom-controls .MuiButtonGroup-root {
+  background-color: var(--vs-g-topbar-bg, rgba(21, 27, 35, 0.92)) !important;
+  border: 1px solid var(--vs-g-topbar-border, rgba(255, 255, 255, 0.15)) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(8px) !important;
+  border-radius: 9999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 2px 4px !important;
+}
+
+.vs-graph-bottom-controls button {
+  color: var(--vs-g-text-secondary, #8b949e) !important;
+  padding: 6px 10px !important;
+  min-width: 36px !important;
+  height: 36px !important;
+  border-radius: 9999px !important;
+  transition: all 0.15s ease !important;
+  border: none !important;
+  background: transparent !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.vs-graph-bottom-controls button:hover {
+  color: var(--vs-g-text-primary, #ffffff) !important;
+  background-color: var(--vs-g-section-hover, rgba(255, 255, 255, 0.08)) !important;
+}
+
+.vs-graph-bottom-controls .MuiDivider-root {
+  border-color: var(--vs-g-topbar-border, rgba(255, 255, 255, 0.12)) !important;
+  height: 20px !important;
+  margin: 0 4px !important;
+}
+
+.vs-graph-bottom-controls .vs-graph-zoom-level {
+  color: var(--vs-g-text-primary, #ffffff);
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 0 8px;
+  min-width: 46px;
+  text-align: center;
+  user-select: none;
+  margin: 0 !important;
+}
+
+/* Hide native flow controls in graph mode so there are no duplicate/conflicting bars */
+body.vs-graph-active [data-testid="flow-controls-container"] {
   display: none !important;
+}
+
+/* Ensure flow document / comment component is above graph overlay */
+body.vs-graph-active .comment-component,
+body.vs-graph-active [class*="comment-component"] {
+  z-index: 1200 !important;
 }
 
 /* Hide flow canvas help card when in graph view so it does not overlap Back to Flow */
 body.vs-graph-active [data-testid="build-flow-card"] {
   display: none !important;
-}
-
-.vs-graph-zoom-group {
-  display: flex;
-  align-items: center;
-  border-radius: 8px;
-  border: 1px solid var(--col-border, rgba(213, 217, 220, 0.24));
-  background: rgba(21, 27, 35, 0.92);
-  backdrop-filter: blur(8px);
-  padding: 3px 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
-
-.vs-graph-zoom-btn {
-  background: transparent;
-  border: none;
-  color: #8b949e;
-  padding: 4px 6px;
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s ease;
-}
-
-.vs-graph-zoom-btn:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.vs-graph-zoom-level {
-  font-size: 12px;
-  font-family: Inter, system-ui, sans-serif;
-  color: #8b949e;
-  padding: 0 8px;
-  min-width: 44px;
-  text-align: center;
-}
-
-.vs-graph-zoom-divider {
-  width: 1px;
-  height: 14px;
-  background: rgba(255, 255, 255, 0.12);
-  margin: 0 4px;
 }
 
 /* Viewport and transform layer */
@@ -1818,24 +1841,37 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         </div>
       </div>
 
-      <!-- Floating Bottom Zoom Capsule (viaSocket standard) -->
+      <!-- Floating Bottom Zoom & Notes Capsule (native viaSocket styling) -->
       <div class="vs-graph-bottom-controls">
-        <div class="vs-graph-zoom-group" role="group" data-testid="zoom-controls">
-          <button class="vs-graph-zoom-btn" id="vs-zoom-out" title="Zoom Out" aria-label="Zoom Out">
-            <svg class="MuiSvgIcon-root" viewBox="0 0 24 24" style="width:17px;height:17px;fill:currentColor;"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14M7 9h5v1H7z"></path></svg>
-          </button>
-          <p class="vs-graph-zoom-level" id="vs-zoom-level">${Math.round(zoom * 100)}%</p>
-          <button class="vs-graph-zoom-btn" id="vs-zoom-in" title="Zoom In" aria-label="Zoom In">
-            <svg class="MuiSvgIcon-root" viewBox="0 0 24 24" style="width:17px;height:17px;fill:currentColor;"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path><path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2z"></path></svg>
-          </button>
-          <div class="vs-graph-zoom-divider"></div>
-          <button class="vs-graph-zoom-btn" id="vs-zoom-fit" title="Fit to Screen" aria-label="Fit to Screen">
-            <svg class="MuiSvgIcon-root" viewBox="0 0 24 24" style="width:17px;height:17px;fill:currentColor;"><path d="M17 4h3c1.1 0 2 .9 2 2v2h-2V6h-3zM4 8V6h3V4H4c-1.1 0-2 .9-2 2v2zm16 8v2h-3v2h3c1.1 0 2-.9 2-2v-2zM7 18H4v-2H2v2c0 1.1.9 2 2 2h3zM18 8H6v8h12z"></path></svg>
-          </button>
-          <div class="vs-graph-zoom-divider"></div>
-          <button class="vs-graph-zoom-btn" id="vs-zoom-reset" title="Center View" aria-label="Center View">
-            <svg class="MuiSvgIcon-root" viewBox="0 0 24 24" style="width:17px;height:17px;fill:currentColor;"><circle cx="12" cy="12" r="3"></circle><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"></path></svg>
-          </button>
+        <div class="flex items-center gap-1">
+          <div role="group" class="MuiButtonGroup-root MuiButtonGroup-pill MuiButtonGroup-horizontal MuiButtonGroup-colorPrimary border border-[var(--col-border)]" data-testid="zoom-controls">
+            <!-- Zoom Out -->
+            <button class="MuiButtonBase-root MuiButtonGroup-grouped MuiButtonGroup-groupedHorizontal MuiButtonGroup-groupedPill MuiButtonGroup-groupedPillHorizontal MuiButtonGroup-groupedPillPrimary MuiButton-root MuiButton-pill MuiButton-pillPrimary MuiButton-sizeMedium MuiButton-pillSizeMedium MuiButton-colorPrimary !px-2 MuiButtonGroup-firstButton" tabindex="0" type="button" data-testid="zoom-out-button" id="vs-zoom-out" aria-label="Zoom Out" title="Zoom Out">
+              <svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14M7 9h5v1H7z"></path></svg>
+            </button>
+
+            <!-- Zoom Level % -->
+            <p class="MuiTypography-root MuiTypography-body2 vs-graph-zoom-level" id="vs-zoom-level">${Math.round(zoom * 100)}%</p>
+
+            <!-- Zoom In -->
+            <button class="MuiButtonBase-root MuiButtonGroup-grouped MuiButtonGroup-groupedHorizontal MuiButtonGroup-groupedPill MuiButtonGroup-groupedPillHorizontal MuiButtonGroup-groupedPillPrimary MuiButton-root MuiButton-pill MuiButton-pillPrimary MuiButton-sizeMedium MuiButton-pillSizeMedium MuiButton-colorPrimary !px-2 MuiButtonGroup-middleButton" tabindex="0" type="button" data-testid="zoom-in-button" id="vs-zoom-in" aria-label="Zoom In" title="Zoom In">
+              <svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14"></path><path d="M12 10h-2v2H9v-2H7V9h2V7h1v2h2z"></path></svg>
+            </button>
+
+            <div class="MuiDivider-root MuiDivider-fullWidth MuiDivider-vertical MuiDivider-flexItem" role="separator" aria-orientation="vertical"></div>
+
+            <!-- Fit to Screen / Zoom -->
+            <button class="MuiButtonBase-root MuiButtonGroup-grouped MuiButtonGroup-groupedHorizontal MuiButtonGroup-groupedPill MuiButtonGroup-groupedPillHorizontal MuiButtonGroup-groupedPillPrimary MuiButton-root MuiButton-pill MuiButton-pillPrimary MuiButton-sizeMedium MuiButton-pillSizeMedium MuiButton-colorPrimary !px-2 MuiButtonGroup-middleButton" tabindex="0" type="button" data-testid="zoom-fit-button" id="vs-zoom-fit" aria-label="Fit to Screen" title="Fit to Screen">
+              <svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M17 4h3c1.1 0 2 .9 2 2v2h-2V6h-3zM4 8V6h3V4H4c-1.1 0-2 .9-2 2v2zm16 8v2h-3v2h3c1.1 0 2-.9 2-2v-2zM7 18H4v-2H2v2c0 1.1.9 2 2 2h3zM18 8H6v8h12z"></path></svg>
+            </button>
+
+            <div class="MuiDivider-root MuiDivider-fullWidth MuiDivider-vertical MuiDivider-flexItem" role="separator" aria-orientation="vertical"></div>
+
+            <!-- Notes / Flow Document -->
+            <button class="MuiButtonBase-root MuiButtonGroup-grouped MuiButtonGroup-groupedHorizontal MuiButtonGroup-groupedPill MuiButtonGroup-groupedPillHorizontal MuiButtonGroup-groupedPillPrimary MuiButton-root MuiButton-pill MuiButton-pillPrimary MuiButton-sizeMedium MuiButton-pillSizeMedium MuiButton-colorPrimary !px-2 MuiButtonGroup-lastButton" tabindex="0" type="button" data-testid="flow-document-button" id="vs-notes-btn" aria-label="Flow Document" title="Flow Document / Notes">
+              <svg class="MuiSvgIcon-root MuiSvgIcon-fontSizeSmall" focusable="false" aria-hidden="true" viewBox="0 0 24 24" style="width:18px;height:18px;fill:currentColor;"><path d="M14 19.88V22h2.12l5.17-5.17-2.12-2.12zM20 8l-6-6H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H12v-2.95l8-8zm-7 1V3.5L18.5 9zm9.71 5-.71-.71a.996.996 0 0 0-1.41 0l-.71.71L22 16.12l.71-.71c.39-.39.39-1.02 0-1.41"></path></svg>
+            </button>
+          </div>
         </div>
       </div>
     `
@@ -1857,11 +1893,12 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
     overlayEl.querySelector('#vs-zoom-in')?.addEventListener('click', () => setZoom(zoom * 1.15))
     overlayEl.querySelector('#vs-zoom-out')?.addEventListener('click', () => setZoom(zoom / 1.15))
-    overlayEl.querySelector('#vs-zoom-reset')?.addEventListener('click', () => {
-      fitView(true)
-    })
     overlayEl.querySelector('#vs-zoom-fit')?.addEventListener('click', () => {
       fitView(true)
+    })
+    overlayEl.querySelector('#vs-notes-btn')?.addEventListener('click', () => {
+      const nativeNotes = document.querySelector<HTMLElement>('[data-testid="flow-document-button"]')
+      nativeNotes?.click()
     })
 
     const viewport = overlayEl.querySelector('#vs-graph-viewport') as HTMLElement
