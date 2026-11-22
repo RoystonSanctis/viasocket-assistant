@@ -1529,15 +1529,65 @@ body:not(.dark) .vs-graph-tip-shortcut,
 .vs-graph-tooltip {
   position: fixed;
   z-index: 2000;
-  background: rgba(97, 97, 97, 0.94);
+  background: rgba(30, 36, 46, 0.96);
   color: #ffffff;
-  padding: 4px 8px;
+  padding: 6px 10px;
   border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   font-size: 11px;
   font-family: inherit;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   pointer-events: none;
   display: none;
+  line-height: 1.45;
+  max-width: 340px;
+  word-break: break-word;
+}
+
+html:not(.dark) .vs-graph-tooltip,
+body:not(.dark) .vs-graph-tooltip,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-tooltip {
+  background: rgba(255, 255, 255, 0.98);
+  color: #1f2937;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.vs-graph-tip-title {
+  font-weight: 600;
+  color: #ffffff;
+}
+
+html:not(.dark) .vs-graph-tip-title,
+body:not(.dark) .vs-graph-tip-title,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-tip-title {
+  color: #111827;
+}
+
+.vs-graph-tip-detail {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10.5px;
+  color: #93c5fd;
+  margin-top: 2px;
+}
+
+html:not(.dark) .vs-graph-tip-detail,
+body:not(.dark) .vs-graph-tip-detail,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-tip-detail {
+  color: #0284c7;
+}
+
+.vs-graph-tip-shortcut {
+  margin-top: 4px;
+  font-size: 10px;
+  color: #cbd5e1;
+  opacity: 0.85;
+}
+
+html:not(.dark) .vs-graph-tip-shortcut,
+body:not(.dark) .vs-graph-tip-shortcut,
+#vs-dependency-graph-overlay.vs-theme-light .vs-graph-tip-shortcut {
+  color: #64748b;
 }
 
 /* JSON Details Modal */
@@ -1831,16 +1881,36 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     return tooltipEl
   }
 
-  function showTooltip(x: number, y: number, text: string, shortcutHint?: string): void {
+  function showTooltip(x: number, y: number, text: string, shortcutHint?: string, detail?: string): void {
     const el = getTooltip()
-    if (shortcutHint) {
-      el.innerHTML = `<div>${escapeHtml(text)}</div><div class="vs-graph-tip-shortcut">${escapeHtml(shortcutHint)}</div>`
-    } else {
-      el.innerText = text
+    let html = `<div class="vs-graph-tip-title">${escapeHtml(text)}</div>`
+    if (detail) {
+      html += `<div class="vs-graph-tip-detail">${escapeHtml(detail)}</div>`
     }
-    el.style.left = `${x + 12}px`
-    el.style.top = `${y + 12}px`
+    if (shortcutHint) {
+      html += `<div class="vs-graph-tip-shortcut">${escapeHtml(shortcutHint)}</div>`
+    }
+    el.innerHTML = html
     el.style.display = 'block'
+
+    const pad = 12
+    const tipWidth = el.offsetWidth || 240
+    const tipHeight = el.offsetHeight || 50
+    const maxX = window.innerWidth - tipWidth - 16
+    const maxY = window.innerHeight - tipHeight - 16
+
+    let left = x + pad
+    let top = y + pad
+
+    if (left > maxX) {
+      left = Math.max(16, x - tipWidth - pad)
+    }
+    if (top > maxY) {
+      top = Math.max(16, y - tipHeight - pad)
+    }
+
+    el.style.left = `${left}px`
+    el.style.top = `${top}px`
   }
 
   function hideTooltip(): void {
@@ -2841,8 +2911,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     let isExpanded = canExpand && expandedPaths.has(pathKey)
 
     const formatted = formatJsonCrackValue(complex.isComplex ? complex.data : value)
-    const tooltipText = expression ? `${expression} = ${formatted.text}` : `${currentPath} = ${formatted.text}`
-    row.title = canExpand ? `${tooltipText} (Click to expand/collapse)` : `${tooltipText} (Click to inspect)`
+    const detailText = expression ? `${expression} = ${formatted.text}` : `${currentPath} = ${formatted.text}`
 
     // Left port dot (if input and has connection)
     if (isInput && portId) {
@@ -2863,7 +2932,6 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       expandBtn.type = 'button'
       expandBtn.textContent = isExpanded ? '−' : '+'
       expandBtn.setAttribute('aria-label', `Toggle ${key}`)
-      expandBtn.title = isExpanded ? 'Click to collapse' : 'Click to expand'
       row.appendChild(expandBtn)
     } else if (depth > 0) {
       const placeholder = document.createElement('div')
@@ -2890,7 +2958,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     const inspectBtn = document.createElement('button')
     inspectBtn.className = 'vs-graph-row-inspect-btn'
     inspectBtn.type = 'button'
-    inspectBtn.title = 'Inspect in modal'
+    inspectBtn.setAttribute('aria-label', 'Inspect in modal')
     inspectBtn.innerHTML = '↗'
     inspectBtn.addEventListener('click', (e) => {
       e.stopPropagation()
@@ -3002,7 +3070,6 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
           expandedPaths.add(pathKey)
           if (expandBtn) {
             expandBtn.textContent = '−'
-            expandBtn.title = 'Click to collapse'
           }
           nestedContainer!.style.display = 'flex'
           if (!renderedChildren) {
@@ -3012,7 +3079,6 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
           expandedPaths.delete(pathKey)
           if (expandBtn) {
             expandBtn.textContent = '+'
-            expandBtn.title = 'Click to expand'
           }
           nestedContainer!.style.display = 'none'
         }
@@ -3047,56 +3113,58 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       })
     }
 
-    // Hover highlights for port curves and key locking
-    if (portId) {
-      row.addEventListener('mouseenter', (e) => {
-        if (lockedState) return
+    // Hover highlights for port curves, unified tooltip, and key locking
+    const onRowEnter = (e: MouseEvent) => {
+      if (lockedState) return
+      if (portId) {
         highlightPortAndCurves(portId, isInput ? 'input' : 'output', key, node.title || node.slugName)
-        const conns = currentGraphData?.connections.filter((c) =>
-          isInput ? c.toPortId === portId : c.fromPortId === portId
-        ) || []
-        if (conns.length > 0) {
-          hoveredKeyInfo = {
-            portId,
-            type: isInput ? 'input' : 'output',
-            keyName: key,
-            stepTitle: node.title || node.slugName,
-            conns,
-          }
-          hoveredConn = null
-          const tip = `${node.title || node.slugName}.${key} (${conns.length} ${conns.length === 1 ? 'connection' : 'connections'})`
-          const shortcut = conns.length === 1 ? 'Space: Lock path' : `Space: Lock all ${conns.length} paths`
-          showTooltip(e.clientX, e.clientY, tip, shortcut)
+      }
+      const conns = portId
+        ? currentGraphData?.connections.filter((c) =>
+            isInput ? c.toPortId === portId : c.fromPortId === portId
+          ) || []
+        : []
+      if (conns.length > 0 && portId) {
+        hoveredKeyInfo = {
+          portId,
+          type: isInput ? 'input' : 'output',
+          keyName: key,
+          stepTitle: node.title || node.slugName,
+          conns,
         }
-      })
-
-      row.addEventListener('mousemove', (e) => {
-        if (lockedState) return
-        const conns = currentGraphData?.connections.filter((c) =>
-          isInput ? c.toPortId === portId : c.fromPortId === portId
-        ) || []
-        if (conns.length > 0) {
-          hoveredKeyInfo = {
-            portId,
-            type: isInput ? 'input' : 'output',
-            keyName: key,
-            stepTitle: node.title || node.slugName,
-            conns,
-          }
-          hoveredConn = null
-          const tip = `${node.title || node.slugName}.${key} (${conns.length} ${conns.length === 1 ? 'connection' : 'connections'})`
-          const shortcut = conns.length === 1 ? 'Space: Lock path' : `Space: Lock all ${conns.length} paths`
-          showTooltip(e.clientX, e.clientY, tip, shortcut)
-        }
-      })
-
-      row.addEventListener('mouseleave', () => {
-        hoveredKeyInfo = null
-        hideTooltip()
-        if (lockedState) return
-        clearHighlights()
-      })
+        hoveredConn = null
+      }
+      const tip = `${node.title || node.slugName}.${key}${conns.length > 0 ? ` (${conns.length} ${conns.length === 1 ? 'connection' : 'connections'})` : ''}`
+      const shortcut = conns.length > 0
+        ? (conns.length === 1 ? 'Space: Lock path • Click to inspect' : `Space: Lock all ${conns.length} paths • Click to inspect`)
+        : (canExpand ? 'Click to expand/collapse' : 'Click to inspect')
+      showTooltip(e.clientX, e.clientY, tip, shortcut, detailText)
     }
+
+    const onRowMove = (e: MouseEvent) => {
+      if (lockedState) return
+      const conns = portId
+        ? currentGraphData?.connections.filter((c) =>
+            isInput ? c.toPortId === portId : c.fromPortId === portId
+          ) || []
+        : []
+      const tip = `${node.title || node.slugName}.${key}${conns.length > 0 ? ` (${conns.length} ${conns.length === 1 ? 'connection' : 'connections'})` : ''}`
+      const shortcut = conns.length > 0
+        ? (conns.length === 1 ? 'Space: Lock path • Click to inspect' : `Space: Lock all ${conns.length} paths • Click to inspect`)
+        : (canExpand ? 'Click to expand/collapse' : 'Click to inspect')
+      showTooltip(e.clientX, e.clientY, tip, shortcut, detailText)
+    }
+
+    const onRowLeave = () => {
+      hoveredKeyInfo = null
+      hideTooltip()
+      if (lockedState) return
+      clearHighlights()
+    }
+
+    row.addEventListener('mouseenter', onRowEnter)
+    row.addEventListener('mousemove', onRowMove)
+    row.addEventListener('mouseleave', onRowLeave)
 
     return itemWrapper
   }
@@ -3691,10 +3759,13 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         hoveredKeyInfo = null
         const tip = item.isSequentialConn
           ? `Sequential Order: ${item.conn.fromSlug} ➔ ${item.conn.toSlug}`
-          : `${item.conn.fromSlug}.${item.conn.fromField} (${item.conn.valuePreview}) ➔ ${item.conn.toSlug}.${item.conn.toField}`
+          : `${item.conn.fromSlug}.${item.conn.fromField} ➔ ${item.conn.toSlug}.${item.conn.toField}`
         const isThisLocked = lockedState?.conns.some((c) => c.id === item.conn.id)
-        const shortcut = isThisLocked ? 'Space: Unlock' : 'Space: Lock path'
-        showTooltip(e.clientX, e.clientY, tip, shortcut)
+        const shortcut = isThisLocked ? 'Space: Unlock' : 'Space: Lock path • Click for details'
+        const detail = item.isSequentialConn
+          ? 'Sequential execution flow'
+          : (item.conn.expression ? `${item.conn.expression} = ${item.conn.valuePreview}` : `Value: ${item.conn.valuePreview}`)
+        showTooltip(e.clientX, e.clientY, tip, shortcut, detail)
 
         if (lockedState) return
         highlightActivePath(item.conn)
@@ -3703,10 +3774,13 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       const onWireMove = (e: MouseEvent) => {
         const tip = item.isSequentialConn
           ? `Sequential Order: ${item.conn.fromSlug} ➔ ${item.conn.toSlug}`
-          : `${item.conn.fromSlug}.${item.conn.fromField} (${item.conn.valuePreview}) ➔ ${item.conn.toSlug}.${item.conn.toField}`
+          : `${item.conn.fromSlug}.${item.conn.fromField} ➔ ${item.conn.toSlug}.${item.conn.toField}`
         const isThisLocked = lockedState?.conns.some((c) => c.id === item.conn.id)
-        const shortcut = isThisLocked ? 'Space: Unlock' : 'Space: Lock path'
-        showTooltip(e.clientX, e.clientY, tip, shortcut)
+        const shortcut = isThisLocked ? 'Space: Unlock' : 'Space: Lock path • Click for details'
+        const detail = item.isSequentialConn
+          ? 'Sequential execution flow'
+          : (item.conn.expression ? `${item.conn.expression} = ${item.conn.valuePreview}` : `Value: ${item.conn.valuePreview}`)
+        showTooltip(e.clientX, e.clientY, tip, shortcut, detail)
       }
 
       const onWireLeave = () => {
