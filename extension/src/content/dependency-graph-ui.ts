@@ -3022,9 +3022,19 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     }
 
     // Key element
+    const fullKeyText = isIndex ? `[${key}]` : key
     const keyEl = document.createElement('div')
     keyEl.className = `vs-graph-row-key ${isIndex ? 'vs-row-index' : ''}`
-    keyEl.textContent = isIndex ? `[${key}]` : key
+    keyEl.textContent = fullKeyText
+    keyEl.setAttribute('title', fullKeyText)
+    const onKeyHover = (e: MouseEvent) => {
+      if (keyEl.scrollWidth > keyEl.clientWidth + 1) {
+        showTooltip(e.clientX, e.clientY - 10, fullKeyText)
+      }
+    }
+    keyEl.addEventListener('mouseenter', onKeyHover)
+    keyEl.addEventListener('mousemove', onKeyHover)
+    keyEl.addEventListener('mouseleave', () => hideTooltip())
 
     // Colon
     const colonEl = document.createElement('div')
@@ -3372,11 +3382,11 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         : ''
 
     const statusChipHtml = isDeletedFromFlow
-      ? `<span class="vs-graph-status-chip deleted">${escapeHtml(node.statusLabel || 'Deleted from flow')}</span>`
+      ? `<span class="vs-graph-status-chip deleted" title="${escapeHtml(node.statusLabel || 'Deleted from flow')}">${escapeHtml(node.statusLabel || 'Deleted from flow')}</span>`
       : isNotRun
-        ? `<span class="vs-graph-status-chip not-run">${escapeHtml(node.statusLabel || 'Did not run')}</span>`
+        ? `<span class="vs-graph-status-chip not-run" title="${escapeHtml(node.statusLabel || 'Did not run')}">${escapeHtml(node.statusLabel || 'Did not run')}</span>`
         : node.statusLabel && node.stepStatus && node.stepStatus !== 'active'
-          ? `<span class="vs-graph-status-chip ${node.stepStatus}">${escapeHtml(node.statusLabel)}</span>`
+          ? `<span class="vs-graph-status-chip ${node.stepStatus}" title="${escapeHtml(node.statusLabel)}">${escapeHtml(node.statusLabel)}</span>`
           : ''
 
     card.innerHTML = `
@@ -3386,10 +3396,10 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         </div>
         <div class="vs-graph-card-title-box">
           <div class="vs-graph-card-title-row">
-            <p class="vs-graph-card-title">${escapeHtml(node.title)}</p>
+            <p class="vs-graph-card-title" title="${escapeHtml(node.title)}">${escapeHtml(node.title)}</p>
             ${statusChipHtml}
           </div>
-          ${subtitle ? `<p class="vs-graph-card-url">${escapeHtml(subtitle)}</p>` : ''}
+          ${subtitle ? `<p class="vs-graph-card-url" title="${escapeHtml(subtitle)}">${escapeHtml(subtitle)}</p>` : ''}
         </div>
         <div class="vs-graph-card-actions">
           ${node.isIndependent ? `<span class="vs-graph-card-badge indep">Independent</span>` : ''}
@@ -3402,6 +3412,32 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         </div>
       </div>
     `
+
+    const titleEl = card.querySelector<HTMLElement>('.vs-graph-card-title')
+    if (titleEl) {
+      titleEl.setAttribute('title', node.title)
+      const onTitleHover = (e: MouseEvent) => {
+        if (titleEl.scrollWidth > titleEl.clientWidth + 1) {
+          showTooltip(e.clientX, e.clientY - 10, node.title)
+        }
+      }
+      titleEl.addEventListener('mouseenter', onTitleHover)
+      titleEl.addEventListener('mousemove', onTitleHover)
+      titleEl.addEventListener('mouseleave', () => hideTooltip())
+    }
+
+    const subtitleEl = card.querySelector<HTMLElement>('.vs-graph-card-url')
+    if (subtitleEl && subtitle) {
+      subtitleEl.setAttribute('title', subtitle)
+      const onSubHover = (e: MouseEvent) => {
+        if (subtitleEl.scrollWidth > subtitleEl.clientWidth + 1) {
+          showTooltip(e.clientX, e.clientY - 10, subtitle)
+        }
+      }
+      subtitleEl.addEventListener('mouseenter', onSubHover)
+      subtitleEl.addEventListener('mousemove', onSubHover)
+      subtitleEl.addEventListener('mouseleave', () => hideTooltip())
+    }
 
     const editBtn = card.querySelector<HTMLButtonElement>('.vs-graph-edit-btn')
     if (editBtn) {
