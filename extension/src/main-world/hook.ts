@@ -2449,9 +2449,12 @@ function install(): void {
   function setupTitleInputInterception(): void {
     const handleTitleInput = (e: Event): void => {
       const target = e.target as HTMLInputElement | null
-      if (!target || target.id !== 'function-title-textfield') return
-
-      e.stopImmediatePropagation()
+      if (!target) return
+      const isTitleInput =
+        target.id === 'function-title-textfield' ||
+        target.id.includes('title') ||
+        target.placeholder?.toLowerCase().includes('name')
+      if (!isTitleInput) return
 
       const store = findReduxStore()
       if (!store) return
@@ -2482,8 +2485,44 @@ function install(): void {
       }
     }
 
+    const handleSaveClick = (e: MouseEvent): void => {
+      const btn = (e.target as HTMLElement | null)?.closest('button')
+      if (!btn) return
+      const isSave =
+        btn.getAttribute('data-testid') === 'save-button' ||
+        btn.textContent?.trim().toLowerCase() === 'save'
+      if (!isSave) return
+
+      const titleInput = document.querySelector<HTMLInputElement>(
+        '#function-title-textfield, input[placeholder*="Name"], input[id*="title"]',
+      )
+      if (titleInput && titleInput.value) {
+        const store = findReduxStore()
+        if (store) {
+          const formatted = titleInput.value.replace(/\s+/g, '_')
+          const state = store.getState()
+          const appInfo = isObj(state.appInfo) ? (state.appInfo as Record<string, unknown>) : undefined
+          const urlParams = new URLSearchParams(location.search)
+          const scriptId =
+            extractScriptId(location.pathname) ||
+            (typeof appInfo?.currentScriptId === 'string' ? appInfo.currentScriptId : undefined) ||
+            urlParams.get('scriptId')
+          const stepId =
+            urlParams.get('stepId') || (typeof appInfo?.currentStepId === 'string' ? appInfo.currentStepId : undefined)
+          if (scriptId && stepId) {
+            store.dispatch({
+              type: 'stepsDataV3/setKeyValueInstance',
+              urlData: { sectionIdOrScriptId: scriptId, versionIdOrStepId: stepId, tabName: 'draft' },
+              payload: { id: stepId, title: formatted, hasUnsavedCode: true },
+            })
+          }
+        }
+      }
+    }
+
     document.addEventListener('input', handleTitleInput, true)
     document.addEventListener('change', handleTitleInput, true)
+    document.addEventListener('click', handleSaveClick, true)
   }
 
   async function cascadeUpdateDownstreamInPage(
@@ -2504,10 +2543,56 @@ function install(): void {
     const blocks = flowJson.blocks as Record<string, Record<string, unknown>>
     const stepsDataV3 = isObj(state.stepsDataV3) ? (state.stepsDataV3 as Record<string, any>) : undefined
     const stepsData = (stepsDataV3?.[scriptId] ?? {}) as Record<string, Record<string, unknown>>
+    const usedVars = isObj(scriptFlow?.usedVariables)
+      ? (scriptFlow.usedVariables as Record<string, any>)
+      : isObj(scriptFlow?.used_variables)
+        ? (scriptFlow.used_variables as Record<string, any>)
+        : undefined
+
+    const apiOrigin =
+      (origin && origin.includes('-api.') ? origin : null) ||
+      (location.hostname.includes('dev') ? 'https://dev-api.viasocket.com' : 'https://flow-api.viasocket.com')
+
+    // 1. Collect all known slugs/aliases for the step being renamed
+    const slugsToReplace = new Set<string>()
+    slugsToReplace.add(oldSlug)
+    slugsToReplace.add(oldSlug.trim().replace(/\s+/g, '_'))
+
+    // Find the step's identifier
+    const targetBlock = blocks[oldSlug]
+    const targetStepId = str(targetBlock?.identifier)
+
+    // Check all keys in usedVariables to discover any referenced slugs that map to this step
+    if (usedVars?.variables && typeof usedVars.variables === 'object') {
+      const oldBase = oldSlug.replace(/(_\d+|_test\w*)$/, '').trim().replace(/\s+/g, '_')
+      for (const varKey of Object.keys(usedVars.variables)) {
+        const m = varKey.match(/^context\.(?:res|vals)\.([^.[\]]+)/)
+        if (m && m[1]) {
+          const s = m[1]
+          if (s === oldSlug || (oldBase && s.startsWith(oldBase))) {
+            slugsToReplace.add(s)
+          }
+        }
+      }
+    }
+    const payloadRes = usedVars?.payloadData?.context?.res
+    if (payloadRes && typeof payloadRes === 'object') {
+      const oldBase = oldSlug.replace(/(_\d+|_test\w*)$/, '').trim().replace(/\s+/g, '_')
+      for (const s of Object.keys(payloadRes)) {
+        if (s === oldSlug || (oldBase && s.startsWith(oldBase))) {
+          slugsToReplace.add(s)
+        }
+      }
+    }
+
+    const slugsList = Array.from(slugsToReplace).filter((s) => s && s !== newSlug)
+    if (slugsList.length === 0) return
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'sent-by-fbai': 'true',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
     }
     if (reqHeaders) {
       for (const [k, v] of Object.entries(reqHeaders)) {
@@ -2518,12 +2603,13 @@ function install(): void {
       }
     }
 
-    // Fetch all function rows from server for complete step data
+    // Fetch fresh function rows from server
     let functionRows: Array<Record<string, unknown>> = []
     try {
-      const fnResp = await fetch(`${origin}/scripts/${scriptId}/functions`, {
+      const fnResp = await fetch(`${apiOrigin}/scripts/${scriptId}/functions?_t=${Date.now()}`, {
         headers,
         credentials: 'include',
+        cache: 'no-store',
       })
       if (fnResp.ok) {
         const fnJson = await fnResp.json()
@@ -2549,11 +2635,13 @@ function install(): void {
     }> = []
 
     for (const [stepSlug, block] of Object.entries(blocks)) {
-      if (stepSlug === oldSlug || stepSlug === newSlug) continue
+      if (slugsToReplace.has(stepSlug) || stepSlug === newSlug) continue
       const type = str(block.type)
       if (!type) continue
 
       const stepId = str(block.identifier) ?? stepSlug
+      if (targetStepId && stepId === targetStepId) continue
+
       const row = rowMap.get(stepId) ?? rowMap.get(stepSlug)
       const stepInstance = stepsData[stepId] as Record<string, unknown> | undefined
       const draft = (stepInstance?.draft ?? {}) as Record<string, unknown>
@@ -2568,18 +2656,26 @@ function install(): void {
             // ignore
           }
         }
+        if (!pluginData && dataFromBackend.code) {
+          try {
+            pluginData = typeof dataFromBackend.code === 'string' ? JSON.parse(dataFromBackend.code as string) : (dataFromBackend.code as Record<string, unknown>)
+          } catch {
+            // ignore
+          }
+        }
         if (!pluginData) {
           pluginData = (draft.pluginData ?? dataFromBackend.pluginData) as Record<string, unknown> | undefined
         }
         pluginData = pluginData ?? {}
         const selectedValues = (pluginData.selectedValues ?? {}) as Record<string, any>
 
-        const rep = replaceStepReferencesInObject(selectedValues, oldSlug, newSlug)
+        const rep = replaceStepReferencesInObject(selectedValues, slugsList, newSlug)
         if (rep.changed) {
           const updatedPluginData = { ...pluginData, selectedValues: rep.value }
           const authData = isObj(selectedValues.authData) ? (selectedValues.authData as Record<string, unknown>) : undefined
-          const authId = str(authData?.id) ?? str(row?.auth_id) ?? str(pluginData.auth_id) ?? str(draft.authId)
-          const actionId = str(row?.action_id) ?? str(pluginData.actionVersionId) ?? str(pluginData.action_id)
+          const blockService = isObj(block.service) ? (block.service as Record<string, unknown>) : undefined
+          const authId = str(authData?.id) ?? str(row?.auth_id) ?? str(pluginData.auth_id) ?? str(blockService?.authVersionId) ?? str(draft.authId)
+          const actionId = str(row?.action_id) ?? str(pluginData.action_id) ?? str(pluginData.actionVersionId) ?? str(blockService?.actionVersionId)
 
           updatesToApply.push({
             slug: stepSlug,
@@ -2589,8 +2685,8 @@ function install(): void {
               type: 'plugin',
               title: stepSlug,
               stepId,
-              description: block.description ?? pluginData.description,
-              iconUrl: block.iconUrl ?? pluginData.iconUrl,
+              description: block.description ?? pluginData.description ?? '',
+              iconUrl: block.iconUrl ?? pluginData.iconUrl ?? '',
               code: updatedPluginData,
               auth_id: authId,
               action_id: actionId,
@@ -2599,11 +2695,11 @@ function install(): void {
         }
       } else if (type === 'function') {
         const rawCode = str(row?.code) ?? str(draft.code) ?? str(dataFromBackend.code) ?? str(block.data) ?? ''
-        const repCode = replaceStepReferencesInString(rawCode, oldSlug, newSlug)
+        const repCode = replaceStepReferencesInString(rawCode, slugsList, newSlug)
         const rowMeta = isObj(row?.metadata) ? (row!.metadata as Record<string, unknown>) : undefined
         const draftedMeta = isObj(rowMeta?.drafted) ? (rowMeta!.drafted as Record<string, unknown>) : undefined
         const dynamicVars = draftedMeta?.dynamicVariables ?? draft.dynamicVariables ?? dataFromBackend.dynamicVariables ?? block.dynamicVariables
-        const repVars = replaceStepReferencesInObject(dynamicVars, oldSlug, newSlug)
+        const repVars = replaceStepReferencesInObject(dynamicVars, slugsList, newSlug)
 
         if (repCode !== rawCode || repVars.changed) {
           updatesToApply.push({
@@ -2614,7 +2710,7 @@ function install(): void {
               type: 'function',
               title: stepSlug,
               stepId,
-              description: block.description ?? draft.description,
+              description: block.description ?? draft.description ?? '',
               code: repCode,
               dynamicVariables: repVars.value,
             },
@@ -2622,7 +2718,7 @@ function install(): void {
         }
       } else if (type === 'variable') {
         const rawExpr = str(row?.code) ?? str(draft.code) ?? str(dataFromBackend.code) ?? str(block.data) ?? ''
-        const repExpr = replaceStepReferencesInString(rawExpr, oldSlug, newSlug)
+        const repExpr = replaceStepReferencesInString(rawExpr, slugsList, newSlug)
         if (repExpr !== rawExpr) {
           updatesToApply.push({
             slug: stepSlug,
@@ -2640,8 +2736,8 @@ function install(): void {
       } else if (type === 'ifBlock') {
         const cond = str(draft.code) ?? str(block.condition) ?? ''
         const stmt = str(draft.statement) ?? str(block.statement) ?? ''
-        const repCond = replaceStepReferencesInString(cond, oldSlug, newSlug)
-        const repStmt = replaceStepReferencesInString(stmt, oldSlug, newSlug)
+        const repCond = replaceStepReferencesInString(cond, slugsList, newSlug)
+        const repStmt = replaceStepReferencesInString(stmt, slugsList, newSlug)
         if (repCond !== cond || repStmt !== stmt) {
           updatesToApply.push({
             slug: stepSlug,
@@ -2659,7 +2755,7 @@ function install(): void {
         }
       } else if (type === 'response') {
         const rawData = str(block.data) ?? str(block.body) ?? ''
-        const repData = replaceStepReferencesInString(rawData, oldSlug, newSlug)
+        const repData = replaceStepReferencesInString(rawData, slugsList, newSlug)
         if (repData !== rawData) {
           updatesToApply.push({
             slug: 'response',
@@ -2683,7 +2779,7 @@ function install(): void {
     let updatedCount = 0
     for (const item of updatesToApply) {
       try {
-        const targetUrl = `${origin}/scripts/${scriptId}/stepv2/${encodeURIComponent(item.slug)}`
+        const targetUrl = `${apiOrigin}/scripts/${scriptId}/stepv2/${encodeURIComponent(item.slug)}`
         const resp = await fetch(targetUrl, {
           method: 'PUT',
           headers,
@@ -2692,22 +2788,6 @@ function install(): void {
         })
         if (resp.ok) {
           updatedCount++
-          const resJson = await resp.json()
-          const script = resJson?.script ?? resJson?.data?.script
-          if (script?.json_script) {
-            store.dispatch({
-              type: 'flowJsonV2/setFlowAndDraftFlowJson',
-              urlData: { scriptId },
-              payload: script.json_script,
-            })
-            if (script.used_variables) {
-              store.dispatch({
-                type: 'flowJsonV2/setFlowJsonAndUsedVariables',
-                urlData: { scriptId },
-                payload: { flowJson: script.json_script, used_variables: script.used_variables },
-              })
-            }
-          }
         }
       } catch (err) {
         console.warn('[assistant] failed to cascade-update step:', item.slug, err)
@@ -2715,6 +2795,44 @@ function install(): void {
     }
 
     if (updatedCount > 0) {
+      // Allow backend database replication / used_variables commit to settle
+      await new Promise((resolve) => setTimeout(resolve, 250))
+      // Fetch fresh script and update Redux store
+      try {
+        const scriptResp = await fetch(`${apiOrigin}/scripts/${scriptId}?_t=${Date.now()}`, {
+          credentials: 'include',
+          cache: 'no-store',
+        })
+        if (scriptResp.ok) {
+          const sJson = await scriptResp.json()
+          const script = sJson?.data?.script ?? sJson?.script ?? sJson?.data
+          if (script?.json_script) {
+            let flowJsonObj = script.json_script
+            if (typeof flowJsonObj === 'string') {
+              try {
+                flowJsonObj = JSON.parse(flowJsonObj)
+              } catch {
+                // ignore
+              }
+            }
+            store.dispatch({
+              type: 'flowJsonV2/setFlowAndDraftFlowJson',
+              urlData: { scriptId },
+              payload: flowJsonObj,
+            })
+            if (script.used_variables) {
+              store.dispatch({
+                type: 'flowJsonV2/setFlowJsonAndUsedVariables',
+                urlData: { scriptId },
+                payload: { flowJson: flowJsonObj, used_variables: script.used_variables },
+              })
+            }
+          }
+        }
+      } catch {
+        // ignore
+      }
+
       post({ type: 'flow-graph-changed' })
       try {
         const toastEl = document.createElement('div')
@@ -2826,6 +2944,17 @@ function install(): void {
                 url.searchParams.set('slugName', p.renameInfo.newSlug)
                 history.replaceState(history.state, '', url.pathname + url.search + url.hash)
               }
+              const oldDisplay = p.renameInfo.oldSlug.replace(/_/g, ' ')
+              const newDisplay = p.renameInfo.newSlug.replace(/_/g, ' ')
+              const els = Array.from(document.querySelectorAll('span, p, div, h2, h3, h4'))
+              for (const el of els) {
+                if (el.children.length === 0) {
+                  const txt = el.textContent?.trim()
+                  if (txt === oldDisplay || txt === p.renameInfo.oldSlug) {
+                    el.textContent = newDisplay
+                  }
+                }
+              }
             } catch {
               // ignore
             }
@@ -2932,6 +3061,16 @@ function install(): void {
                         if (uniqueTitle !== parsed.title) {
                           parsed.title = uniqueTitle
                           args[0] = JSON.stringify(parsed)
+                          try {
+                            const titleInput = document.querySelector<HTMLInputElement>(
+                              '#function-title-textfield, input[placeholder*="Name"], input[id*="title"]',
+                            )
+                            if (titleInput) {
+                              titleInput.value = uniqueTitle.replace(/_/g, ' ')
+                            }
+                          } catch {
+                            // ignore
+                          }
                         }
                       }
                     }
@@ -2949,7 +3088,7 @@ function install(): void {
             const xhr = this
             cascadeUpdateDownstreamInPage(renameInfo, headers)
               .catch((err) => console.warn('[assistant] cascadeUpdateDownstreamInPage error:', err))
-              .finally(() => {
+              .then(() => {
                 try {
                   p.start = performance.now()
                   if (countStart(p)) counted = p
@@ -3033,6 +3172,16 @@ function install(): void {
                   if (uniqueTitle !== parsed.title) {
                     parsed.title = uniqueTitle
                     init.body = JSON.stringify(parsed)
+                    try {
+                      const titleInput = document.querySelector<HTMLInputElement>(
+                        '#function-title-textfield, input[placeholder*="Name"], input[id*="title"]',
+                      )
+                      if (titleInput) {
+                        titleInput.value = uniqueTitle.replace(/_/g, ' ')
+                      }
+                    } catch {
+                      // ignore
+                    }
                   }
                 }
               }

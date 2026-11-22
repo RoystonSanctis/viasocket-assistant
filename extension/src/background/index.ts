@@ -339,8 +339,8 @@ chrome.action.onClicked.addListener(async (tab) => {
   const isVs = url.includes('viasocket.com') || url.includes('sokt.io')
   if (isVs) {
     try {
-      await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ['page-hook.js'], world: 'MAIN', injectImmediately: true })
-      await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ['content.js'] })
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['page-hook.js'], world: 'MAIN', injectImmediately: true })
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] })
     } catch {
       // script already present or frame restricted
     }
@@ -359,8 +359,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url && !tab.discarded) {
     const isVs = tab.url.includes('viasocket.com') || tab.url.includes('sokt.io')
     if (isVs) {
-      chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['page-hook.js'], world: 'MAIN', injectImmediately: true }).catch(() => {})
-      chrome.scripting.executeScript({ target: { tabId, allFrames: true }, files: ['content.js'] }).catch(() => {})
+      chrome.scripting.executeScript({ target: { tabId }, files: ['page-hook.js'], world: 'MAIN', injectImmediately: true }).catch(() => {})
+      chrome.scripting.executeScript({ target: { tabId }, files: ['content.js'] }).catch(() => {})
     }
   }
 })
@@ -380,7 +380,7 @@ async function injectIntoOpenTabs(): Promise<void> {
   await Promise.all(
     tabs.map(async (tab) => {
       if (tab.id === undefined || tab.discarded) return
-      const target = { tabId: tab.id, allFrames: true }
+      const target = { tabId: tab.id }
       try {
         await chrome.scripting.executeScript({ target, files: ['page-hook.js'], world: 'MAIN', injectImmediately: true })
         await chrome.scripting.executeScript({ target, files: ['content.js'] })

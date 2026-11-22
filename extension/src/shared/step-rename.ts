@@ -30,7 +30,7 @@ export function getUniqueStepSlug(desiredSlug: string, existingSlugs: Iterable<s
 }
 
 /**
- * Replaces all downstream references to oldSlug with newSlug in code or template string.
+ * Replaces all downstream references to oldSlug (or list of old slugs/aliases) with newSlug in code or template string.
  * Handles:
  * - context.res.oldSlug / context?.res?.oldSlug
  * - context.vals.oldSlug / context?.vals?.oldSlug
@@ -38,23 +38,36 @@ export function getUniqueStepSlug(desiredSlug: string, existingSlugs: Iterable<s
  * - steps.oldSlug / steps?.oldSlug
  * - Bracket notation: context.res["oldSlug"], context?.res?.['oldSlug'], steps["oldSlug"], etc.
  */
-export function replaceStepReferencesInString(text: string, oldSlug: string, newSlug: string): string {
-  if (!text || typeof text !== 'string' || !oldSlug || !newSlug || oldSlug === newSlug) return text
-  const escaped = oldSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+export function replaceStepReferencesInString(
+  text: string,
+  oldSlugs: string | string[],
+  newSlug: string,
+): string {
+  if (!text || typeof text !== 'string' || !newSlug) return text
+  const list = Array.isArray(oldSlugs) ? oldSlugs : [oldSlugs]
+  const valid = Array.from(new Set(list.filter((s) => typeof s === 'string' && s.trim() && s !== newSlug)))
+    .sort((a, b) => b.length - a.length)
 
-  // 1. Dot notation: (context?.res?. | res?. | steps?. | context?.vals?.)oldSlug
-  const dotRe = new RegExp(
-    String.raw`(\bcontext(?:\?\.)?(?:res|vals)(?:\?\.)|\b(?:res|steps)(?:\?\.)|\bcontext\.(?:res|vals)\.|\b(?:res|steps)\.)\b${escaped}\b`,
-    'g',
-  )
-  let updated = text.replace(dotRe, `$1${newSlug}`)
+  if (valid.length === 0) return text
 
-  // 2. Bracket notation: context?.res?.[...] or res[...] or steps[...]
-  const bracketRe = new RegExp(
-    String.raw`(\bcontext(?:\?\.)?(?:res|vals)(?:\?\.)?\s*\[\s*["']|\b(?:res|steps)(?:\?\.)?\s*\[\s*["'])${escaped}(?=["']\s*\])`,
-    'g',
-  )
-  updated = updated.replace(bracketRe, `$1${newSlug}`)
+  let updated = text
+  for (const oldSlug of valid) {
+    const escaped = oldSlug.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+    // 1. Dot notation: (context?.res?. | res?. | steps?. | context?.vals?.)oldSlug
+    const dotRe = new RegExp(
+      String.raw`(\bcontext(?:\?\.)?(?:res|vals)(?:\?\.)|\b(?:res|steps)(?:\?\.)|\bcontext\.(?:res|vals)\.|\b(?:res|steps)\.)\b${escaped}\b`,
+      'g',
+    )
+    updated = updated.replace(dotRe, `$1${newSlug}`)
+
+    // 2. Bracket notation: context?.res?.[...] or res[...] or steps[...]
+    const bracketRe = new RegExp(
+      String.raw`(\bcontext(?:\?\.)?(?:res|vals)(?:\?\.)?\s*\[\s*["']|\b(?:res|steps)(?:\?\.)?\s*\[\s*["'])${escaped}(?=["']\s*\])`,
+      'g',
+    )
+    updated = updated.replace(bracketRe, `$1${newSlug}`)
+  }
 
   return updated
 }
@@ -63,15 +76,19 @@ export function replaceStepReferencesInString(text: string, oldSlug: string, new
  * Recursively traverses an object, array, or scalar, replacing step references in all strings.
  * Returns the updated value and a boolean flag indicating if any replacements were made.
  */
-export function replaceStepReferencesInObject(obj: unknown, oldSlug: string, newSlug: string): { value: unknown; changed: boolean } {
+export function replaceStepReferencesInObject(
+  obj: unknown,
+  oldSlugs: string | string[],
+  newSlug: string,
+): { value: unknown; changed: boolean } {
   if (typeof obj === 'string') {
-    const updated = replaceStepReferencesInString(obj, oldSlug, newSlug)
+    const updated = replaceStepReferencesInString(obj, oldSlugs, newSlug)
     return { value: updated, changed: updated !== obj }
   }
   if (Array.isArray(obj)) {
     let changed = false
     const arr = obj.map((item) => {
-      const res = replaceStepReferencesInObject(item, oldSlug, newSlug)
+      const res = replaceStepReferencesInObject(item, oldSlugs, newSlug)
       if (res.changed) changed = true
       return res.value
     })
@@ -81,9 +98,9 @@ export function replaceStepReferencesInObject(obj: unknown, oldSlug: string, new
     let changed = false
     const record: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(obj)) {
-      const newKey = replaceStepReferencesInString(k, oldSlug, newSlug)
+      const newKey = replaceStepReferencesInString(k, oldSlugs, newSlug)
       if (newKey !== k) changed = true
-      const res = replaceStepReferencesInObject(v, oldSlug, newSlug)
+      const res = replaceStepReferencesInObject(v, oldSlugs, newSlug)
       if (res.changed) changed = true
       record[newKey] = res.value
     }

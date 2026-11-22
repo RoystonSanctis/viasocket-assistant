@@ -22,7 +22,7 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["storage", "cookies", "offscreen", "alarms", "tts", "scripting"],
+  "permissions": ["tabs", "storage", "cookies", "offscreen", "alarms", "tts", "scripting"],
   "host_permissions": [
     "https://*.viasocket.com/*",
     "https://viasocket.com/*",
@@ -43,8 +43,11 @@
   "content_scripts": [
     {
       "matches": [
-        "https://*.viasocket.com/*",
-        "https://viasocket.com/*"
+        "https://flow.viasocket.com/*",
+        "https://beta-flow.viasocket.com/*",
+        "https://dev-flow.viasocket.com/*",
+        "https://embedfrontend.viasocket.com/*",
+        "https://dev-embedfrontend.viasocket.com/*"
       ],
       "js": ["page-hook.js"],
       "run_at": "document_start",
@@ -55,8 +58,11 @@
     },
     {
       "matches": [
-        "https://*.viasocket.com/*",
-        "https://viasocket.com/*"
+        "https://flow.viasocket.com/*",
+        "https://beta-flow.viasocket.com/*",
+        "https://dev-flow.viasocket.com/*",
+        "https://embedfrontend.viasocket.com/*",
+        "https://dev-embedfrontend.viasocket.com/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle",
@@ -80,5 +86,17 @@
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
-  }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["page-hook.js", "icons/*"],
+      "matches": [
+        "https://flow.viasocket.com/*",
+        "https://beta-flow.viasocket.com/*",
+        "https://dev-flow.viasocket.com/*",
+        "https://embedfrontend.viasocket.com/*",
+        "https://dev-embedfrontend.viasocket.com/*"
+      ]
+    }
+  ]
 }
