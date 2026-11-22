@@ -3051,7 +3051,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     if (portId) {
       row.addEventListener('mouseenter', (e) => {
         if (lockedState) return
-
+        highlightPortAndCurves(portId, isInput ? 'input' : 'output', key, node.title || node.slugName)
         const conns = currentGraphData?.connections.filter((c) =>
           isInput ? c.toPortId === portId : c.fromPortId === portId
         ) || []
@@ -3506,6 +3506,8 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     if (resetHighlights) {
       if (hoveredConn) {
         highlightActivePath(hoveredConn)
+      } else if (hoveredKeyInfo && hoveredKeyInfo.conns.length > 0) {
+        highlightPortAndCurves(hoveredKeyInfo.portId, hoveredKeyInfo.type, hoveredKeyInfo.keyName, hoveredKeyInfo.stepTitle)
       } else {
         clearHighlights()
       }
