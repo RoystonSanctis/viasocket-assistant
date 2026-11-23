@@ -2,7 +2,7 @@
 
 > Aligned with official Google Chrome Web Store guidelines:  
 > [Creating a great listing page](https://developer.chrome.com/docs/webstore/best-listing)  
-> Last Updated: 2026-10-25 (v0.4.0)
+> Last Updated: 2026-11-23 (v0.6.0)
 
 ---
 
@@ -58,6 +58,15 @@ Add a JS step with the + button on the Flow view, delete steps from the step men
 
 ⚡ Subfunctions panel for JS steps
 Add app actions inside a JavaScript step with a full form: connection picker, dropdowns that load from the app, generated fields and data mapping. SOCKET writes the call into your code and keeps the form and the code in sync.
+
+📊 Interactive Dependency Graph
+Switch to the Graph view tab anytime to inspect your workflow's data flow. See step inputs, outputs, nested object trees, independent steps and active execution paths visualized on an interactive canvas.
+
+🔄 Smart Step Rename
+Rename any step even after it is used in downstream steps or custom responses. The assistant cascades and updates all variable paths across the flow before saving.
+
+📥 Response & Input Data inspection
+Inspect live response payloads and step input data in dedicated tabs with authentic syntax highlighting, array counts and one-click path copying.
 
 📋 Copy, paste, export and import
 Copy a step with its code, mappings and app settings, and paste it into another flow or account. Export a whole flow to a file and import it anywhere.
@@ -161,12 +170,13 @@ Per Google's [Best Listing Images Guide](https://developer.chrome.com/docs/webst
 
 | Permission | Category | User-Facing Justification |
 | :--- | :--- | :--- |
-| `storage` | API Permission | Saves user preferences, mascots' screen position, voice settings, and custom AI provider configurations locally in the browser. |
-| `cookies` | API Permission | Reads existing authenticated viaSocket session cookies so the assistant can interact with your workflows without requiring a redundant login. |
-| `offscreen` | API Permission | Runs client-side audio processing and local speech recognition in a sandboxed offscreen document to ensure zero latency and keep the UI responsive. |
+| `tabs` | API Permission | Used to identify active viaSocket workflow tabs to communicate with the assistant overlay, handle OAuth authentication popups for workflow connections, and open settings pages. |
+| `storage` | API Permission | Saves user preferences, UI position/docking coordinates, voice settings, and API configuration locally in the browser. |
+| `cookies` | API Permission | Reads existing authenticated viaSocket session cookies so the assistant can interact with your workflows without requiring separate login. |
+| `offscreen` | API Permission | Runs client-side audio processing and local speech recognition in a sandboxed offscreen document without impacting page responsiveness. |
 | `alarms` | API Permission | Periodically checks for workflow sync updates and cleans up expired temporary state. |
 | `tts` | API Permission | Provides optional spoken audio feedback when voice replies are enabled. |
-| `scripting` | API Permission | Safely injects the SOCKET companion and assistant chat panel into viaSocket flow canvas pages. |
+| `scripting` | API Permission | Safely injects the SOCKET companion, step context menus, and interactive dependency graph canvas into viaSocket flow canvas pages. |
 | `https://flow.viasocket.com/*` | Host Permission | Core domain: enables assistant mascot and workflow inspector to operate on viaSocket flow builder pages. |
 | `https://beta-flow.viasocket.com/*` | Host Permission | Enables inspecting and testing workflows on viaSocket beta environments. |
 | `https://dev-flow.viasocket.com/*` | Host Permission | Enables building and debugging workflows on viaSocket development environments. |
@@ -181,6 +191,46 @@ Per Google's [Best Listing Images Guide](https://developer.chrome.com/docs/webst
 ---
 
 ## 5. Developer Console Submission Form (Exact Answers)
+
+### 0. API Permissions Justifications (Privacy Practices Tab)
+*Copy and paste each corresponding justification below into the required text areas:*
+
+#### `tabs justification*` (Required)
+```text
+Used to identify active viaSocket workflow tabs to communicate with the assistant overlay, handle OAuth authentication popups for workflow connections, and open settings pages.
+```
+
+#### `storage justification*`
+```text
+Saves user preferences, UI position/docking coordinates, voice settings, and API configuration locally in the browser.
+```
+
+#### `cookies justification*`
+```text
+Reads existing authenticated viaSocket session cookies so the assistant can interact with your workflows without requiring separate login.
+```
+
+#### `offscreen justification*`
+```text
+Runs client-side audio processing and local speech recognition in a sandboxed offscreen document without impacting page responsiveness.
+```
+
+#### `alarms justification*`
+```text
+Periodically checks for workflow configuration updates and cleans up expired temporary state.
+```
+
+#### `tts justification*`
+```text
+Provides optional spoken audio feedback when voice replies are enabled.
+```
+
+#### `scripting justification*`
+```text
+Safely injects the companion interface, step context menus, and interactive dependency graph canvas into viaSocket flow builder pages.
+```
+
+---
 
 ### 1. Host Permission Justification
 *Paste into the **Host permission justification** text area (max 1,000 characters):*
@@ -250,7 +300,7 @@ No credentials required. Reviewers can test freely:
 Before submitting to the Chrome Web Store dashboard:
 
 - [ ] **Package Check**: Run `npm run check` in `extension/` to ensure zero TypeScript errors, valid configuration schemas, and clean build output.
-- [ ] **Manifest Version**: `manifest.json` matches release version (e.g. `0.4.0`).
+- [ ] **Manifest Version**: `manifest.json` matches release version (e.g. `0.6.0`).
 - [ ] **Icons**: `128×128`, `48×48`, `32×32`, and `16×16` icons present in `dist/icons/`.
 - [ ] **Screenshots**: At least 1 (recommended 5) screenshots formatted at 1280×800, full bleed, crisp text, and highlighting actual workflow UI.
 - [ ] **Promo Tiles**: 440×280 promo tile created with high contrast and legible typography at small scale.
