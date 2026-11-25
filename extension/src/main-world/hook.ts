@@ -1127,11 +1127,13 @@ function install(): void {
           expr = expr.slice(2, -1).trim()
         }
 
-        // Trigger reference: context.req.body.xyz or req.body['xyz']
+        // Trigger reference: context.req.body.xyz, context?.req?.body?.['xyz'], or req.body['xyz']
         if (expr.includes('req.body') || expr.includes('req.') || /req(?:\.|\?\.|\[)/.test(expr)) {
           const field = expr
-            .replace(/^(?:context(?:\.|\?\.)?)?req(?:\.|\?\.)(?:body(?:\.|\?\.)?)?/g, '')
-            .replace(/\[["'](.*?)["']\]/g, '$1')
+            .replace(/\?\.\[/g, '[')
+            .replace(/\?\./g, '.')
+            .replace(/^(?:context\.)?req\.(?:body\.?)?/g, '')
+            .replace(/\[["'](.*?)["']\]/g, '.$1')
             .replace(/^\.+/, '')
             .replace(/[\?\}].*$/, '')
             .trim()
@@ -1140,8 +1142,8 @@ function install(): void {
           }
         }
 
-        // Step response reference: context.res.Step_Name.field or context.steps.Step_Name?.field
-        const stepMatch = /(?:context(?:\.|\?\.)?)?(?:res|steps)(?:\.|\?\.|\[["'])([a-zA-Z0-9_-]+)(?:["']\])?(?:\.|\?\.|\[["'])([a-zA-Z0-9_$-]+)/.exec(expr)
+        // Step response reference: context.res.Step_Name.field or context?.res?.['Step_Name']?.['field']
+        const stepMatch = /(?:context(?:\.|\?\.)?)?(?:res|steps)(?:\.|\?\.|(?:\?\.)?\[["'])([a-zA-Z0-9_-]+)(?:["']\])?(?:\.|\?\.|(?:\?\.)?\[["'])([a-zA-Z0-9_$-]+)/.exec(expr)
         if (stepMatch && stepMatch[1] && stepMatch[2]) {
           const slug = stepMatch[1]
           const field = stepMatch[2].replace(/["'\]\}].*$/, '')
@@ -1218,15 +1220,31 @@ function install(): void {
       const triggerFields = new Set<string>()
 
       const variablesMap = obj(usedVars.variables)
-      for (const varKey of Object.keys(variablesMap)) {
-        if (varKey.includes('req.body') || varKey.includes('req.')) {
-          const field = varKey
-            .replace(/context\.req\.body\b/g, '')
-            .replace(/req\.body\b/g, '')
-            .replace(/context\.req\b/g, '')
-            .replace(/\[["'](.*?)["']\]/g, '$1')
-            .replace(/^\.+/, '')
-          if (field) triggerFields.add(field)
+      const triggerUsedByMap = new Map<string, Set<string>>()
+      const normalizeTriggerVarKey = (rawKey: string): string =>
+        rawKey
+          .replace(/\?\.\[/g, '[')
+          .replace(/\?\./g, '.')
+          .replace(/context\.req\.body\b/g, '')
+          .replace(/req\.body\b/g, '')
+          .replace(/context\.req\b/g, '')
+          .replace(/\[["'](.*?)["']\]/g, '.$1')
+          .replace(/^\.+/, '')
+
+      for (const [varKey, varInfo] of Object.entries(variablesMap)) {
+        if (varKey.includes('req.body') || varKey.includes('req.') || /req(?:\?\.|\.)/.test(varKey)) {
+          const field = normalizeTriggerVarKey(varKey)
+          if (field) {
+            triggerFields.add(field)
+            const list = obj(varInfo).usedInFunctions
+            if (Array.isArray(list)) {
+              const set = triggerUsedByMap.get(field) || new Set<string>()
+              for (const fnSlug of list) {
+                if (typeof fnSlug === 'string' && fnSlug) set.add(fnSlug)
+              }
+              triggerUsedByMap.set(field, set)
+            }
+          }
         }
       }
 
@@ -1239,11 +1257,8 @@ function install(): void {
       }
 
       for (const f of triggerFields) {
-        const val = reqBody[f] ?? evalExpr(`context.req.body.${f}`)
-        const usedBy =
-          (obj(variablesMap[`context.req.body.${f}`]).usedInFunctions as string[]) ||
-          (obj(variablesMap[`context.req.body["${f}"]`]).usedInFunctions as string[]) ||
-          []
+        const val = reqBody[f] ?? evalExpr(`context.req.body['${f.replace(/'/g, "\\'")}']`)
+        const usedBy = Array.from(triggerUsedByMap.get(f) || [])
         if (usedBy.length === 0 && (val === '' || val === null || val === undefined)) {
           continue
         }
@@ -1442,10 +1457,12 @@ function install(): void {
         if (stepType === 'ifBlock' || stepType === 'if') {
           const condStr = typeof block.condition === 'string' ? block.condition : ''
           if (condStr) {
-            const matches = condStr.matchAll(/context(?:\.|\?\.)(?:req(?:(?:\.|\?\.)body)?|res(?:\.|\?\.)[a-zA-Z0-9_-]+|steps(?:\.|\?\.)[a-zA-Z0-9_-]+)(?:(?:\.|\?\.)[a-zA-Z0-9_$-]+|\[["'][a-zA-Z0-9_$-]+["']\])*/g)
+            const matches = condStr.matchAll(
+              /context(?:\?\.|\.)(?:req(?:(?:\?\.|\.)body)?|res(?:(?:\?\.|\.)[a-zA-Z0-9_-]+|(?:\?\.)?\[["'][a-zA-Z0-9_-]+["']\])|steps(?:(?:\?\.|\.)[a-zA-Z0-9_-]+|(?:\?\.)?\[["'][a-zA-Z0-9_-]+["']\]))(?:(?:\?\.|\.)[a-zA-Z0-9_$-]+|(?:\?\.)?\[["'][^"'\]]+["']\])*/g
+            )
             for (const m of matches) {
               const after = condStr.slice((m.index ?? 0) + m[0].length)
-              let cleaned = m[0].replace(/\?\./g, '.')
+              let cleaned = m[0].replace(/\?\.\[/g, '[').replace(/\?\./g, '.')
               // If immediately followed by '(', the last segment is a method call (e.g. .toLowerCase()), strip it
               if (after.trimStart().startsWith('(')) {
                 const lastDot = cleaned.lastIndexOf('.')
@@ -1680,6 +1697,22 @@ function install(): void {
       const orderMap = obj(flowJson.order)
       const ifChildSet = new Set<string>()
       const directIfParent = new Map<string, string>()
+      const unwrapIfGroupChildren = (list: unknown[], seen = new Set<string>()): string[] => {
+        const out: string[] = []
+        for (const item of list) {
+          if (typeof item !== 'string' || !item || seen.has(item)) continue
+          seen.add(item)
+          const itemBlock = obj(blocks[item])
+          const itemType = typeof itemBlock.type === 'string' ? itemBlock.type : ''
+          if (itemType === 'ifGroup' && Array.isArray(orderMap[item])) {
+            out.push(...unwrapIfGroupChildren(orderMap[item] as unknown[], seen))
+          } else {
+            out.push(item)
+          }
+        }
+        return out
+      }
+
       for (const [parentSlug, childList] of Object.entries(orderMap)) {
         const parentBlock = obj(blocks[parentSlug])
         const parentType = typeof parentBlock.type === 'string' ? parentBlock.type : ''
@@ -1688,9 +1721,10 @@ function install(): void {
         const parentNode = stepNodes.find((n) => n.slugName === parentSlug)
         if (!parentNode) continue
 
+        const expandedChildren = unwrapIfGroupChildren(childList)
         let prevActiveInBranch: string | null = null
         let branchTerminated = false
-        for (const rawChild of childList) {
+        for (const rawChild of expandedChildren) {
           if (typeof rawChild !== 'string' || !rawChild) continue
           const childNode = stepNodes.find((n) => n.slugName === rawChild)
           if (!childNode) continue
@@ -1761,9 +1795,9 @@ function install(): void {
       }
 
       for (const node of stepNodes) {
-        const rootIfOwner = getRootIfOwner(node.slugName)
-        if (rootIfOwner) {
-          node.parentIfSlug = rootIfOwner
+        const directParent = directIfParent.get(node.slugName)
+        if (directParent) {
+          node.parentIfSlug = directParent
         }
       }
 

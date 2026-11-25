@@ -2025,14 +2025,76 @@ body.dark .vs-graph-status-chip.not-run,
   pointer-events: auto;
 }
 
-/* If-condition group container (for organized non-delay graph) */
+/* If-condition group container (for organized non-delay graph, multi-level nested) */
 .vs-graph-if-group {
+  --vs-if-accent: #d97706;
+  --vs-if-border: rgba(217, 119, 6, 0.45);
+  --vs-if-bg: rgba(245, 158, 11, 0.04);
+  --vs-if-glow: rgba(245, 158, 11, 0.28);
   position: absolute;
-  border: 1.5px dashed rgba(217, 119, 6, 0.38);
-  background: rgba(245, 158, 11, 0.03);
+  border: 1.5px dashed var(--vs-if-border);
+  background: var(--vs-if-bg);
   border-radius: 14px;
   z-index: 1;
   pointer-events: none;
+  transition: box-shadow 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.vs-graph-if-group.vs-if-group-hovered {
+  border-style: solid;
+  border-width: 2px;
+  border-color: var(--vs-if-accent);
+  background: color-mix(in srgb, var(--vs-if-accent) 9%, transparent);
+  box-shadow: 0 0 0 3px var(--vs-if-glow), 0 8px 28px var(--vs-if-glow);
+}
+
+.vs-graph-if-group.vs-if-color-0 {
+  --vs-if-accent: #d97706;
+  --vs-if-border: rgba(217, 119, 6, 0.48);
+  --vs-if-bg: rgba(245, 158, 11, 0.04);
+  --vs-if-glow: rgba(245, 158, 11, 0.28);
+}
+
+.vs-graph-if-group.vs-if-color-1 {
+  --vs-if-accent: #2563eb;
+  --vs-if-border: rgba(37, 99, 235, 0.48);
+  --vs-if-bg: rgba(59, 130, 246, 0.045);
+  --vs-if-glow: rgba(59, 130, 246, 0.28);
+}
+
+.vs-graph-if-group.vs-if-color-2 {
+  --vs-if-accent: #059669;
+  --vs-if-border: rgba(5, 150, 105, 0.48);
+  --vs-if-bg: rgba(16, 185, 129, 0.045);
+  --vs-if-glow: rgba(16, 185, 129, 0.28);
+}
+
+.vs-graph-if-group.vs-if-color-3 {
+  --vs-if-accent: #7c3aed;
+  --vs-if-border: rgba(124, 58, 237, 0.48);
+  --vs-if-bg: rgba(139, 92, 246, 0.045);
+  --vs-if-glow: rgba(139, 92, 246, 0.28);
+}
+
+.vs-graph-if-group.vs-if-color-4 {
+  --vs-if-accent: #e11d48;
+  --vs-if-border: rgba(225, 29, 72, 0.48);
+  --vs-if-bg: rgba(244, 63, 94, 0.045);
+  --vs-if-glow: rgba(244, 63, 94, 0.28);
+}
+
+.vs-graph-if-group.vs-if-color-5 {
+  --vs-if-accent: #0891b2;
+  --vs-if-border: rgba(8, 145, 178, 0.48);
+  --vs-if-bg: rgba(6, 182, 212, 0.045);
+  --vs-if-glow: rgba(6, 182, 212, 0.28);
+}
+
+.vs-graph-if-group.vs-if-color-6 {
+  --vs-if-accent: #ea580c;
+  --vs-if-border: rgba(234, 88, 12, 0.48);
+  --vs-if-bg: rgba(249, 115, 22, 0.045);
+  --vs-if-glow: rgba(249, 115, 22, 0.28);
 }
 
 .vs-graph-if-group-header {
@@ -2042,15 +2104,21 @@ body.dark .vs-graph-status-chip.not-run,
   background: var(--vs-g-bg, #ffffff);
   padding: 2px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(217, 119, 6, 0.38);
+  border: 1px solid var(--vs-if-border);
   font-size: 11px;
   font-weight: 600;
-  color: #d97706;
+  color: var(--vs-if-accent);
   display: flex;
   align-items: center;
   gap: 6px;
   pointer-events: auto;
   white-space: nowrap;
+  transition: box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.vs-graph-if-group.vs-if-group-hovered > .vs-graph-if-group-header {
+  border-color: var(--vs-if-accent);
+  box-shadow: 0 0 12px var(--vs-if-glow);
 }
 
 .vs-graph-if-sublabel {
@@ -3215,6 +3283,28 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     })
 
     viewport.addEventListener('mousemove', (e) => {
+      // Glow innermost if-condition boundary under pointer
+      const allIfGroups = Array.from(viewport.querySelectorAll<HTMLElement>('.vs-graph-if-group'))
+      let innermostGroup: HTMLElement | null = null
+      let bestLevel = -1
+      let bestArea = Infinity
+      for (const g of allIfGroups) {
+        const r = g.getBoundingClientRect()
+        if (e.clientX >= r.left - 4 && e.clientX <= r.right + 4 && e.clientY >= r.top - 12 && e.clientY <= r.bottom + 4) {
+          const lvl = parseInt(g.getAttribute('data-if-level') || '0', 10)
+          const area = r.width * r.height
+          if (lvl > bestLevel || (lvl === bestLevel && area < bestArea)) {
+            bestLevel = lvl
+            bestArea = area
+            innermostGroup = g
+          }
+        }
+      }
+      for (const g of allIfGroups) {
+        if (g === innermostGroup) g.classList.add('vs-if-group-hovered')
+        else g.classList.remove('vs-if-group-hovered')
+      }
+
       if (lockedState) return
       const target = e.target as HTMLElement | SVGElement | null
       const isOverPath = Boolean(target?.closest?.('.vs-graph-path, .vs-graph-path-hitarea'))
@@ -3228,6 +3318,9 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     })
 
     viewport.addEventListener('mouseleave', () => {
+      viewport.querySelectorAll<HTMLElement>('.vs-graph-if-group.vs-if-group-hovered').forEach((g) => {
+        g.classList.remove('vs-if-group-hovered')
+      })
       if (lockedState) return
       hoveredConn = null
       hoveredKeyInfo = null
@@ -3491,39 +3584,69 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     if (useGroupedIfLayout) {
       const ifStartX = START_X + (maxTopDepth + 1) * COLUMN_WIDTH
       let groupY = START_Y
+      let globalColorCursor = 0
 
-      for (const ifNode of ifGroupNodes) {
+      const pickDistinctColor = (parentColor: number | null, prevSiblingColor: number | null): number => {
+        for (let offset = 0; offset < 7; offset++) {
+          const cand = (globalColorCursor + offset) % 7
+          if (cand !== parentColor && cand !== prevSiblingColor) {
+            globalColorCursor = (cand + 1) % 7
+            return cand
+          }
+        }
+        const fallback = globalColorCursor % 7
+        globalColorCursor = (globalColorCursor + 1) % 7
+        return fallback
+      }
+
+      const renderIfGroupRecursive = (
+        ifNode: FlowGraphNode,
+        level: number,
+        gx: number,
+        gy: number,
+        colorIdx: number,
+        parentGroupSlug?: string
+      ): void => {
         const groupSlug = ifNode.slugName
         const groupEl = document.createElement('div')
-        groupEl.className = 'vs-graph-if-group'
+        groupEl.className = `vs-graph-if-group vs-if-color-${colorIdx}`
         groupEl.setAttribute('data-if-group', groupSlug)
-        groupEl.style.left = `${ifStartX}px`
-        groupEl.style.top = `${groupY}px`
+        groupEl.setAttribute('data-if-level', String(level))
+        if (parentGroupSlug) {
+          groupEl.setAttribute('data-parent-if-group', parentGroupSlug)
+        }
+        groupEl.style.left = `${gx}px`
+        groupEl.style.top = `${gy}px`
 
         const header = document.createElement('div')
         header.className = 'vs-graph-if-group-header'
-        header.innerHTML = `<span>IF CONDITION</span><span style="color: var(--vs-g-text-primary, #1f2328)">${escapeHtml(ifNode.title)}</span>`
+        header.innerHTML = `<span>${level > 0 ? `NESTED IF (L${level + 1})` : 'IF CONDITION'}</span><span style="color: var(--vs-g-text-primary, #1f2328)">${escapeHtml(ifNode.title)}</span>`
         groupEl.appendChild(header)
         nodesLayer.appendChild(groupEl)
 
         const ifCard = createNodeCard(ifNode)
         ifCard.setAttribute('data-if-member', groupSlug)
         ifCard.setAttribute('data-if-role', 'condition')
-        ifCard.style.left = `${ifStartX + 28}px`
-        ifCard.style.top = `${groupY + 36}px`
+        ifCard.style.left = `${gx + 28}px`
+        ifCard.style.top = `${gy + 36}px`
         nodesLayer.appendChild(ifCard)
 
         const children = visibleSteps.filter((s) => s.parentIfSlug === groupSlug)
-        const innerIndependent = children.filter(
+        const childIfNodes = children.filter((c) => c.type === 'ifBlock' || c.type === 'if')
+        const nonIfChildren = children.filter((c) => c.type !== 'ifBlock' && c.type !== 'if')
+
+        const innerIndependent = nonIfChildren.filter(
           (c) =>
             c.type !== 'break' &&
             c.inputs.length === 0 &&
-            !children.some((other) => other.upstreamSlugs.includes(c.slugName))
+            !nonIfChildren.some((other) => other.upstreamSlugs.includes(c.slugName))
         )
         const innerIndepSet = new Set(innerIndependent.map((c) => c.slugName))
-        const innerDependent = children.filter((c) => !innerIndepSet.has(c.slugName))
+        const innerDependent = nonIfChildren.filter((c) => !innerIndepSet.has(c.slugName))
 
-        const innerStartX = ifStartX + 28 + 224 + 90
+        const innerStartX = gx + 28 + 224 + 80
+        let nextInnerY = gy + 36
+
         if (innerDependent.length > 0) {
           const minChildDepth = Math.min(...innerDependent.map((c) => c.depth))
           const relCols = new Map<number, FlowGraphNode[]>()
@@ -3534,7 +3657,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
             relCols.set(rel, list)
           }
           for (const [relCol, list] of relCols.entries()) {
-            let cy = groupY + 36
+            let cy = gy + 36
             const cx = innerStartX + relCol * 420
             for (const c of list) {
               const card = createNodeCard(c)
@@ -3545,6 +3668,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
               nodesLayer.appendChild(card)
               cy += (c.type === 'break' ? 64 : 160) + 24
             }
+            nextInnerY = Math.max(nextInnerY, cy)
           }
         }
 
@@ -3554,7 +3678,7 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
           subLabel.setAttribute('data-if-sublabel', groupSlug)
           subLabel.textContent = 'Independent Steps'
           subLabel.style.left = `${innerStartX}px`
-          subLabel.style.top = `${groupY + 220}px`
+          subLabel.style.top = `${nextInnerY + 12}px`
           nodesLayer.appendChild(subLabel)
 
           let ix = innerStartX
@@ -3563,12 +3687,27 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
             card.setAttribute('data-if-member', groupSlug)
             card.setAttribute('data-if-indep', 'true')
             card.style.left = `${ix}px`
-            card.style.top = `${groupY + 240}px`
+            card.style.top = `${nextInnerY + 32}px`
             nodesLayer.appendChild(card)
             ix += 390
           }
+          nextInnerY += 200
         }
 
+        let prevChildColor: number | null = null
+        for (const childIf of childIfNodes) {
+          const childColor = pickDistinctColor(colorIdx, prevChildColor)
+          prevChildColor = childColor
+          renderIfGroupRecursive(childIf, level + 1, innerStartX, nextInnerY + 24, childColor, groupSlug)
+          nextInnerY += 300
+        }
+      }
+
+      let prevTopColor: number | null = null
+      for (const ifNode of ifGroupNodes) {
+        const topColor = pickDistinctColor(null, prevTopColor)
+        prevTopColor = topColor
+        renderIfGroupRecursive(ifNode, 0, ifStartX, groupY, topColor)
         groupY += 320
       }
       maxGraphY = Math.max(maxGraphY, groupY)
@@ -3635,25 +3774,27 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       maxGraphY = Math.max(maxGraphY, currentY)
     }
 
-    const ifGroups = Array.from(nodesLayer.querySelectorAll<HTMLElement>('.vs-graph-if-group'))
-    if (ifGroups.length > 0) {
-      let groupY = baseStartY
-      for (const groupEl of ifGroups) {
+    const topIfGroups = Array.from(nodesLayer.querySelectorAll<HTMLElement>('.vs-graph-if-group:not([data-parent-if-group])'))
+    if (topIfGroups.length > 0) {
+      const reflowIfGroupRecursive = (groupEl: HTMLElement, gx: number, gy: number): { width: number; height: number } => {
         const groupSlug = groupEl.getAttribute('data-if-group') || ''
         const members = Array.from(nodesLayer.querySelectorAll<HTMLElement>(`.vs-graph-card[data-if-member="${groupSlug}"]`))
         const condCard = members.find((m) => m.getAttribute('data-if-role') === 'condition')
         const depCards = members.filter((m) => m.hasAttribute('data-rel-col'))
         const indepCards = members.filter((m) => m.getAttribute('data-if-indep') === 'true')
+        const childGroups = Array.from(nodesLayer.querySelectorAll<HTMLElement>(`.vs-graph-if-group[data-parent-if-group="${groupSlug}"]`))
 
-        groupEl.style.top = `${groupY}px`
-        const innerTop = groupY + 36
+        groupEl.style.left = `${gx}px`
+        groupEl.style.top = `${gy}px`
+        const innerTop = gy + 36
         let groupMaxBottom = innerTop
-        let groupMaxRight = (parseFloat(groupEl.style.left) || 0) + 320
+        let groupMaxRight = gx + 320
 
         if (condCard) {
+          condCard.style.left = `${gx + 28}px`
           condCard.style.top = `${innerTop}px`
           groupMaxBottom = Math.max(groupMaxBottom, innerTop + condCard.offsetHeight)
-          groupMaxRight = Math.max(groupMaxRight, (parseFloat(condCard.style.left) || 0) + condCard.offsetWidth)
+          groupMaxRight = Math.max(groupMaxRight, gx + 28 + condCard.offsetWidth)
         }
 
         const relColMap = new Map<number, HTMLElement[]>()
@@ -3686,13 +3827,29 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
           }
         }
 
-        const groupLeft = parseFloat(groupEl.style.left) || 0
-        const groupHeight = Math.max(260, groupMaxBottom - groupY + 28)
-        const groupWidth = Math.max(360, groupMaxRight - groupLeft + 28)
+        if (childGroups.length > 0) {
+          const innerStartX = gx + 28 + 224 + 80
+          let childGroupY = depCards.length > 0 || indepCards.length > 0 ? groupMaxBottom + 28 : innerTop
+          for (const cg of childGroups) {
+            const cgSize = reflowIfGroupRecursive(cg, innerStartX, childGroupY)
+            groupMaxBottom = Math.max(groupMaxBottom, childGroupY + cgSize.height)
+            groupMaxRight = Math.max(groupMaxRight, innerStartX + cgSize.width)
+            childGroupY += cgSize.height + 24
+          }
+        }
+
+        const groupHeight = Math.max(260, groupMaxBottom - gy + 28)
+        const groupWidth = Math.max(360, groupMaxRight - gx + 28)
         groupEl.style.height = `${groupHeight}px`
         groupEl.style.width = `${groupWidth}px`
+        return { width: groupWidth, height: groupHeight }
+      }
 
-        groupY += groupHeight + 36
+      let groupY = baseStartY
+      for (const groupEl of topIfGroups) {
+        const gx = parseFloat(groupEl.style.left) || 0
+        const size = reflowIfGroupRecursive(groupEl, gx, groupY)
+        groupY += size.height + 36
       }
       maxGraphY = Math.max(maxGraphY, groupY)
     }
