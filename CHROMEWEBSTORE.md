@@ -2,7 +2,7 @@
 
 > Aligned with official Google Chrome Web Store guidelines:  
 > [Creating a great listing page](https://developer.chrome.com/docs/webstore/best-listing)  
-> Last Updated: 2026-11-23 (v0.6.0)
+> Last Updated: 2026-11-25 (v0.6.1)
 
 ---
 
@@ -60,13 +60,13 @@ Add a JS step with the + button on the Flow view, delete steps from the step men
 Add app actions inside a JavaScript step with a full form: connection picker, dropdowns that load from the app, generated fields and data mapping. SOCKET writes the call into your code and keeps the form and the code in sync.
 
 📊 Interactive Dependency Graph
-Switch to the Graph view tab anytime to inspect your workflow's data flow. See step inputs, outputs, nested object trees, independent steps and active execution paths visualized on an interactive canvas.
+Switch to the Graph view tab anytime (in both standard and AI flows) to inspect your workflow's data flow. See step inputs, outputs, sample responses, multipath if-conditions, delays, break nodes, independent steps and active execution paths—plus hover tracing and Spacebar path locking.
 
 🔄 Smart Step Rename
 Rename any step even after it is used in downstream steps or custom responses. The assistant cascades and updates all variable paths across the flow before saving.
 
 📥 Response & Input Data inspection
-Inspect live response payloads and step input data in dedicated tabs with authentic syntax highlighting, array counts and one-click path copying.
+Inspect live response payloads and step input data—including all variables used by JavaScript steps—in dedicated tabs with syntax highlighting, array counts and one-click path copying.
 
 📋 Copy, paste, export and import
 Copy a step with its code, mappings and app settings, and paste it into another flow or account. Export a whole flow to a file and import it anywhere.
