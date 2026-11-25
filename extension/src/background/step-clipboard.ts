@@ -113,6 +113,55 @@ export async function handleStepClipboardRequest(
       }
     }
 
+    case 'step:get-samples': {
+      try {
+        const client = await getClientForSender(sender, {
+          scriptId: req.scriptId,
+          host: req.host,
+        })
+        if (!client) return { ok: false, error: 'Could not connect to viaSocket for this page' }
+        const scriptId = req.scriptId || client.page.scriptId
+        if (!scriptId || !SCRIPT_ID_RE.test(scriptId)) {
+          return { ok: false, error: 'Invalid scriptId' }
+        }
+        const samples: Record<string, unknown> = {}
+        const parseMaybe = (v: unknown): unknown => {
+          if (typeof v !== 'string') return v
+          try {
+            return JSON.parse(v)
+          } catch {
+            return v
+          }
+        }
+        await Promise.allSettled(
+          req.steps.slice(0, 30).map(async (s) => {
+            if (!s.slug || !s.identifier) return
+            const fnRes = await client.request<{ success?: boolean; data?: any }>({
+              method: 'GET',
+              path: `/scripts/${scriptId}/functions/${encodeURIComponent(s.identifier)}`,
+            })
+            const fnRow = fnRes?.data || fnRes
+            if (!fnRow || typeof fnRow !== 'object') return
+            const codeParsed = parseMaybe(fnRow.code)
+            const codeObj = codeParsed && typeof codeParsed === 'object' ? (codeParsed as Record<string, unknown>) : null
+            const rawSample =
+              codeObj?.sampleData ??
+              fnRow.sampleData ??
+              (codeObj?.pluginData && typeof codeObj.pluginData === 'object'
+                ? (codeObj.pluginData as Record<string, unknown>).sampleData
+                : undefined)
+            const sample = parseMaybe(rawSample)
+            if (sample !== undefined && sample !== null) {
+              samples[s.slug] = sample
+            }
+          }),
+        )
+        return { ok: true, data: samples }
+      } catch (e: any) {
+        return { ok: false, error: e?.message || 'Failed to fetch step samples' }
+      }
+    }
+
     case 'step:copy': {
       try {
         const client = await getClientForSender(sender, {

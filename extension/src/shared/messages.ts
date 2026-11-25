@@ -193,6 +193,7 @@ export type FlowStepStatus = 'newly_added' | 'modified' | 'deleted' | 'paused' |
 export interface FlowGraphNode {
   id: string
   slugName: string
+  identifier?: string
   title: string
   type: string
   iconUrl?: string
@@ -205,6 +206,11 @@ export interface FlowGraphNode {
   statusLabel?: string
   hasRun?: boolean
   notInLog?: boolean
+  condition?: string
+  statement?: string
+  breakMode?: string
+  isSampleOutput?: boolean
+  parentIfSlug?: string
 }
 
 export interface FlowGraphConnection {

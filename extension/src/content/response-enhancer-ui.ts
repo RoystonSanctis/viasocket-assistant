@@ -780,7 +780,15 @@ function applyFlowTab(
     requestAnimationFrame(syncIndicator)
     setTimeout(syncIndicator, 60)
 
-    responsePanel.style.display = 'none'
+    const siblingPanels = responsePanel.parentElement
+      ? Array.from(responsePanel.parentElement.children).filter(
+          (el): el is HTMLElement => el instanceof HTMLElement && el.getAttribute('role') === 'tabpanel'
+        )
+      : [responsePanel]
+
+    siblingPanels.forEach((panel) => {
+      panel.style.display = 'none'
+    })
     inputWrapper.style.display = 'flex'
     inputWrapper.style.width = '100%'
   } else {
@@ -808,7 +816,14 @@ function applyFlowTab(
     }
 
     inputWrapper.style.display = 'none'
-    responsePanel.style.display = ''
+    const siblingPanels = responsePanel.parentElement
+      ? Array.from(responsePanel.parentElement.children).filter(
+          (el): el is HTMLElement => el instanceof HTMLElement && el.getAttribute('role') === 'tabpanel'
+        )
+      : [responsePanel]
+    siblingPanels.forEach((panel) => {
+      panel.style.display = ''
+    })
   }
 
   if (bridge?.ready) {
@@ -1499,7 +1514,7 @@ export function initResponseEnhancerUI(bridge: PageBridge): ResponseEnhancerCont
   function scanFlowResponseContainer(): void {
     const tabsRoot = document.querySelector<HTMLElement>('[data-testid="response-console-tabs"], .MuiTabs-root')
     const responsePanel = document.querySelector<HTMLElement>(
-      '#simple-tabpanel-RESPONSE, [role="tabpanel"][id*="RESPONSE"], [role="tabpanel"][id*="0"]'
+      '#simple-tabpanel-RESPONSE, #simple-tabpanel-SAMPLE_DATA, [role="tabpanel"][id*="RESPONSE"], [role="tabpanel"][id*="SAMPLE_DATA"], [role="tabpanel"][id*="0"]'
     )
     if (!tabsRoot || !responsePanel) {
       if (flowState) {

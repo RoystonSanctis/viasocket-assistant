@@ -87,6 +87,13 @@ export type StepClipboardRequest =
       orgId?: string
       host?: string
     }
+  | {
+      target: 'background'
+      type: 'step:get-samples'
+      scriptId: string
+      steps: Array<{ slug: string; identifier: string }>
+      host?: string
+    }
 
 export type StepClipboardResponse<T = unknown> =
   | { ok: true; data: T }

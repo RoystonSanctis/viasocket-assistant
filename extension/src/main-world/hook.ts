@@ -110,7 +110,11 @@ function install(): void {
     try {
       window.postMessage(envelope, location.origin)
     } catch {
-      // nothing useful to do; never disturb the page
+      try {
+        window.postMessage(JSON.parse(JSON.stringify(envelope)), location.origin)
+      } catch {
+        // nothing useful to do; never disturb the page
+      }
     }
   }
 
@@ -526,7 +530,8 @@ function install(): void {
         variables,
         contextTree,
       }
-    } catch {
+    } catch (err) {
+      console.error('[vs-assistant] readFlowGraphData error:', err)
       return null
     }
   }
@@ -924,7 +929,8 @@ function install(): void {
         flowHitId: flowHitId || undefined,
         timestamp,
       }
-    } catch {
+    } catch (err) {
+      console.error('[vs-assistant] readFlowGraphData error:', err)
       return null
     }
   }
@@ -1065,6 +1071,8 @@ function install(): void {
       for (const slug of stepOrder) {
         if (!blocks[slug]) continue
         const block = obj(blocks[slug])
+        const bType = typeof block.type === 'string' ? block.type : ''
+        if (bType === 'comment' || bType === 'ifGroup') continue
         const draftStatus = typeof block.draftStatus === 'string' ? block.draftStatus.toUpperCase().trim() : ''
         const blockStatus = typeof block.status === 'string' ? block.status.toUpperCase().trim() : 'ACTIVE'
         const isDeleted =
@@ -1137,6 +1145,16 @@ function install(): void {
         return null
       }
 
+      const rawReqBody = obj(requestSnapshot.body)
+      const triggerEntry = obj(obj(obj(state.stepsDataV3)[scriptId]).SET_TRIGGER)
+      const triggerSample = obj(
+        isObj(trigger.sampleData)
+          ? trigger.sampleData
+          : obj(obj(triggerEntry.draft).pluginData).sampleData
+      )
+      const usingTriggerSample = !isLogView && !Object.keys(rawReqBody).length && Object.keys(triggerSample).length > 0
+      const effectiveReqBody = Object.keys(rawReqBody).length ? rawReqBody : (!isLogView ? triggerSample : {})
+
       function evalExpr(expr: string): unknown {
         if (!expr || typeof expr !== 'string') return undefined
         let clean = expr.trim()
@@ -1154,14 +1172,15 @@ function install(): void {
             'steps',
             `try { return (${clean}); } catch(e) { return undefined; }`
           )
-          return fn(
-            { req: requestSnapshot, res: responseSnapshot, vals, steps: responseSnapshot },
-            requestSnapshot,
+          const res = fn(
+            { req: { ...requestSnapshot, body: effectiveReqBody }, res: responseSnapshot, vals, steps: responseSnapshot },
+            { ...requestSnapshot, body: effectiveReqBody },
             responseSnapshot,
             vals,
-            requestSnapshot.body ?? {},
+            effectiveReqBody,
             responseSnapshot
           )
+          return typeof res === 'function' || typeof res === 'symbol' ? undefined : res
         } catch {
           return undefined
         }
@@ -1197,8 +1216,9 @@ function install(): void {
         }
       }
 
-      const reqBody = obj(requestSnapshot.body)
+      const reqBody = effectiveReqBody
       for (const k of Object.keys(reqBody)) {
+        if (k === 'viasocket_help') continue
         if (triggerFields.has(k) || triggerFields.size < 6) {
           triggerFields.add(k)
         }
@@ -1236,6 +1256,7 @@ function install(): void {
         stepStatus: 'active',
         hasRun: true,
         notInLog: false,
+        isSampleOutput: usingTriggerSample && triggerOutputs.length > 0,
       }
 
       // 2. Build Step Nodes
@@ -1404,6 +1425,23 @@ function install(): void {
           }
         }
 
+        if (stepType === 'ifBlock' || stepType === 'if') {
+          const condStr = typeof block.condition === 'string' ? block.condition : ''
+          if (condStr) {
+            const matches = condStr.matchAll(/context(?:\.|\?\.)(?:req(?:(?:\.|\?\.)body)?|res(?:\.|\?\.)[a-zA-Z0-9_-]+|steps(?:\.|\?\.)[a-zA-Z0-9_-]+)(?:(?:\.|\?\.)[a-zA-Z0-9_$-]+|\[["'][a-zA-Z0-9_$-]+["']\])*/g)
+            for (const m of matches) {
+              const after = condStr.slice((m.index ?? 0) + m[0].length)
+              let cleaned = m[0].replace(/\?\./g, '.')
+              // If immediately followed by '(', the last segment is a method call (e.g. .toLowerCase()), strip it
+              if (after.trimStart().startsWith('(')) {
+                const lastDot = cleaned.lastIndexOf('.')
+                if (lastDot > 0) cleaned = cleaned.slice(0, lastDot)
+              }
+              if (cleaned) registerInput(cleaned, cleaned)
+            }
+          }
+        }
+
         // 3. Saved block configuration in flowJson.blocks
         const blockSelVals = obj(block.selectedValues)
         const blockInputs = obj(blockSelVals.inputData || block.data)
@@ -1486,11 +1524,22 @@ function install(): void {
           }
         }
 
-        // Collect outputs from responseSnapshot
+        // Collect outputs from responseSnapshot (or sampleData when no logs / step has not run)
         const outputs: FlowGraphPort[] = []
         const stepResp = responseSnapshot[slug]
-        if (isObj(stepResp)) {
-          for (const [k, v] of Object.entries(stepResp as Record<string, unknown>)) {
+        const rawSampleResp =
+          stepResp === undefined
+            ? (pluginData.sampleData ??
+                draft.sampleData ??
+                obj(obj(stepEntry.dataFromBackend).pluginData).sampleData ??
+                obj(stepEntry.dataFromBackend).sampleData ??
+                block.sampleData)
+            : undefined
+        const effectiveStepResp = stepResp !== undefined ? stepResp : rawSampleResp
+        const isSampleOutput = stepResp === undefined && rawSampleResp !== undefined && rawSampleResp !== null
+
+        if (isObj(effectiveStepResp)) {
+          for (const [k, v] of Object.entries(effectiveStepResp as Record<string, unknown>)) {
             const usedBy = (obj(variablesMap[`context.res.${slug}.${k}`]).usedInFunctions as string[]) || []
             outputs.push({
               id: `out-${slug}-${k}`,
@@ -1500,12 +1549,12 @@ function install(): void {
               usedBySlugs: usedBy,
             })
           }
-        } else if (stepResp !== undefined) {
+        } else if (effectiveStepResp !== undefined && effectiveStepResp !== null) {
           outputs.push({
             id: `out-${slug}-output`,
             key: 'output',
-            value: stepResp,
-            displayValue: formatVal(stepResp),
+            value: effectiveStepResp,
+            displayValue: formatVal(effectiveStepResp),
             usedBySlugs: [],
           })
         }
@@ -1569,11 +1618,17 @@ function install(): void {
           }
         }
 
+        const normalizedType = isDelayBlock(block, slug) ? 'delay' : stepType
+        const conditionStr = typeof block.condition === 'string' ? block.condition : undefined
+        const statementStr = typeof block.statement === 'string' ? block.statement : undefined
+        const breakModeStr = normalizedType === 'break' && typeof block.mode === 'string' ? block.mode : undefined
+
         stepNodes.push({
           id: slug,
           slugName: slug,
+          identifier: stepIdentifier || undefined,
           title: stepTitle,
-          type: stepType,
+          type: normalizedType,
           iconUrl,
           depth: 1,
           isIndependent: upstreamSlugs.length === 0,
@@ -1584,6 +1639,10 @@ function install(): void {
           statusLabel,
           hasRun,
           notInLog,
+          condition: conditionStr,
+          statement: statementStr,
+          breakMode: breakModeStr,
+          isSampleOutput,
         })
       }
 
@@ -1602,6 +1661,70 @@ function install(): void {
         }
       }
 
+      const hasDelay = stepOrder.some((slug) => isDelayBlock(obj(blocks[slug]), slug))
+
+      const orderMap = obj(flowJson.order)
+      const ifChildSet = new Set<string>()
+      const directIfParent = new Map<string, string>()
+      for (const [parentSlug, childList] of Object.entries(orderMap)) {
+        const parentBlock = obj(blocks[parentSlug])
+        const parentType = typeof parentBlock.type === 'string' ? parentBlock.type : ''
+        if ((parentType !== 'ifBlock' && parentType !== 'if') || !Array.isArray(childList)) continue
+
+        const parentNode = stepNodes.find((n) => n.slugName === parentSlug)
+        if (!parentNode) continue
+
+        let prevActiveInBranch: string | null = null
+        let branchTerminated = false
+        for (const rawChild of childList) {
+          if (typeof rawChild !== 'string' || !rawChild) continue
+          const childNode = stepNodes.find((n) => n.slugName === rawChild)
+          if (!childNode) continue
+
+          ifChildSet.add(rawChild)
+          directIfParent.set(rawChild, parentSlug)
+
+          if (branchTerminated) continue
+
+          // In sequential/delay flows, steps inside an if condition stack vertically in sequence (if -> step1 -> step2 -> break).
+          // Break node always connects from preceding step in the branch if present, else from the ifBlock, and terminates the branch.
+          const branchSourceSlug =
+            (childNode.type === 'break' || hasDelay) && prevActiveInBranch ? prevActiveInBranch : parentSlug
+          const branchSourceNode = stepNodes.find((n) => n.slugName === branchSourceSlug) || parentNode
+
+          if (!childNode.upstreamSlugs.includes(branchSourceSlug)) {
+            childNode.upstreamSlugs.push(branchSourceSlug)
+          }
+          childNode.isIndependent = false
+
+          const existsConn = connections.some((c) => c.fromSlug === branchSourceSlug && c.toSlug === rawChild)
+          if (!existsConn) {
+            const fromHasRun = !isLogView || branchSourceNode.hasRun !== false
+            const toHasRun = !isLogView || childNode.hasRun !== false
+            connections.push({
+              id: `conn-branch-${branchSourceSlug}-${rawChild}`,
+              fromNodeId: branchSourceSlug,
+              fromSlug: branchSourceSlug,
+              fromPortId: `${branchSourceSlug}-branch-out`,
+              fromField: childNode.type === 'break' ? 'stop' : 'if true',
+              toNodeId: rawChild,
+              toSlug: rawChild,
+              toPortId: `${rawChild}-branch-in`,
+              toField: 'branch',
+              expression: childNode.type === 'break' ? 'break-flow' : 'if-branch',
+              valuePreview: parentNode.statement || parentNode.condition || 'Branch executes when condition is true',
+              hasRun: fromHasRun && toHasRun,
+            })
+          }
+
+          if (childNode.type === 'break') {
+            branchTerminated = true
+          } else {
+            prevActiveInBranch = rawChild
+          }
+        }
+      }
+
       function isDelayBlock(block: Record<string, unknown> | undefined, slug: string): boolean {
         if (!block) return false
         if (block.type === 'delay') return true
@@ -1613,14 +1736,36 @@ function install(): void {
         return false
       }
 
-      const hasDelay = stepOrder.some((slug) => isDelayBlock(obj(blocks[slug]), slug))
+      const getRootIfOwner = (slug: string): string | null => {
+        let curr = slug
+        const visited = new Set<string>()
+        while (directIfParent.has(curr) && !visited.has(curr)) {
+          visited.add(curr)
+          curr = directIfParent.get(curr)!
+        }
+        return curr === slug ? null : curr
+      }
+
+      for (const node of stepNodes) {
+        const rootIfOwner = getRootIfOwner(node.slugName)
+        if (rootIfOwner) {
+          node.parentIfSlug = rootIfOwner
+        }
+      }
 
       if (hasDelay) {
-        // When a delay is added and made public, the workflow execution becomes
-        // strictly sequential before and after the delay based on the flow order.
-        // The entire graph is dependent.
-        for (let i = 0; i < stepOrder.length; i++) {
-          const slug = stepOrder[i]
+        // When a delay is present, top-level root steps execute sequentially horizontally,
+        // while steps inside each if condition stack vertically in that if condition's column.
+        // After a break step, there is no sequential continuation.
+        // Use stepOrder filtered to exclude steps nested inside ifBlocks, so ifGroup wrappers
+        // are naturally flattened while if-branch children stay excluded for vertical stacking.
+        const activeRootOrder = stepOrder.filter(
+          (slug) => !ifChildSet.has(slug) && stepNodes.some((s) => s.slugName === slug)
+        )
+
+        let hitRootBreak = false
+        for (let i = 0; i < activeRootOrder.length; i++) {
+          const slug = activeRootOrder[i]
           if (!slug) continue
           const node = stepNodes.find((s) => s.slugName === slug)
           if (!node) continue
@@ -1628,31 +1773,54 @@ function install(): void {
           node.isIndependent = false
           node.depth = i + 1
 
-          const prevSlug = i === 0 ? 'trigger' : stepOrder[i - 1]
-          if (prevSlug && !node.upstreamSlugs.includes(prevSlug)) {
-            node.upstreamSlugs.push(prevSlug)
+          if (!hitRootBreak) {
+            const prevSlug = i === 0 ? 'trigger' : activeRootOrder[i - 1]
+            const prevNode = prevSlug && prevSlug !== 'trigger' ? stepNodes.find((s) => s.slugName === prevSlug) : undefined
+            if (prevNode?.type === 'break') {
+              hitRootBreak = true
+            } else if (prevSlug) {
+              if (!node.upstreamSlugs.includes(prevSlug)) {
+                node.upstreamSlugs.push(prevSlug)
+              }
+
+              const hasDirectConn = connections.some((c) => c.fromSlug === prevSlug && c.toSlug === slug)
+              if (!hasDirectConn) {
+                const prevHasRun = !isLogView || (prevSlug === 'trigger' ? true : executedSlugs.has(prevSlug))
+                const currHasRun = !isLogView || executedSlugs.has(slug)
+                const seqConnHasRun = prevHasRun && currHasRun
+
+                connections.push({
+                  id: `conn-seq-${prevSlug}-${slug}`,
+                  fromNodeId: prevSlug,
+                  fromSlug: prevSlug,
+                  fromPortId: `${prevSlug}-seq-out`,
+                  fromField: 'flow',
+                  toNodeId: slug,
+                  toSlug: slug,
+                  toPortId: `${slug}-seq-in`,
+                  toField: 'flow',
+                  expression: 'sequential',
+                  valuePreview: 'Sequential Step',
+                  hasRun: seqConnHasRun,
+                })
+              }
+            }
           }
 
-          const hasDirectConn = connections.some((c) => c.fromSlug === prevSlug && c.toSlug === slug)
-          if (!hasDirectConn && prevSlug) {
-            const prevHasRun = !isLogView || (prevSlug === 'trigger' ? true : executedSlugs.has(prevSlug))
-            const currHasRun = !isLogView || executedSlugs.has(slug)
-            const seqConnHasRun = prevHasRun && currHasRun
+          if (node.type === 'break') {
+            hitRootBreak = true
+          }
+        }
 
-            connections.push({
-              id: `conn-seq-${prevSlug}-${slug}`,
-              fromNodeId: prevSlug,
-              fromSlug: prevSlug,
-              fromPortId: `${prevSlug}-seq-out`,
-              fromField: 'flow',
-              toNodeId: slug,
-              toSlug: slug,
-              toPortId: `${slug}-seq-in`,
-              toField: 'flow',
-              expression: 'sequential',
-              valuePreview: 'Sequential Step',
-              hasRun: seqConnHasRun,
-            })
+        // Place steps inside an if condition vertically in the same column as their owner ifBlock
+        for (const node of stepNodes) {
+          const rootIfOwner = getRootIfOwner(node.slugName)
+          if (rootIfOwner) {
+            const ownerNode = stepNodes.find((s) => s.slugName === rootIfOwner)
+            if (ownerNode) {
+              node.isIndependent = false
+              node.depth = ownerNode.depth
+            }
           }
         }
 
@@ -1719,7 +1887,8 @@ function install(): void {
         connections,
         summary,
       }
-    } catch {
+    } catch (err) {
+      console.error('[vs-assistant] readFlowGraphData error:', err)
       return null
     }
   }
@@ -2430,7 +2599,8 @@ function install(): void {
     let url: URL
     try {
       url = new URL(String(rawUrl), location.href)
-    } catch {
+    } catch (err) {
+      console.error('[vs-assistant] readFlowGraphData error:', err)
       return null
     }
     if (!apiHosts.has(url.host)) return null
