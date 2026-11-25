@@ -3770,13 +3770,6 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         text: trimmed,
       }
     }
-    // Number encoded as string
-    if (/^-?\d+(\.\d+)?$/.test(trimmed) && trimmed.length <= 12) {
-      return {
-        html: `<span class="vs-val-num">${escapeHtml(trimmed)}</span>`,
-        text: trimmed,
-      }
-    }
     if (trimmed === 'true' || trimmed === 'false') {
       return {
         html: `<span class="vs-val-bool">${trimmed}</span>`,
