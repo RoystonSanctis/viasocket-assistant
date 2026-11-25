@@ -2899,9 +2899,9 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
     updateGraphTheme()
 
-    // Attach listeners on other buttons to close graph view when clicked
-    const otherButtons = tabsContainer.querySelectorAll<HTMLButtonElement>(
-      'button[value="flow"], button[value="preview"], button[value="log"]'
+    // Attach listeners on all other tab buttons (including Summary in AIFlow=true) to close graph view when clicked
+    const otherButtons = Array.from(tabsContainer.querySelectorAll<HTMLButtonElement>('button')).filter(
+      (btn) => btn.getAttribute('data-testid') !== TAB_BUTTON_TESTID
     )
     otherButtons.forEach((btn) => {
       if (!btn.hasAttribute('data-vs-graph-listener')) {
@@ -2920,19 +2920,17 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     if (!tabsContainer) return
 
     const graphBtn = tabsContainer.querySelector(`[data-testid="${TAB_BUTTON_TESTID}"]`) as HTMLButtonElement | null
-    const flowBtn = tabsContainer.querySelector('[data-testid="workflow-flow-view-tab"]') as HTMLButtonElement | null
-    const previewBtn = tabsContainer.querySelector('[data-testid="workflow-preview-view-tab"]') as HTMLButtonElement | null
-    const logBtn = tabsContainer.querySelector('[data-testid="workflow-log-view-tab"]') as HTMLButtonElement | null
+    const otherBtns = Array.from(tabsContainer.querySelectorAll<HTMLButtonElement>('button')).filter(
+      (btn) => btn.getAttribute('data-testid') !== TAB_BUTTON_TESTID
+    )
 
     if (isGraphActive) {
       graphBtn?.classList.add('Mui-selected')
       graphBtn?.setAttribute('aria-pressed', 'true')
-      flowBtn?.classList.remove('Mui-selected')
-      flowBtn?.setAttribute('aria-pressed', 'false')
-      previewBtn?.classList.remove('Mui-selected')
-      previewBtn?.setAttribute('aria-pressed', 'false')
-      logBtn?.classList.remove('Mui-selected')
-      logBtn?.setAttribute('aria-pressed', 'false')
+      otherBtns.forEach((btn) => {
+        btn.classList.remove('Mui-selected')
+        btn.setAttribute('aria-pressed', 'false')
+      })
     } else {
       graphBtn?.classList.remove('Mui-selected')
       graphBtn?.setAttribute('aria-pressed', 'false')
@@ -2959,6 +2957,8 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     if (!overlayEl) {
       overlayEl = document.createElement('div')
       overlayEl.id = OVERLAY_ID
+    }
+    if (overlayEl.parentElement !== contentBox) {
       contentBox.appendChild(overlayEl)
     }
     updateGraphTheme()
@@ -3295,6 +3295,12 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     if (nativeChipContainer) {
       nativeChipContainer.style.setProperty('z-index', '260', 'important')
     }
+
+    // In &AIFlow=true, workflow-view-tabs lives inside contentBox (children[1]); keep its floating bar above the overlay.
+    const tabsBar = document.querySelector('[data-testid="workflow-view-tabs"]')?.closest('.z-20') as HTMLElement | null
+    if (tabsBar && document.getElementById('flow-page-box')?.children[1]?.contains(tabsBar)) {
+      tabsBar.style.setProperty('z-index', '260', 'important')
+    }
   }
 
   function resetLogsDrawerZIndex(): void {
@@ -3314,6 +3320,11 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     const nativeChipContainer = document.querySelector<HTMLElement>('[data-testid="workflow-navbar-logs-time-chip-container"]')
     if (nativeChipContainer) {
       nativeChipContainer.style.removeProperty('z-index')
+    }
+
+    const tabsBar = document.querySelector('[data-testid="workflow-view-tabs"]')?.closest('.z-20') as HTMLElement | null
+    if (tabsBar) {
+      tabsBar.style.removeProperty('z-index')
     }
   }
 

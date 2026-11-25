@@ -617,8 +617,13 @@ function install(): void {
         return val ?? {}
       }
 
-      const requestSnapshot = obj(tryParse(invData.requestSnapshotJsonData || invData.requestSnapshot))
-      const responseSnapshot = obj(tryParse(invData.responseSnapshotJsonData || invData.responseSnapshot))
+      const pickSnap = (primary: unknown, fallback: unknown): Record<string, unknown> => {
+        const p = obj(tryParse(primary))
+        if (Object.keys(p).length > 0) return p
+        return obj(tryParse(fallback))
+      }
+      const requestSnapshot = pickSnap(invData.requestSnapshotJsonData, invData.requestSnapshot)
+      const responseSnapshot = pickSnap(invData.responseSnapshotJsonData, invData.responseSnapshot)
       const vals = obj(tryParse(invData.valsJson || invData.vals))
       const stepRequestSnapshot = obj(tryParse(invData.stepRequestSnapshot))
 
@@ -734,9 +739,14 @@ function install(): void {
           (typeof block.code === 'string' && block.code) ||
           ''
 
+        const flowUsedFn = obj(obj(flowState.usedVariables).functions)
+        const pubUsedFn = obj(obj(flowState.publishUsedVariables).functions)
+        const flowFnVars = flowUsedFn[slugName] ?? flowUsedFn[stepId] ?? pubUsedFn[slugName] ?? pubUsedFn[stepId]
+
         const usedVarsFromRedux: string[] = [
           ...(Array.isArray(draft.usedVariables) ? draft.usedVariables : []),
           ...(Array.isArray(block.usedVariables) ? block.usedVariables : []),
+          ...(Array.isArray(flowFnVars) ? flowFnVars : []),
         ]
 
         const invUsedVars = obj(invData.usedVariables)
@@ -857,6 +867,7 @@ function install(): void {
         const codeDirectPaths = extractDirectPathsFromCode(codeStr)
         const allDirectPaths = Array.from(new Set([...usedVarsFromRedux, ...codeDirectPaths]))
 
+        const usedVarSet = new Set(usedVarsFromRedux)
         for (const p of allDirectPaths) {
           if (typeof p !== 'string') continue
           const norm = normalizePath(p)
@@ -865,6 +876,9 @@ function install(): void {
           const val = evalExpr(p)
           if (val !== undefined) {
             resolvedVars[p] = val
+            coveredNormPaths.add(norm)
+          } else if (usedVarSet.has(p)) {
+            resolvedVars[p] = null
             coveredNormPaths.add(norm)
           }
         }

@@ -170,7 +170,7 @@ async function authFor(ctx: VsContext, row: ActionRow, authId: string): Promise<
   const lookup = str(row.authidlookup)
   if (!ROW_ID_RE.test(authId) || !serviceId || !lookup) return 'Choose a valid connection first.'
   try {
-    return { authData: await resolveConnection(ctx, authId, serviceId, lookup), noConnection: false }
+    return { authData: await resolveConnection(ctx, authId, serviceId, lookup, flowOf(ctx.vs.page) ?? undefined), noConnection: false }
   } catch (e) {
     if (e instanceof ToolError) return 'This connection cannot be used (expired, or not one of this app’s connections). Pick or connect another.'
     throw e
@@ -287,7 +287,7 @@ export async function handleSubfunctionsRequest(req: SubfnRequest, sender: chrom
 
       case 'subfn:list-connections': {
         if (!ROW_ID_RE.test(req.serviceId) || !ROW_ID_RE.test(req.authIdLookup)) return { ok: false, error: 'Unknown app' }
-        const rows = await listConnections(ctx, req.serviceId, req.authIdLookup)
+        const rows = await listConnections(ctx, req.serviceId, req.authIdLookup, flowOf(ctx.vs.page) ?? undefined)
         const list: SubfnConnection[] = rows.map((c) => {
           const s = summarizeConnection(c)
           return { id: c.id, label: str(s.name), valid: s.valid === true }

@@ -297,7 +297,8 @@ export function initSubfunctionsUI(bridge: PageBridge): SubfunctionsUIController
   function connectionsOf(a: { serviceId?: string; authIdLookup?: string }, fresh = false): Promise<SubfnConnection[]> {
     if (!a.serviceId || !a.authIdLookup) return Promise.resolve([])
     const { serviceId, authIdLookup } = a
-    return cached(connectionLists, `${serviceId}|${authIdLookup}`, () => ask<SubfnConnection[]>({ type: 'subfn:list-connections', serviceId, authIdLookup }), fresh)
+    const orgKey = location.pathname.match(/\/projects\/([^/]+)/)?.[1] ?? ''
+    return cached(connectionLists, `${orgKey}|${serviceId}|${authIdLookup}`, () => ask<SubfnConnection[]>({ type: 'subfn:list-connections', serviceId, authIdLookup }), fresh)
   }
 
   ensureStyle(THEME_STYLE_ID, THEME_CSS)
