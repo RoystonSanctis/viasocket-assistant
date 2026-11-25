@@ -3763,15 +3763,38 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
       currentGraphData.connections.some((c) => c.expression === 'sequential') ||
       currentGraphData.steps.some((s) => s.type === 'delay')
     const baseStartY = hasSequentialFlow ? 170 : 80
-    let maxGraphY = baseStartY
+
+    const multiSpanCount = currentGraphData.connections.filter((c) => {
+      const fromDepth = c.fromSlug === 'trigger' ? 0 : (currentGraphData?.steps.find((s) => s.slugName === c.fromSlug)?.depth ?? 1)
+      const toDepth = currentGraphData?.steps.find((s) => s.slugName === c.toSlug)?.depth ?? 1
+      return Math.abs(toDepth - fromDepth) > 1 || toDepth < fromDepth
+    }).length
+
+    // Place Independent Steps lane ABOVE dependent steps & if-groups
+    let depStartY = baseStartY
+    const lane = nodesLayer.querySelector<HTMLElement>('.vs-graph-independent-lane')
+    if (lane) {
+      const indepSectionY = baseStartY
+      lane.style.top = `${indepSectionY}px`
+      const indepCards = Array.from(nodesLayer.querySelectorAll<HTMLElement>('.vs-graph-card[data-independent="true"]'))
+      const indepY = indepSectionY + 32
+      let maxIndepHeight = 0
+      for (const card of indepCards) {
+        card.style.top = `${indepY}px`
+        maxIndepHeight = Math.max(maxIndepHeight, card.offsetHeight)
+      }
+      const laneHeight = Math.max(150, maxIndepHeight + 52)
+      lane.style.height = `${laneHeight}px`
+      const arcClearance = multiSpanCount > 0 ? Math.min(240, multiSpanCount * 24 + 56) : 48
+      depStartY = indepSectionY + laneHeight + arcClearance
+    }
 
     for (const [, colCards] of colCardsMap.entries()) {
-      let currentY = baseStartY
+      let currentY = depStartY
       for (const card of colCards) {
         card.style.top = `${currentY}px`
         currentY += card.offsetHeight + 32
       }
-      maxGraphY = Math.max(maxGraphY, currentY)
     }
 
     const topIfGroups = Array.from(nodesLayer.querySelectorAll<HTMLElement>('.vs-graph-if-group:not([data-parent-if-group])'))
@@ -3797,15 +3820,32 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
           groupMaxRight = Math.max(groupMaxRight, gx + 28 + condCard.offsetWidth)
         }
 
+        // Place Independent Steps ABOVE Dependent Steps inside the if-group
+        let depInnerTop = innerTop
+        const subLabel = nodesLayer.querySelector<HTMLElement>(`.vs-graph-if-sublabel[data-if-sublabel="${groupSlug}"]`)
+        if (indepCards.length > 0) {
+          const indepLabelTop = innerTop
+          if (subLabel) subLabel.style.top = `${indepLabelTop}px`
+          const indepCardTop = indepLabelTop + 20
+          let indepMaxBottom = indepCardTop
+          for (const c of indepCards) {
+            c.style.top = `${indepCardTop}px`
+            indepMaxBottom = Math.max(indepMaxBottom, indepCardTop + c.offsetHeight)
+            groupMaxBottom = Math.max(groupMaxBottom, indepCardTop + c.offsetHeight)
+            groupMaxRight = Math.max(groupMaxRight, (parseFloat(c.style.left) || 0) + c.offsetWidth)
+          }
+          depInnerTop = indepMaxBottom + 24
+        }
+
         const relColMap = new Map<number, HTMLElement[]>()
         for (const c of depCards) {
           const rc = parseInt(c.getAttribute('data-rel-col') || '0', 10)
           if (!relColMap.has(rc)) relColMap.set(rc, [])
           relColMap.get(rc)!.push(c)
         }
-        let depMaxBottom = innerTop
+        let depMaxBottom = depInnerTop
         for (const [, list] of relColMap.entries()) {
-          let cy = innerTop
+          let cy = depInnerTop
           for (const c of list) {
             c.style.top = `${cy}px`
             cy += c.offsetHeight + 24
@@ -3813,18 +3853,8 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
           }
           depMaxBottom = Math.max(depMaxBottom, cy - 24)
         }
-        groupMaxBottom = Math.max(groupMaxBottom, depMaxBottom)
-
-        const subLabel = nodesLayer.querySelector<HTMLElement>(`.vs-graph-if-sublabel[data-if-sublabel="${groupSlug}"]`)
-        if (indepCards.length > 0) {
-          const indepLabelTop = depCards.length > 0 ? depMaxBottom + 20 : innerTop
-          if (subLabel) subLabel.style.top = `${indepLabelTop}px`
-          const indepCardTop = indepLabelTop + 20
-          for (const c of indepCards) {
-            c.style.top = `${indepCardTop}px`
-            groupMaxBottom = Math.max(groupMaxBottom, indepCardTop + c.offsetHeight)
-            groupMaxRight = Math.max(groupMaxRight, (parseFloat(c.style.left) || 0) + c.offsetWidth)
-          }
+        if (depCards.length > 0) {
+          groupMaxBottom = Math.max(groupMaxBottom, depMaxBottom)
         }
 
         if (childGroups.length > 0) {
@@ -3845,36 +3875,12 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
         return { width: groupWidth, height: groupHeight }
       }
 
-      let groupY = baseStartY
+      let groupY = depStartY
       for (const groupEl of topIfGroups) {
         const gx = parseFloat(groupEl.style.left) || 0
         const size = reflowIfGroupRecursive(groupEl, gx, groupY)
         groupY += size.height + 36
       }
-      maxGraphY = Math.max(maxGraphY, groupY)
-    }
-
-    const multiSpanCount = currentGraphData.connections.filter((c) => {
-      const fromDepth = c.fromSlug === 'trigger' ? 0 : (currentGraphData?.steps.find((s) => s.slugName === c.fromSlug)?.depth ?? 1)
-      const toDepth = currentGraphData?.steps.find((s) => s.slugName === c.toSlug)?.depth ?? 1
-      return Math.abs(toDepth - fromDepth) > 1 || toDepth < fromDepth
-    }).length
-    if (multiSpanCount > 0) {
-      maxGraphY += Math.min(260, multiSpanCount * 28 + 56)
-    }
-
-    const lane = nodesLayer.querySelector<HTMLElement>('.vs-graph-independent-lane')
-    if (lane) {
-      const indepSectionY = maxGraphY + 40
-      lane.style.top = `${indepSectionY}px`
-      const indepCards = Array.from(nodesLayer.querySelectorAll<HTMLElement>('.vs-graph-card[data-independent="true"]'))
-      const indepY = indepSectionY + 36
-      let maxIndepHeight = 0
-      for (const card of indepCards) {
-        card.style.top = `${indepY}px`
-        maxIndepHeight = Math.max(maxIndepHeight, card.offsetHeight)
-      }
-      lane.style.height = `${Math.max(260, maxIndepHeight + 56)}px`
     }
 
     requestAnimationFrame(() => {
