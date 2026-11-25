@@ -4246,29 +4246,37 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
 
     // Hover highlights for port curves, unified tooltip, and key locking
     const onRowEnter = (e: MouseEvent) => {
-      if (lockedState) return
       const conns = portId
         ? currentGraphData?.connections.filter((c) =>
             isInput ? c.toPortId === portId : c.fromPortId === portId
           ) || []
         : []
-      if (conns.length > 0 && portId) {
-        highlightPortAndCurves(portId, isInput ? 'input' : 'output', key, node.title || node.slugName)
-        hoveredKeyInfo = {
-          portId,
-          type: isInput ? 'input' : 'output',
-          keyName: key,
-          stepTitle: node.title || node.slugName,
-          conns,
+      if (!lockedState) {
+        if (conns.length > 0 && portId) {
+          highlightPortAndCurves(portId, isInput ? 'input' : 'output', key, node.title || node.slugName)
+          hoveredKeyInfo = {
+            portId,
+            type: isInput ? 'input' : 'output',
+            keyName: key,
+            stepTitle: node.title || node.slugName,
+            conns,
+          }
+          hoveredConn = null
+        } else {
+          hoveredKeyInfo = null
+          clearHighlights()
         }
-        hoveredConn = null
-      } else {
-        hoveredKeyInfo = null
-        clearHighlights()
       }
       const tip = `${node.title || node.slugName}.${key}${conns.length > 0 ? ` (${conns.length} ${conns.length === 1 ? 'connection' : 'connections'})` : ''}`
+      const isThisKeyLocked = Boolean(
+        lockedState?.isKeyLock &&
+          conns.length > 0 &&
+          conns.every((c) => lockedState?.conns.some((lc) => lc.id === c.id))
+      )
       const shortcut = conns.length > 0
-        ? (conns.length === 1 ? 'Space: Lock path • Click to inspect' : `Space: Lock all ${conns.length} paths • Click to inspect`)
+        ? isThisKeyLocked
+          ? 'Space: Unlock • Click to inspect'
+          : (conns.length === 1 ? 'Space: Lock path • Click to inspect' : `Space: Lock all ${conns.length} paths • Click to inspect`)
         : (canExpand ? 'Click to expand/collapse' : 'Click to inspect')
       let rowDetail = detailText
       if (node.hasRun === false) {
@@ -4286,15 +4294,21 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
     }
 
     const onRowMove = (e: MouseEvent) => {
-      if (lockedState) return
       const conns = portId
         ? currentGraphData?.connections.filter((c) =>
             isInput ? c.toPortId === portId : c.fromPortId === portId
           ) || []
         : []
       const tip = `${node.title || node.slugName}.${key}${conns.length > 0 ? ` (${conns.length} ${conns.length === 1 ? 'connection' : 'connections'})` : ''}`
+      const isThisKeyLocked = Boolean(
+        lockedState?.isKeyLock &&
+          conns.length > 0 &&
+          conns.every((c) => lockedState?.conns.some((lc) => lc.id === c.id))
+      )
       const shortcut = conns.length > 0
-        ? (conns.length === 1 ? 'Space: Lock path • Click to inspect' : `Space: Lock all ${conns.length} paths • Click to inspect`)
+        ? isThisKeyLocked
+          ? 'Space: Unlock • Click to inspect'
+          : (conns.length === 1 ? 'Space: Lock path • Click to inspect' : `Space: Lock all ${conns.length} paths • Click to inspect`)
         : (canExpand ? 'Click to expand/collapse' : 'Click to inspect')
       let rowDetail = detailText
       if (node.hasRun === false) {
@@ -5296,7 +5310,6 @@ export function initDependencyGraphUI(bridge: PageBridge): DependencyGraphContro
           detail = `${detail} • (Not executed in this log)`
         }
         showTooltip(e.clientX, e.clientY, tip, shortcut, detail)
-
         if (lockedState) return
         highlightActivePath(item.conn)
       }
